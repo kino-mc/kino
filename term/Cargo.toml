@@ -1,0 +1,9 @@
+[package]
+name = "term"
+version = "0.1.0"
+authors = ["Adrien Champion <adrien.champion@email.com>"]
+
+[dependencies]
+num = "*"
+nom = "*"
+hashconsing = "*"
