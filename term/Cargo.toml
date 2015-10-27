@@ -5,6 +5,5 @@ authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
 num = "*"
-regex = "*"
 nom = { version = "*", features = [ "regexp" ] }
 hashconsing = "*"

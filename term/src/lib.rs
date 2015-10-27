@@ -9,7 +9,6 @@ only non-zero denominator will push the problem to function symbol application.
 
 extern crate num ;
 extern crate hashconsing as hcons ;
-extern crate regex ;
 #[macro_use]
 extern crate nom ;
 

@@ -1,6 +1,5 @@
 extern crate num ;
 extern crate hashconsing as hcons ;
-extern crate regex ;
 #[macro_use]
 extern crate nom ;
 
