@@ -18,5 +18,6 @@ pub mod sym ;
 pub mod id ;
 pub mod term ;
 pub mod parse ;
+pub mod factory ;
 
 pub use base::* ;
