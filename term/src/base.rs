@@ -7,6 +7,13 @@ use std::sync::{ Arc, Mutex } ;
 /** Under the hood an offset is a `u16`. */
 pub type Offset = u16 ;
 
+/** Bytes to Offset conversion. */
+pub fn bytes_to_offset(bytes: & [u8]) -> Offset {
+  // -> Result<Offset, std::num::ParseIntError> {
+  use std::str ;
+  Offset::from_str_radix( str::from_utf8(bytes).unwrap(), 10 ).unwrap()
+}
+
 /** One-state offset. */
 pub struct Offset1(Offset) ;
 

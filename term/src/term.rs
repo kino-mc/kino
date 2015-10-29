@@ -3,23 +3,22 @@
 use ::base::* ;
 use ::typ ;
 use ::sym ;
+use ::cst ;
 use self::TerM::* ;
 
 #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum State {
-  One, Zero
+  Curr, Next
 }
 
 #[derive(PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum TerM {
   Var(sym::Sym),
   SVar(sym::Sym, State),
-  Bool(typ::Bool),
-  Int(typ::Int),
-  Rat(typ::Rat),
+  Cst(cst::Cst),
   App(sym::Sym, Vec<Term>),
-  Forall(Vec<sym::Sym>, Term),
-  Exists(Vec<sym::Sym>, Term),
+  Forall(Vec<(sym::Sym, typ::Type)>, Term),
+  Exists(Vec<(sym::Sym, typ::Type)>, Term),
   Let(Vec<(sym::Sym, Term)>, Term),
 }
 
@@ -49,29 +48,19 @@ impl VarMaker<sym::Sym> for TermConsign {
   }
 }
 
-pub trait CstMaker<Cst> {
-  fn cst(& self, Cst) -> Term ;
+trait CstMaker<Const> {
+  fn cst(& self, Const) -> Term ;
 }
 impl<
-  'a, Cst: Clone, T: Sized + CstMaker<Cst>
-> CstMaker<& 'a Cst> for T {
-  fn cst(& self, cst: & 'a Cst) -> Term {
-    (self as & CstMaker<Cst>).cst(cst.clone())
+  'a, Const: Clone, T: Sized + CstMaker<Const>
+> CstMaker<& 'a Const> for T {
+  fn cst(& self, c: & 'a Const) -> Term {
+    self.cst(c.clone())
   }
 }
-impl CstMaker<typ::Bool> for TermConsign {
-  fn cst(& self, b: typ::Bool) -> Term {
-    self.lock().unwrap().mk( Bool(b) )
-  }
-}
-impl CstMaker<typ::Int> for TermConsign {
-  fn cst(& self, i: typ::Int) -> Term {
-    self.lock().unwrap().mk( Int(i) )
-  }
-}
-impl CstMaker<typ::Rat> for TermConsign {
-  fn cst(& self, r: typ::Rat) -> Term {
-    self.lock().unwrap().mk( Rat(r) )
+impl CstMaker<cst::Cst> for TermConsign {
+  fn cst(& self, c: cst::Cst) -> Term {
+    self.lock().unwrap().mk( Cst(c) )
   }
 }
 
@@ -92,17 +81,17 @@ impl AppMaker<sym::Sym> for TermConsign {
 }
 
 pub trait BindMaker<Trm> {
-  fn forall(& self, Vec<sym::Sym>, Trm) -> Term ;
-  fn exists(& self, Vec<sym::Sym>, Trm) -> Term ;
+  fn forall(& self, Vec<(sym::Sym, typ::Type)>, Trm) -> Term ;
+  fn exists(& self, Vec<(sym::Sym, typ::Type)>, Trm) -> Term ;
   fn let_b(& self, Vec<(sym::Sym, Term)>, Trm) -> Term ;
 }
 impl<
   'a, Trm: Clone, T: Sized + BindMaker<Trm>
 > BindMaker<& 'a Trm> for T {
-  fn forall(& self, bind: Vec<sym::Sym>, term: & 'a Trm) -> Term {
+  fn forall(& self, bind: Vec<(sym::Sym, typ::Type)>, term: & 'a Trm) -> Term {
     self.forall( bind, term.clone() )
   }
-  fn exists(& self, bind: Vec<sym::Sym>, term: & 'a Trm) -> Term {
+  fn exists(& self, bind: Vec<(sym::Sym, typ::Type)>, term: & 'a Trm) -> Term {
     self.exists( bind, term.clone() )
   }
   fn let_b(& self, bind: Vec<(sym::Sym, Term)>, term: & 'a Trm) -> Term {
@@ -110,10 +99,10 @@ impl<
   }
 }
 impl BindMaker<Term> for TermConsign {
-  fn forall(& self, bind: Vec<sym::Sym>, term: Term) -> Term {
+  fn forall(& self, bind: Vec<(sym::Sym, typ::Type)>, term: Term) -> Term {
     self.lock().unwrap().mk( Forall(bind, term) )
   }
-  fn exists(& self, bind: Vec<sym::Sym>, term: Term) -> Term {
+  fn exists(& self, bind: Vec<(sym::Sym, typ::Type)>, term: Term) -> Term {
     self.lock().unwrap().mk( Exists(bind, term) )
   }
   fn let_b(& self, bind: Vec<(sym::Sym, Term)>, term: Term) -> Term {

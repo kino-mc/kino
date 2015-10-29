@@ -3,7 +3,12 @@ name = "term"
 version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
+[[bin]]
+name = "term_bin"
+doc = false
+
 [dependencies]
 num = "*"
 nom = { version = "*", features = [ "regexp" ] }
 hashconsing = "*"
+rsmt2 = { git = "https://bitbucket.org/AdrienChampion/rsmt2.git" }

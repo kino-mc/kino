@@ -10,9 +10,9 @@ use nom::IResult::* ;
 mod base ;
 pub mod typ ;
 pub mod sym ;
-pub mod id ;
+pub mod cst ;
 pub mod term ;
-pub mod parse ;
+pub mod parser ;
 
 pub use base::* ;
 
@@ -20,9 +20,9 @@ macro_rules! try_parse {
   ($fun:expr, $arg:expr) => (
     {
       println!(
-        "| parsing \"{}\"", String::from(str::from_utf8($arg).unwrap())
+        "| parsing \"{}\"", str::from_utf8($arg).unwrap()
       ) ;
-      match $fun($arg) {
+      match $fun(& $arg[..]) {
         Done(_,out) => println!("| done: {:?}", out),
         Error(e) => panic!("error: {:?}", e),
         Incomplete(n) => panic!("incomplete: {:?}", n),
@@ -40,19 +40,19 @@ fn main() {
   println!("") ;
 
   try_parse!(
-    parse::id_parser, & b"bla@1"[..]
+    parser::smtrans::id_parser, b"next.bla"
   ) ;
 
   try_parse!(
-    parse::id_parser, & b"bla"[..]
+    parser::smtrans::id_parser, b"bla"
   ) ;
 
   try_parse!(
-    parse::id_parser, & b"|bsth[)]*]+)!&[{})*])/lnstzvm;,.pyla|"[..]
+    parser::smtrans::id_parser, b"|bsth[)]*]+)!&[{})*])/lnstzvm;,.pyla|"
   ) ;
 
   try_parse!(
-    parse::id_parser, & b"|bsth[)]*]+)!&[{})*])/lnstzvm;,.pyla@0|"[..]
+    parser::smtrans::id_parser, b"|state.bsth[)]*]+)!&[{})*])/lnstzvm;,.pyla|"
   ) ;
 
   println!("") ;
@@ -62,11 +62,11 @@ fn main() {
   println!("") ;
 
   try_parse!(
-    parse::bool_parser, & b"true"[..]
+    parser::bool_parser, b"true"
   ) ;
 
   try_parse!(
-    parse::bool_parser, & b"false"[..]
+    parser::bool_parser, b"false"
   ) ;
 
   println!("") ;
@@ -76,11 +76,11 @@ fn main() {
   println!("") ;
 
   try_parse!(
-    parse::int_parser, & b"42"[..]
+    parser::int_parser, b"42"
   ) ;
 
   try_parse!(
-    parse::int_parser, & b"450134291675203472056472501627956329765342942"[..]
+    parser::int_parser, b"450134291675203472056472501627956329765342942"
   ) ;
 
   println!("") ;
@@ -90,15 +90,15 @@ fn main() {
   println!("") ;
 
   try_parse!(
-    parse::rat_parser, & b"(/ 42 7)"[..]
+    parser::rat_parser, b"(/ 42 7)"
   ) ;
 
   try_parse!(
-    parse::rat_parser, & b"(/ 42 7)"[..]
+    parser::rat_parser, b"(/ 42 7)"
   ) ;
 
   try_parse!(
-    parse::rat_parser, & b"(/ 427205347 7754237425397059340795023976376)"[..]
+    parser::rat_parser, b"(/ 427205347 7754237425397059340795023976376)"
   ) ;
 
   println!("") ;
