@@ -11,7 +11,7 @@
 
 use nom::multispace ;
 
-use ::typ::{ Bool, Int, Rat } ;
+use ::typ::{ Type, Bool, Int, Rat } ;
 
 /** Used in tests for parsers. */
 #[cfg(test)]
@@ -38,6 +38,14 @@ macro_rules! try_parse {
 
 pub mod smtrans ;
 pub mod smt2 ;
+
+named!{ pub type_parser<Type>,
+  alt!(
+    map!( tag!("Int"),  |_| Type::Int  ) |
+    map!( tag!("Bool"), |_| Type::Bool ) |
+    map!( tag!("Real"),  |_| Type::Rat  )
+  )
+}
 
 named!{ pub bool_parser<Bool>,
   alt!(
@@ -109,6 +117,31 @@ macro_rules! try_parse_val {
       (s, val) -> { assert_eq!(val, $val) }
     )
   ) ;
+}
+
+#[cfg(test)]
+mod typ3 {
+  #[test]
+  fn boo1() {
+    use super::* ;
+    try_parse_val!(
+      type_parser, b"Bool", ::typ::Type::Bool
+    )
+  }
+  #[test]
+  fn int() {
+    use super::* ;
+    try_parse_val!(
+      type_parser, b"Int", ::typ::Type::Int
+    )
+  }
+  #[test]
+  fn rat() {
+    use super::* ;
+    try_parse_val!(
+      type_parser, b"Real", ::typ::Type::Rat
+    )
+  }
 }
 
 

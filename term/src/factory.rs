@@ -13,6 +13,7 @@ use nom::IResult ;
 
 use smt::ParseSmt2 ;
 
+use ::base::Offset ;
 use ::sym::* ;
 use ::cst::* ;
 use ::term::* ;
@@ -23,7 +24,7 @@ struct Factory {
 }
 
 impl ParseSmt2 for Factory {
-  type Ident = Sym ;
+  type Ident = (Sym, Offset) ;
   type Value = Cst ;
   type Expr = Term ;
   type Proof = () ;
@@ -48,3 +49,4 @@ impl ParseSmt2 for Factory {
     panic!("not implemented")
   }
 }
+

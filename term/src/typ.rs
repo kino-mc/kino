@@ -5,16 +5,18 @@ pub enum Type {
   Bool, Int, Rat
 }
 
+impl Type {
+  pub fn to_str(& self) -> & 'static str {
+    match * self {
+      Type::Bool => "Bool",
+      Type::Int => "Int",
+      Type::Rat => "Real",
+    }
+  }
+}
+
 pub type Bool = bool ;
 
 pub type Int = ::num::BigInt ;
 
 pub type Rat = ::num::rational::BigRational ;
-
-named!{ pub typ_parser<Type>,
-  alt!(
-    map!( tag!("Bool"), |_| Type::Bool ) |
-    map!( tag!("Int"),  |_| Type::Int  ) |
-    map!( tag!("Rat"),  |_| Type::Rat  )
-  )
-}
