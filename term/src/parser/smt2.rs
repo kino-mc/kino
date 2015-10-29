@@ -4,9 +4,7 @@ use ::std::str ;
 
 use ::nom::multispace ;
 
-use ::base::{
-  Offset, bytes_to_offset
-} ;
+use ::base::Offset ;
 
 use super::{
   simple_symbol_head, simple_symbol_tail,
@@ -16,7 +14,7 @@ named!{ offset<Offset>,
   chain!(
     char!('@') ~
     offset: is_a!("0123456789"),
-    || bytes_to_offset(offset)
+    || Offset::of_bytes(offset)
   )
 }
 
@@ -37,16 +35,89 @@ named!{ pub id_parser< (String, Option<Offset>) >,
       char!('|'),
       chain!(
         offset: opt!(offset) ~
+        head: none_of!("|\\@") ~
         sym: map!(
-          is_not!("|\\"),
-          |bytes| String::from(
-            str::from_utf8(bytes).unwrap()
-          )
+          is_not!("|\\"), str::from_utf8
         ),
-        || (sym, offset)
+        || ( format!("{}{}", head, sym.unwrap()), offset )
       ),
       char!('|')
     )
   )
 }
 
+
+
+
+
+
+
+
+
+
+
+
+#[cfg(test)]
+macro_rules! try_parse_id {
+  ($fun:expr, $arg:expr, $state:expr, $id:expr) => (
+    try_parse!($fun, $arg,
+      (s, res) -> {
+        let (id, state) = res ;
+        let exp: Option<Offset> = $state ;
+        if exp != state {
+          panic!("expected state {:?}, got {:?}", exp, state)
+        } else {
+          assert_eq!(id, $id)
+        }
+      }
+    )
+  ) ;
+  ($fun:expr, $arg:expr, $state:expr) => (
+    try_parse_id!(
+      $fun, $arg, $state, ::std::str::from_utf8($arg).unwrap()
+    )
+  ) ;
+}
+
+#[cfg(test)]
+mod simpl_sym {
+  use base::Offset ;
+  #[test]
+  fn nsvar() {
+    use super::* ;
+    try_parse_id!(id_parser, b"bla", None, "bla") ;
+    try_parse_id!(id_parser, b"_bla!52740>^^&", None, "_bla!52740>^^&") ;
+  }
+  #[test]
+  fn svar() {
+    use super::* ;
+    try_parse_id!(id_parser, b"@7bla", Some(Offset::of_int(7)), "bla") ;
+    try_parse_id!(
+      id_parser, b"@42!52@_740>^^&",
+      Some(Offset::of_int(42)), "!52@_740>^^&"
+    ) ;
+  }
+}
+
+#[cfg(test)]
+mod quoted_sym {
+  use base::Offset ;
+  #[test]
+  fn nsvar() {
+    use super::* ;
+    try_parse_id!(id_parser, b"|bla|", None, "bla") ;
+    try_parse_id!(
+      id_parser, b"|[{}_b}(l=a}(!**52)740>^^&|",
+      None, "[{}_b}(l=a}(!**52)740>^^&"
+    ) ;
+  }
+  #[test]
+  fn svar() {
+    use super::* ;
+    try_parse_id!(id_parser, b"|@7bla|", Some(Offset::of_int(7)), "bla") ;
+    try_parse_id!(
+      id_parser, b"|@42[{!+)*(![{}+=*!/~%75!52@_740>^^&|",
+      Some(Offset::of_int(42)), "[{!+)*(![{}+=*!/~%75!52@_740>^^&"
+    ) ;
+  }
+}

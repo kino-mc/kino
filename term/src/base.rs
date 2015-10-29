@@ -5,13 +5,24 @@ pub use hcons::* ;
 use std::sync::{ Arc, Mutex } ;
 
 /** Under the hood an offset is a `u16`. */
-pub type Offset = u16 ;
+#[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash,Clone,Copy)]
+pub struct Offset(u16) ;
 
-/** Bytes to Offset conversion. */
-pub fn bytes_to_offset(bytes: & [u8]) -> Offset {
-  // -> Result<Offset, std::num::ParseIntError> {
-  use std::str ;
-  Offset::from_str_radix( str::from_utf8(bytes).unwrap(), 10 ).unwrap()
+impl Offset {
+  /** Bytes to Offset conversion. */
+  pub fn of_bytes(bytes: & [u8]) -> Offset {
+    // -> Result<Offset, std::num::ParseIntError> {
+    use std::str ;
+    Offset(
+      u16::from_str_radix( str::from_utf8(bytes).unwrap(), 10 ).unwrap()
+    )
+  }
+  /** `usize` to Offset conversion. */
+  pub fn of_int(int: usize) -> Offset {
+    Offset(
+      u16::from_str_radix( & int.to_string(), 10 ).unwrap()
+    )
+  }
 }
 
 /** One-state offset. */
