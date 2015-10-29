@@ -1,6 +1,6 @@
 /*! Type-related structures and parsers. */
 
-#[derive(PartialEq,Eq,PartialOrd,Ord, Hash)]
+#[derive(Clone,Debug,PartialEq,Eq,PartialOrd,Ord, Hash)]
 pub enum Type {
   Bool, Int, Rat
 }

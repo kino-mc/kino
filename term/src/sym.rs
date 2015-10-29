@@ -1,8 +1,8 @@
 /*! Symbol-related structures and parsers. */
 
-use ::base::* ;
+use base::* ;
 
-#[derive(PartialEq,Eq,PartialOrd,Ord,Hash)]
+#[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub struct Symbol {
   sym: String
 }

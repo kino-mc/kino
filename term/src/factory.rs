@@ -7,11 +7,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/** Term factory stuff. */
+/*! Term factory stuff. */
+
+use nom::IResult ;
 
 use smt::ParseSmt2 ;
 
 use ::sym::* ;
+use ::cst::* ;
 use ::term::* ;
 
 struct Factory {
@@ -19,7 +22,29 @@ struct Factory {
   term: TermConsign,
 }
 
-// impl ParseSmt2 for Factory {
-//   type Ident = id::Id ;
-//   type Value = 
-// }
+impl ParseSmt2 for Factory {
+  type Ident = Sym ;
+  type Value = Cst ;
+  type Expr = Term ;
+  type Proof = () ;
+  fn parse_ident<'a>(
+    & self, bytes: &'a [u8]
+  ) -> IResult<'a, &'a [u8], Self::Ident> {
+    panic!("not implemented")
+  }
+  fn parse_value<'a>(
+    & self, bytes: &'a [u8]
+  ) -> IResult<'a, &'a [u8], Self::Value> {
+    panic!("not implemented")
+  }
+  fn parse_expr<'a>(
+    & self, bytes: &'a [u8]
+  ) -> IResult<'a, &'a [u8], Self::Expr> {
+    panic!("not implemented")
+  }
+  fn parse_proof<'a>(
+    & self, bytes: &'a [u8]
+  ) -> IResult<'a, &'a [u8], Self::Proof> {
+    panic!("not implemented")
+  }
+}

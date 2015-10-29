@@ -10,5 +10,5 @@ doc = false
 [dependencies]
 num = "*"
 nom = { version = "*", features = [ "regexp" ] }
-hashconsing = "*"
+hashconsing = { git = "https://bitbucket.org/AdrienChampion/hashconsing.git" }
 rsmt2 = { git = "https://bitbucket.org/AdrienChampion/rsmt2.git" }
