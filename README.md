@@ -1,4 +1,4 @@
-Kinō (帰納: induction, recursion) is a SMT-based, k-induction engine for transition systems.
+Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for transition systems.
 
 
 # License
