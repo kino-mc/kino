@@ -31,17 +31,20 @@ when printing terms. For more details, see
 * struct [`Offset2`][offset2] to specify the offset.
 
 
-## Conventions *when interacting with SMT-solvers*
+## SMT naming convention
 
 A state variable `<var>` unrolled at `7` is understood printing/parsing-wise
-as `|@7<var>|`. This can be ambiguous depending on how the variables are
-sanitized in the STS frontend.
+as `|@7 <var>|`. A non-stateful variable `<var>` is printed as `| <var>|`.
+This way, a symbol `@42 my_var` will is printed as `| @42 my_var|`. It cannot
+be mistaken for a stateful variable `|@42 my_var|`.
 
-The guideline is that when parsing STS, a variable `<var>` should be sanitized
-as a function symbol `| <var>|`. This way, a variable declared in a STS as
-`@42my_var` will be sanitized as `| @42my_var|`. It cannot be mistaken for a
-stateful variable `|@42my_var|` SMT-Lib-2-wise.
+So at SMT level all symbols have the shape
+`"|" ~ opt("@<int>") ~ " " ~ "<id>" ~ "|"`
 
+## STS naming convention
+
+Printing and parsing in STS works as expected, except that printing always
+prints symbols as quoted symbols.
 
 ## Parsing
 

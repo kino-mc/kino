@@ -12,9 +12,14 @@
 use std::io ;
 use std::hash::Hash ;
 use std::sync::{ Arc, Mutex } ;
-use std::ops::Index ;
 
 pub use hcons::* ;
+
+#[derive(Clone,Copy)]
+pub enum SymPrintStyle {
+  Internal,
+  External,
+}
 
 /** A state is either current or next. */
 #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
@@ -43,19 +48,25 @@ pub trait Writable {
   fn write(& self, & mut io::Write) -> io::Result<()> ;
 }
 
+/** Can write itself as a symbol. */
+pub trait SymWritable {
+  /** Writes itself given a print style. */
+  fn write(& self, & mut io::Write, SymPrintStyle) -> io::Result<()> ;
+}
+
 /** Can write a state variable given a state. */
-pub trait SVarWriter<Sym: Writable> {
+pub trait SVarWriter<Sym: SymWritable> {
   /** Writes a state variable given a state. */
   #[inline(always)]
   fn write(
-    & self, & mut io::Write, & Sym, & State
+    & self, & mut io::Write, & Sym, & State, SymPrintStyle
   ) -> io::Result<()> ;
 }
 
-/** Can write itself given a state writer. */
-pub trait StateWritable<S: Writable, Svw: SVarWriter<S>> {
-  /** Write itself given a state writer. */
-  fn write(& self, & mut io::Write, & Svw) -> io::Result<()> ;
+/** Can write itself given a state writer and a print style. */
+pub trait StateWritable<S: SymWritable, Svw: SVarWriter<S>> {
+  /** Write itself given a state writer and a print style. */
+  fn write(& self, & mut io::Write, & Svw, SymPrintStyle) -> io::Result<()> ;
 }
 
 /** An offset. */
@@ -120,40 +131,32 @@ impl Offset2 {
   }
 }
 
-impl<Sym: Writable> SVarWriter<Sym> for Offset2 {
+impl<Sym: SymWritable> SVarWriter<Sym> for Offset2 {
   fn write(
-    & self, writer: & mut io::Write, v: & Sym, st: & State
+    & self, writer: & mut io::Write,
+    v: & Sym, st: & State, style: SymPrintStyle
   ) -> io::Result<()> {
     try!( write!(writer, "|@") ) ;
     match * st {
       State::Curr => try!( self.curr.write(writer) ),
       State::Next => try!( self.next.write(writer) ),
     } ;
-    try!( v.write(writer) ) ;
+    try!( v.write(writer, style) ) ;
     write!(writer, "|")
   }
 }
 
-impl<Sym: Writable> SVarWriter<Sym> for () {
+impl<Sym: SymWritable> SVarWriter<Sym> for () {
   fn write(
-    & self, writer: & mut io::Write, v: & Sym, st: & State
+    & self, writer: & mut io::Write,
+    v: & Sym, st: & State, style: SymPrintStyle
   ) -> io::Result<()> {
     match * st {
       State::Curr => try!( write!(writer, "(state |") ),
       State::Next => try!( write!(writer, "(next |") ),
     } ;
-    try!( v.write(writer) ) ;
+    try!( v.write(writer, style) ) ;
     write!(writer, "|)")
-  }
-}
-
-impl<'a> Index<& 'a State> for Offset2 {
-  type Output = Offset ;
-  fn index(& self, i: & 'a State) -> & Offset {
-    match * i {
-      State::Curr => & self.curr,
-      State::Next => & self.next,
-    }
   }
 }
 

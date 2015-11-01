@@ -11,7 +11,7 @@
 
 use std::io ;
 
-use base::{ Writable, HConsed, HConsign } ;
+use base::{ SymPrintStyle, SymWritable, HConsed, HConsign } ;
 
 
 /** Underlying representation of function symbols. */
@@ -24,10 +24,16 @@ pub struct RealSym {
 /** Hash consed function symbol. */
 pub type Sym = HConsed<RealSym> ;
 
-impl Writable for Sym {
+impl SymWritable for Sym {
   #[inline(always)]
-  fn write(& self, writer: & mut io::Write) -> io::Result<()> {
-    write!(writer, "{}", self.get().sym)
+  fn write(
+    & self, writer: & mut io::Write, style: SymPrintStyle
+  ) -> io::Result<()> {
+    use base::SymPrintStyle::* ;
+    match style {
+      Internal => write!(writer, " {}", self.get().sym),
+      External => write!(writer, "{}", self.get().sym),
+    }
   }
 }
 

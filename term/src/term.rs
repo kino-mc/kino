@@ -12,8 +12,8 @@
 use std::io ;
 
 use base::{
-  StateWritable, Writable, SVarWriter, PrintSmt2, PrintSts2,
-  Offset2, HConsed, HConsign, State
+  StateWritable, Writable, SVarWriter, PrintSmt2, PrintSts2, SymWritable,
+  Offset2, HConsed, HConsign, State, SymPrintStyle
 } ;
 use typ::Type ;
 use sym::Sym ;
@@ -114,7 +114,7 @@ pub type TermConsign = HConsign<RealTerm> ;
 
 impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Term {
   fn write(
-    & self, writer: & mut io::Write, sv_writer: & Svw
+    & self, writer: & mut io::Write, sv_writer: & Svw, style: SymPrintStyle
   ) -> io::Result<()> {
     let mut stack = vec![ (true, vec![ self.clone() ]) ] ;
     loop {
@@ -125,14 +125,14 @@ impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Term {
           if ! is_first { try!( write!(writer, " ") ) } ;
           match term.get() {
             & V(ref var) => {
-              try!( var.write(writer, sv_writer) )
+              try!( var.write(writer, sv_writer, style) )
             },
             & C(ref cst) => {
               try!( cst.write(writer) )
             },
             & App(ref sym, ref args) => {
               try!( write!(writer, "(|") ) ;
-              try!( sym.write(writer) ) ;
+              try!( sym.write(writer, style) ) ;
               try!( write!(writer, "| ") ) ;
               let mut args = args.clone() ;
               args.reverse() ;
@@ -167,7 +167,7 @@ impl PrintSts2 for Term {
   fn to_sts2(
     & self, writer: & mut io::Write
   ) -> io::Result<()> {
-    self.write(writer, & ())
+    self.write(writer, & (), SymPrintStyle::External)
   }
 }
 
@@ -175,7 +175,7 @@ impl PrintSmt2 for Term {
   fn to_smt2(
     & self, writer: & mut io::Write, offset: & Offset2
   ) -> io::Result<()> {
-    self.write(writer, offset)
+    self.write(writer, offset, SymPrintStyle::Internal)
   }
 }
 

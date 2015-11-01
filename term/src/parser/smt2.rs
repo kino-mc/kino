@@ -27,7 +27,7 @@ use super::{
   quantifier_parser, Quantifier
 } ;
 
-trait TermApply {
+trait TermApply: Sized {
   fn apply<
     F: Fn(Term) -> Result<Term,()>
   >(& self, F) -> Result<Self, ()> ;
@@ -58,7 +58,7 @@ impl Mergeable<(Sym, Term)> for Sym {
   fn merge(self, t: Term) -> (Sym, Term) { (self, t) }
 }
 
-trait HasTermInfo<Out, T: Mergeable<Out>> {
+trait HasTermInfo<Out: TermApply, T: Mergeable<Out>> {
   fn term_info(self) -> ( (Term, Smt2Offset), T ) ;
 }
 impl HasTermInfo<Term, ()> for (Term, Smt2Offset) {
@@ -218,19 +218,24 @@ named!{ pub id_parser< (String, Smt2Offset) >,
   alt!(
     // Simple symbol.
     chain!(
-      offset: opt!(offset) ~
+      opt!(offset) ~
       head: simple_symbol_head ~
       tail: simple_symbol_tail,
-      || (
-        format!("{}{}", head, str::from_utf8(tail).unwrap()),
-        Smt2Offset::of_opt(offset)
-      )
+      || {
+        let sym = format!("{}{}", head, str::from_utf8(tail).unwrap()) ;
+        panic!("simple symbol {}", sym)
+      }
+      // (
+      //   format!("{}{}", head, str::from_utf8(tail).unwrap()),
+      //   Smt2Offset::of_opt(offset)
+      // )
     ) |
     // Quoted symbol.
     delimited!(
       char!('|'),
       chain!(
         offset: opt!(offset) ~
+        char!(' ') ~
         sym: map!(
           is_not!("|\\"), str::from_utf8
         ),
@@ -463,26 +468,26 @@ macro_rules! try_parse_term {
   ) ;
 }
 
-#[cfg(test)]
-mod simpl_sym {
-  use base::Offset ;
-  use base::Smt2Offset::* ;
-  #[test]
-  fn nsvar() {
-    use super::* ;
-    try_parse_id!(id_parser, b"bla", No, "bla") ;
-    try_parse_id!(id_parser, b"_bla!52740>^^&", No, "_bla!52740>^^&") ;
-  }
-  #[test]
-  fn svar() {
-    use super::* ;
-    try_parse_id!(id_parser, b"@7bla", One(Offset::of_int(7)), "bla") ;
-    try_parse_id!(
-      id_parser, b"@42!52@_740>^^&",
-      One(Offset::of_int(42)), "!52@_740>^^&"
-    ) ;
-  }
-}
+// #[cfg(test)]
+// mod simpl_sym {
+//   use base::Offset ;
+//   use base::Smt2Offset::* ;
+//   #[test]
+//   fn nsvar() {
+//     use super::* ;
+//     try_parse_id!(id_parser, b"bla", No, "bla") ;
+//     try_parse_id!(id_parser, b"_bla!52740>^^&", No, "_bla!52740>^^&") ;
+//   }
+//   #[test]
+//   fn svar() {
+//     use super::* ;
+//     try_parse_id!(id_parser, b"@7bla", One(Offset::of_int(7)), "bla") ;
+//     try_parse_id!(
+//       id_parser, b"@42!52@_740>^^&",
+//       One(Offset::of_int(42)), "!52@_740>^^&"
+//     ) ;
+//   }
+// }
 
 #[cfg(test)]
 mod quoted_sym {
@@ -491,18 +496,18 @@ mod quoted_sym {
   #[test]
   fn nsvar() {
     use super::* ;
-    try_parse_id!(id_parser, b"|bla|", No, "bla") ;
+    try_parse_id!(id_parser, b"| bla|", No, "bla") ;
     try_parse_id!(
-      id_parser, b"|[{}_b}(l=a}(!**52)740>^^&|",
+      id_parser, b"| [{}_b}(l=a}(!**52)740>^^&|",
       No, "[{}_b}(l=a}(!**52)740>^^&"
     ) ;
   }
   #[test]
   fn svar() {
     use super::* ;
-    try_parse_id!(id_parser, b"|@7bla|", One(Offset::of_int(7)), "bla") ;
+    try_parse_id!(id_parser, b"|@7 bla|", One(Offset::of_int(7)), "bla") ;
     try_parse_id!(
-      id_parser, b"|@42[{!+)*(![{}+=*!/~%75!52@_740>^^&|",
+      id_parser, b"|@42 [{!+)*(![{}+=*!/~%75!52@_740>^^&|",
       One(Offset::of_int(42)), "[{!+)*(![{}+=*!/~%75!52@_740>^^&"
     ) ;
   }
@@ -564,20 +569,20 @@ mod terms {
     let res = factory.var( factory.sym("bla") ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"bla",
+      b"| bla|",
       Smt2Offset::No,
       res
     ) ;
     let res = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"@7bla",
+      b"|@7 bla|",
       Smt2Offset::One(Offset::of_int(7)),
       res
     ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"|@8bla|",
+      b"|@8 bla|",
       Smt2Offset::One(Offset::of_int(8)),
       res
     ) ;

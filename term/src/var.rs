@@ -12,7 +12,8 @@
 use std::io ;
 
 use base::{
-  State, Writable, SVarWriter, StateWritable, HConsed, HConsign
+  State, Writable, SVarWriter, StateWritable, SymPrintStyle, SymWritable,
+  HConsed, HConsign
 } ;
 use sym::Sym ;
 
@@ -31,11 +32,16 @@ pub type Var = HConsed<RealVar> ;
 impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Var {
   #[inline(always)]
   fn write(
-    & self, writer: & mut io::Write, sv_writer: & Svw
+    & self, writer: & mut io::Write, sv_writer: & Svw, style: SymPrintStyle
   ) -> io::Result<()> {
     match * self.get() {
-      RealVar::Var(ref sym) => sym.write(writer),
-      RealVar::SVar(ref sym, ref st) => sv_writer.write(writer, sym, st),
+      RealVar::Var(ref sym) => {
+        try!( write!(writer, "|") ) ;
+        try!( sym.write(writer, style) ) ;
+        write!(writer, "|")
+      },
+      RealVar::SVar(ref sym, ref st) =>
+        sv_writer.write(writer, sym, st, style),
     }
   }
 }
