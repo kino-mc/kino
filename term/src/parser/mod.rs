@@ -142,7 +142,7 @@ named!{ pub simple_symbol_head<char>,
     _\
     abcdefghijklmnopqrstuvwxyz\
     ABCDEFGHIJKLMNOPQRSTUVWXYZ\
-    ~!$%^&*_-+=<>.?/
+    ~!$%^&*_-+=<>.?/\
   ")
 }
 
@@ -153,7 +153,7 @@ named!{ pub simple_symbol_tail,
     0123456789\
     abcdefghijklmnopqrstuvwxyz\
     ABCDEFGHIJKLMNOPQRSTUVWXYZ\
-    ~!@$%^&*_-+=<>.?/
+    ~!@$%^&*_-+=<>.?/\
   ")
 }
 

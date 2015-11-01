@@ -17,8 +17,8 @@ use nom::{ multispace, IResult } ;
 use base::{ State, Offset, Smt2Offset } ;
 use typ::Type ;
 use sym::Sym ;
-use term::{ Term, Operator, UnTermOps } ;
-use factory::Factory ;
+use term::{ Term, Operator } ;
+use factory::{ Factory, UnTermOps } ;
 
 use super::{
   type_parser,
@@ -258,7 +258,7 @@ fn cst_parser<'a>(
 fn var_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
-  use term::VarMaker ;
+  use var::VarMaker ;
   map!(
     bytes,
     id_parser,
@@ -314,9 +314,7 @@ fn quantified_parser<'a>(
             id_parser,
             |(s,off)| match off {
               Smt2Offset::No => f.sym(s),
-              _ => panic!(
-                "offset in bound variable"
-              ),
+              _ => panic!("offset in bound variable"),
             }
           ) ~
           multispace ~
@@ -512,13 +510,14 @@ mod quoted_sym {
 
 #[cfg(test)]
 mod terms {
-  use base::{ Offset, Smt2Offset, Offset2, PrintSmt2 } ;
+  use base::{ State, Offset, Smt2Offset, Offset2, PrintSmt2 } ;
   use sym::* ;
-  use cst::* ;
-  use term::* ;
+  use var::* ;
+  use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
   use factory::* ;
   use typ::* ;
   use std::str::FromStr ;
+
   #[test]
   fn cst() {
     use super::* ;
@@ -562,14 +561,14 @@ mod terms {
   fn var() {
     use super::* ;
     let factory = Factory::mk() ;
-    let res = factory.var( factory.of_str("bla") ) ;
+    let res = factory.var( factory.sym("bla") ) ;
     try_parse_term!(
       term_parser, & factory,
       b"bla",
       Smt2Offset::No,
       res
     ) ;
-    let res = factory.svar( factory.of_str("bla"), State::Curr ) ;
+    let res = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
       term_parser, & factory,
       b"@7bla",
@@ -591,7 +590,7 @@ mod terms {
 
     let bla_plus_7 = factory.op(
       Operator::Add, vec![
-        factory.var( factory.of_str("bla") ),
+        factory.var( factory.sym("bla") ),
         factory.cst( Int::from_str("7").unwrap() )
       ]
     ) ;
@@ -622,7 +621,7 @@ mod terms {
 
     let nested = factory.op(
       Operator::And, vec![
-        factory.svar( factory.of_str("svar"), State::Curr ),
+        factory.svar( factory.sym("svar"), State::Curr ),
         nested
       ]
     ) ;
@@ -638,7 +637,7 @@ mod terms {
 
     let nested = factory.op(
       Operator::Or, vec![
-        factory.svar( factory.of_str("something else"), State::Next ),
+        factory.svar( factory.sym("something else"), State::Next ),
         nested
       ]
     ) ;
@@ -659,8 +658,8 @@ mod terms {
     let factory = Factory::mk() ;
 
     let bla_plus_7 = factory.app(
-      factory.of_str("function symbol"), vec![
-        factory.var( factory.of_str("bla") ),
+      factory.sym("function symbol"), vec![
+        factory.var( factory.sym("bla") ),
         factory.cst( Int::from_str("7").unwrap() )
       ]
     ) ;
@@ -675,7 +674,7 @@ mod terms {
     ) ;
 
     let nested = factory.app(
-      factory.of_str("another function symbol"), vec![
+      factory.sym("another function symbol"), vec![
         factory.cst( Int::from_str("17").unwrap() ),
         bla_plus_7
       ]
@@ -690,8 +689,8 @@ mod terms {
     ) ;
 
     let nested = factory.app(
-      factory.of_str("yet another one"), vec![
-        factory.svar( factory.of_str("svar"), State::Curr ),
+      factory.sym("yet another one"), vec![
+        factory.svar( factory.sym("svar"), State::Curr ),
         nested
       ]
     ) ;
@@ -707,7 +706,7 @@ mod terms {
 
     let nested = factory.op(
       Operator::Or, vec![
-        factory.svar( factory.of_str("something else"), State::Next ),
+        factory.svar( factory.sym("something else"), State::Next ),
         nested
       ]
     ) ;

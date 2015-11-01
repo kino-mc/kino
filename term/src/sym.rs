@@ -1,11 +1,20 @@
+// Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+// directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 /*! Function symbols. */
 
 use std::io ;
 
-use base::{ PrintSmt2, Offset2, HConsed, HConsign } ;
+use base::{ Writable, HConsed, HConsign } ;
 
 
-/** Underlying representation for function symbols. */
+/** Underlying representation of function symbols. */
 #[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub struct RealSym {
   /** The `String` representing the function symbol. */
@@ -15,9 +24,9 @@ pub struct RealSym {
 /** Hash consed function symbol. */
 pub type Sym = HConsed<RealSym> ;
 
-impl PrintSmt2 for Sym {
+impl Writable for Sym {
   #[inline(always)]
-  fn to_smt2(& self, writer: & mut io::Write, _: & Offset2) -> io::Result<()> {
+  fn write(& self, writer: & mut io::Write) -> io::Result<()> {
     write!(writer, "{}", self.get().sym)
   }
 }

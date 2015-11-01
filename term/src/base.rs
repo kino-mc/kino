@@ -22,13 +22,40 @@ pub enum State {
   /** Current state. */
   Curr,
   /** Next state. */
-  Next
+  Next,
+}
+
+/** Printable in the STS 2 standard. */
+pub trait PrintSts2 {
+  /** Prints something in STS 2 in a `Write`. */
+  fn to_sts2(& self, & mut io::Write) -> io::Result<()> ;
 }
 
 /** Printable in the SMT Lib 2 standard, given an offset. */
 pub trait PrintSmt2 {
-  /** Prints something in a `Write`, given an offset. */
+  /** Prints something in SMT Lib 2 in a `Write`, given an offset. */
   fn to_smt2(& self, & mut io::Write, & Offset2) -> io::Result<()> ;
+}
+
+/** Can write itself. */
+pub trait Writable {
+  /** Writes itself. */
+  fn write(& self, & mut io::Write) -> io::Result<()> ;
+}
+
+/** Can write a state variable given a state. */
+pub trait SVarWriter<Sym: Writable> {
+  /** Writes a state variable given a state. */
+  #[inline(always)]
+  fn write(
+    & self, & mut io::Write, & Sym, & State
+  ) -> io::Result<()> ;
+}
+
+/** Can write itself given a state writer. */
+pub trait StateWritable<S: Writable, Svw: SVarWriter<S>> {
+  /** Write itself given a state writer. */
+  fn write(& self, & mut io::Write, & Svw) -> io::Result<()> ;
 }
 
 /** An offset. */
@@ -63,10 +90,8 @@ impl Offset {
   }
 }
 
-impl PrintSmt2 for Offset {
-  fn to_smt2(
-    & self, writer: & mut io::Write, _: & Offset2
-  ) -> io::Result<()> {
+impl Writable for Offset {
+  fn write(& self, writer: & mut io::Write) -> io::Result<()> {
     write!(writer, "{}", self.offset)
   }
 }
@@ -92,6 +117,33 @@ impl Offset2 {
       curr: self.curr.nxt(),
       next: self.next.nxt(),
     }
+  }
+}
+
+impl<Sym: Writable> SVarWriter<Sym> for Offset2 {
+  fn write(
+    & self, writer: & mut io::Write, v: & Sym, st: & State
+  ) -> io::Result<()> {
+    try!( write!(writer, "|@") ) ;
+    match * st {
+      State::Curr => try!( self.curr.write(writer) ),
+      State::Next => try!( self.next.write(writer) ),
+    } ;
+    try!( v.write(writer) ) ;
+    write!(writer, "|")
+  }
+}
+
+impl<Sym: Writable> SVarWriter<Sym> for () {
+  fn write(
+    & self, writer: & mut io::Write, v: & Sym, st: & State
+  ) -> io::Result<()> {
+    match * st {
+      State::Curr => try!( write!(writer, "(state |") ),
+      State::Next => try!( write!(writer, "(next |") ),
+    } ;
+    try!( v.write(writer) ) ;
+    write!(writer, "|)")
   }
 }
 

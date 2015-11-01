@@ -11,7 +11,7 @@
 
 use std::io ;
 
-use base::{ PrintSmt2, Offset2, HConsed, HConsign } ;
+use base::{ Writable, HConsed, HConsign } ;
 use typ ;
 
 use self::RealCst::* ;
@@ -30,10 +30,9 @@ pub enum RealCst {
 /** Hash consed constant. */
 pub type Cst = HConsed<RealCst> ;
 
-impl PrintSmt2 for Cst {
-  fn to_smt2(
-    & self, writer: & mut io::Write, _: & Offset2
-  ) -> io::Result<()> {
+impl Writable for Cst {
+  #[inline(always)]
+  fn write(& self, writer: & mut io::Write) -> io::Result<()> {
     match * self.get() {
       Bool(ref b) => write!( writer, "{}", b ),
       Int(ref i) => write!( writer, "{}", i ),

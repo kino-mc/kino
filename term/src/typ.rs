@@ -1,7 +1,16 @@
+// Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+// directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 /*! Type representation and their values. */
 
 use std::io ;
-use base::{ PrintSmt2, Offset2 } ;
+use base::{ Writable } ;
 
 /** A primitive type. */
 #[derive(Clone,Debug,PartialEq,Eq,PartialOrd,Ord, Hash)]
@@ -26,10 +35,9 @@ impl Type {
   }
 }
 
-impl PrintSmt2 for Type {
-  fn to_smt2(
-    & self, writer: & mut io::Write, _: & Offset2
-  ) -> io::Result<()> {
+impl Writable for Type {
+  #[inline(always)]
+  fn write(& self, writer: & mut io::Write) -> io::Result<()> {
     write!(writer, "{}", self.to_str())
   }
 }

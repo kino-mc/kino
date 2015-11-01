@@ -11,10 +11,14 @@
 
 use std::io ;
 
-use ::base::{ PrintSmt2, Offset2, HConsed, HConsign, State } ;
-use ::typ::Type ;
-use ::sym::Sym ;
-use ::cst ;
+use base::{
+  StateWritable, Writable, SVarWriter, PrintSmt2, PrintSts2,
+  Offset2, HConsed, HConsign, State
+} ;
+use typ::Type ;
+use sym::Sym ;
+use cst::Cst ;
+use var::{ Var, VarMaker } ;
 use self::RealTerm::* ;
 
 /** Standard operators. */
@@ -54,9 +58,9 @@ pub enum Operator {
   Gt,
 }
 
-impl PrintSmt2 for Operator {
-  fn to_smt2(
-    & self, writer: & mut io::Write, _: & Offset2
+impl Writable for Operator {
+  fn write(
+    & self, writer: & mut io::Write
   ) -> io::Result<()> {
     write!(
       writer,
@@ -86,12 +90,10 @@ impl PrintSmt2 for Operator {
 /** Underlying representation of terms. */
 #[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum RealTerm {
-  /** A non-stateful variable. */
-  Var(Sym),
-  /** A stateful variable. */
-  SVar(Sym, State),
+  /** A variable. */
+  V(Var),
   /** A constant value. */
-  Cst(cst::Cst),
+  C(Cst),
   /** An application of an operator. */
   Op(Operator, Vec<Term>),
   /** A universal quantification. */
@@ -110,9 +112,9 @@ pub type Term = HConsed<RealTerm> ;
 /** Hash cons table for terms. */
 pub type TermConsign = HConsign<RealTerm> ;
 
-impl PrintSmt2 for Term {
-  fn to_smt2(
-    & self, writer: & mut io::Write, offset: & Offset2
+impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Term {
+  fn write(
+    & self, writer: & mut io::Write, sv_writer: & Svw
   ) -> io::Result<()> {
     let mut stack = vec![ (true, vec![ self.clone() ]) ] ;
     loop {
@@ -122,23 +124,15 @@ impl PrintSmt2 for Term {
           stack.push( (false, to_do) ) ;
           if ! is_first { try!( write!(writer, " ") ) } ;
           match term.get() {
-            & Var(ref sym) => {
-              try!( write!(writer, "|") ) ;
-              try!( sym.to_smt2(writer, offset) ) ;
-              try!( write!(writer, "|") )
+            & V(ref var) => {
+              try!( var.write(writer, sv_writer) )
             },
-            & SVar(ref sym, ref state) => {
-              try!( write!(writer, "|@") ) ;
-              try!( offset[state].to_smt2(writer, offset) ) ;
-              try!( sym.to_smt2(writer, offset) ) ;
-              try!( write!(writer, "|") )
-            },
-            & Cst(ref cst) => {
-              try!( cst.to_smt2(writer, offset) )
+            & C(ref cst) => {
+              try!( cst.write(writer) )
             },
             & App(ref sym, ref args) => {
               try!( write!(writer, "(|") ) ;
-              try!( sym.to_smt2(writer, offset) ) ;
+              try!( sym.write(writer) ) ;
               try!( write!(writer, "| ") ) ;
               let mut args = args.clone() ;
               args.reverse() ;
@@ -146,7 +140,7 @@ impl PrintSmt2 for Term {
             },
             & Op(ref op, ref args) => {
               try!( write!(writer, "(") ) ;
-              try!( op.to_smt2(writer, offset) ) ;
+              try!( op.write(writer) ) ;
               try!( write!(writer, " ") ) ;
               let mut args = args.clone() ;
               args.reverse() ;
@@ -169,31 +163,31 @@ impl PrintSmt2 for Term {
   }
 }
 
-/** Can create non-stateful stateful variables. */
-pub trait VarMaker<Sym> {
-  /** Creates a non-stateful variable. */
-  #[inline]
-  fn var(& self, Sym) -> Term ;
-  /** Creates a stateful variable. */
-  #[inline]
-  fn svar(& self, Sym, State) -> Term ;
-}
-impl<
-  'a, Sym: Clone, T: Sized + VarMaker<Sym>
-> VarMaker<& 'a Sym> for T {
-  fn var(& self, id: & 'a Sym) -> Term {
-    (self as & VarMaker<Sym>).var(id.clone())
-  }
-  fn svar(& self, id: & 'a Sym, state: State) -> Term {
-    (self as & VarMaker<Sym>).svar(id.clone(), state)
+impl PrintSts2 for Term {
+  fn to_sts2(
+    & self, writer: & mut io::Write
+  ) -> io::Result<()> {
+    self.write(writer, & ())
   }
 }
-impl VarMaker<Sym> for TermConsign {
-  fn var(& self, id: Sym) -> Term {
-    self.lock().unwrap().mk( Var(id) )
+
+impl PrintSmt2 for Term {
+  fn to_smt2(
+    & self, writer: & mut io::Write, offset: & Offset2
+  ) -> io::Result<()> {
+    self.write(writer, offset)
   }
-  fn svar(& self, id: Sym, state: State) -> Term {
-    self.lock().unwrap().mk( SVar(id, state) )
+}
+
+/** Can create variables. */
+pub trait VariableMaker {
+  /** Creates a variable. */
+  #[inline]
+  fn var(& self, Var) -> Term ;
+}
+impl VariableMaker for TermConsign {
+  fn var(& self, var: Var) -> Term {
+    self.lock().unwrap().mk( V(var) )
   }
 }
 
@@ -210,9 +204,9 @@ impl<
     self.cst(c.clone())
   }
 }
-impl CstMaker<cst::Cst> for TermConsign {
-  fn cst(& self, c: cst::Cst) -> Term {
-    self.lock().unwrap().mk( Cst(c) )
+impl CstMaker<Cst> for TermConsign {
+  fn cst(& self, c: Cst) -> Term {
+    self.lock().unwrap().mk( C(c) )
   }
 }
 
@@ -284,36 +278,31 @@ impl BindMaker<Term> for TermConsign {
   }
 }
 
-/** Unary operations over terms. */
-pub trait UnTermOps<Trm> {
-  /** Bumps a term.
 
-  * changes all `SVar(sym, State::curr)` to `SVar(sym, State::next)`,
-  * returns `Err(())` if input term contains a `SVar(_, State::next)`. */
-  #[inline]
-  fn bump(& self, Trm) -> Result<Term,()> ;
+pub trait Factory :
+  VarMaker<Sym, Term> +
+  CstMaker<Cst> +
+  OpMaker +
+  AppMaker<Sym> +
+  BindMaker<Term> {
 }
-impl<
-  'a, Trm: Clone, T: Sized + UnTermOps<Trm>
-> UnTermOps<& 'a Trm> for T {
-  fn bump(& self, term: & 'a Trm) -> Result<Term,()> {
-    self.bump( term.clone() )
-  }
-}
-impl UnTermOps<Term> for TermConsign {
-  fn bump(& self, term: Term) -> Result<Term,()> {
-    zip::var_map(
-      self,
-      |cons, t| match * t.get() {
+
+pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,()> {
+  use var::RealVar::* ;
+  zip::var_map(
+    f,
+    |factory, t| match * t.get() {
+      V(ref var) => match * var.get() {
         SVar(ref s, State::Curr) => Ok(
-          Some( cons.svar(s, State::Next) )
+          Some( factory.svar(s.clone(), State::Next) )
         ),
         SVar(_,_) => Err(()),
         _ => Ok(None),
       },
-      term
-    )
-  }
+      _ => Ok(None),
+    },
+    term
+  )
 }
 
 
@@ -414,7 +403,7 @@ mod zip {
     /** Goes up in the zipper recursively.
 
     Stops if going up an empty path, or unexplored siblings are found. */
-    pub fn go_up(mut self, cons: & TermConsign) -> Res {
+    pub fn go_up<F: Factory>(mut self, cons: & F) -> Res {
       loop {
         match self.path.pop() {
 
@@ -482,10 +471,10 @@ mod zip {
   // }
 
   /** Applies some function to the variables in a term. */
-  pub fn var_map<'a,F,E>(
-    cons: & 'a TermConsign, f: F, term: Term
+  pub fn var_map<'a, F: Factory, Fun, E>(
+    cons: & 'a F, f: Fun, term: Term
   ) -> Result<Term,E>
-  where F: Fn(& 'a TermConsign, & Term) -> Result<Option<Term>,E> {
+  where Fun: Fn(& 'a F, & Term) -> Result<Option<Term>,E> {
     let mut zip = Zip { path: vec![], curr: term } ;
     loop {
       zip = zip.go_down() ;

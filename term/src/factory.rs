@@ -17,9 +17,11 @@ use base::{ Mkable, State, Offset, Smt2Offset } ;
 use typ::{ Type, Bool, Int, Rat } ;
 use sym::{ SymConsign, Sym, SymMaker } ;
 use cst::{ Cst, CstConsign } ;
+use var::{ Var, VarConsign, VarMaker } ;
 use term::{
   TermConsign, Operator, Term,
-  CstMaker, VarMaker, OpMaker, AppMaker, BindMaker, UnTermOps
+  CstMaker, VariableMaker, OpMaker, AppMaker, BindMaker,
+  bump
 } ;
 use parser ;
 
@@ -39,10 +41,12 @@ macro_rules! try_parse {
 /** Factory for terms. */
 #[derive(Clone)]
 pub struct Factory {
-  /** Hash cons table for constants. */
-  cst: CstConsign,
   /** Hash cons table for function symbols. */
   sym: SymConsign,
+  /** Hash cons table for variabls. */
+  var: VarConsign,
+  /** Hash cons table for constants. */
+  cst: CstConsign,
   /** Hash cons table for terms. */
   term: TermConsign,
 }
@@ -51,7 +55,10 @@ impl Factory {
   /** Creates an empty term factory. */
   pub fn mk() -> Self {
     Factory {
-      cst: CstConsign::mk(), sym: SymConsign::mk(), term: TermConsign::mk()
+      sym: SymConsign::mk(),
+      var: VarConsign::mk(),
+      cst: CstConsign::mk(),
+      term: TermConsign::mk(),
     }
   }
   /** The hash cons table for constants. */
@@ -59,6 +66,23 @@ impl Factory {
     & self.cst
   }
 }
+
+
+/* |===| Factory can create symbols. */
+
+impl<'a> SymMaker<& 'a str> for Factory {
+  fn sym(& self, sym: & 'a str) -> Sym {
+    self.sym.sym(sym)
+  }
+}
+impl SymMaker<String> for Factory {
+  fn sym(& self, sym: String) -> Sym {
+    self.sym.sym(sym)
+  }
+}
+
+
+/* |===| Factory can create constants. */
 
 impl CstMaker<Cst> for Factory {
   fn cst(& self, cst: Cst) -> Term {
@@ -84,39 +108,48 @@ impl CstMaker<Rat> for Factory {
   }
 }
 
-impl<'a> SymMaker<& 'a str> for Factory {
-  fn sym(& self, sym: & 'a str) -> Sym {
-    self.sym.sym(sym)
-  }
-}
-impl SymMaker<String> for Factory {
-  fn sym(& self, sym: String) -> Sym {
-    self.sym.sym(sym)
-  }
-}
 
-impl VarMaker<String> for Factory {
+/* |===| Factory can create variables. */
+
+impl VarMaker<String, Term> for Factory {
   fn var(& self, sym: String) -> Term {
-    self.term.var( self.sym(sym) )
+    self.term.var(
+      self.var.var( self.sym(sym) )
+    )
   }
   fn svar(& self, sym: String, st: State) -> Term {
-    self.term.svar( self.sym(sym), st )
+    self.term.var(
+      self.var.svar( self.sym(sym), st )
+    )
   }
 }
-
-impl<'a> VarMaker<& 'a str> for Factory {
+impl<'a> VarMaker<& 'a str, Term> for Factory {
   fn var(& self, sym: & 'a str) -> Term {
-    self.term.var( self.sym(sym) )
+    self.term.var(
+      self.var.var( self.sym(sym) )
+    )
   }
   fn svar(& self, sym: & 'a str, st: State) -> Term {
-    self.term.svar( self.sym(sym), st )
+    self.term.var(
+      self.var.svar( self.sym(sym), st )
+    )
+  }
+}
+impl VarMaker<Sym, Term> for Factory {
+  fn var(& self, sym: Sym) -> Term {
+    self.term.var(
+      self.var.var(sym)
+    )
+  }
+  fn svar(& self, sym: Sym, st: State) -> Term {
+    self.term.var(
+      self.var.svar(sym,st)
+    )
   }
 }
 
-impl VarMaker<Sym> for Factory {
-  fn var(& self, sym: Sym) -> Term { self.term.var(sym) }
-  fn svar(& self, sym: Sym, st: State) -> Term { self.term.svar(sym,st) }
-}
+
+/* |===| Factory can create operator applications. */
 
 impl OpMaker for Factory {
   fn op(& self, op: Operator, args: Vec<Term>) -> Term {
@@ -124,11 +157,17 @@ impl OpMaker for Factory {
   }
 }
 
+
+/* |===| Factory can create function symbol applications. */
+
 impl AppMaker<Sym> for Factory {
   fn app(& self, sym: Sym, args: Vec<Term>) -> Term {
     self.term.app(sym, args)
   }
 }
+
+
+/* |===| Factory can create quantifier and let-bindings. */
 
 impl BindMaker<Term> for Factory {
   fn forall(
@@ -148,8 +187,33 @@ impl BindMaker<Term> for Factory {
   }
 }
 
+
+/* |===| Factory is a term factory. */
+
+impl ::term::Factory for Factory {}
+
+
+/* |===| Factory can perform unary operations on terms. */
+
+/** Unary operations on terms. */
+pub trait UnTermOps<Trm> {
+  /** Bumps a term.
+
+  * changes all `SVar(sym, State::curr)` to `SVar(sym, State::next)`,
+  * returns `Err(())` if input term contains a `SVar(_, State::next)`. */
+  fn bump(& self, Trm) -> Result<Term,()> ;
+}
+impl<
+  'a, Trm: Clone, T: UnTermOps<Trm> + Sized
+> UnTermOps<& 'a Trm> for T {
+  #[inline(always)]
+  fn bump(& self, term: & 'a Trm) -> Result<Term,()> {
+    (self as & UnTermOps<Trm>).bump(term.clone())
+  }
+}
+
 impl UnTermOps<Term> for Factory {
-  fn bump(& self, term: Term) -> Result<Term,()> { self.term.bump(term) }
+  fn bump(& self, term: Term) -> Result<Term,()> { bump(self, term) }
 }
 
 
@@ -159,19 +223,23 @@ impl UnTermOps<Term> for Factory {
 
 
 impl ParseSmt2 for Factory {
-  type Ident = (Sym, Option<Offset>) ;
+  type Ident = (Var, Option<Offset>) ;
   type Value = Cst ;
   type Expr = (Term, Smt2Offset) ;
   type Proof = () ;
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], (Sym, Option<Offset>)> {
+  ) -> IResult<'a, & 'a [u8], (Var, Option<Offset>)> {
     map!(
       bytes,
       parser::smt2::id_parser,
       |(sym, offset)| match offset {
-        Smt2Offset::No => (self.sym(sym), None),
-        Smt2Offset::One(o) => (self.sym(sym), Some(o)),
+        Smt2Offset::No => (
+          self.var.var(self.sym(sym)), None
+        ),
+        Smt2Offset::One(o) => (
+          self.var.svar( self.sym(sym), State::Curr ), Some(o)
+        ),
         _ => unreachable!(),
       }
     )
@@ -187,7 +255,7 @@ impl ParseSmt2 for Factory {
     parser::smt2::term_parser(bytes, self)
   }
   fn parse_proof<'a>(
-    & self, bytes: & 'a [u8]
+    & self, _: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], ()> {
     unimpl!()
   }

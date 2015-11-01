@@ -14,7 +14,8 @@ use std::str ;
 use nom::{ multispace, IResult } ;
 
 use base::State ;
-use term::{ Term, VarMaker } ;
+use var::VarMaker ;
+use term::Term ;
 use factory::Factory ;
 
 use super::{
@@ -219,8 +220,8 @@ pub fn term_parser<'a>(
 ) -> IResult<'a, & 'a [u8], Term> {
   alt!(
     bytes,
-    apply!(var_parser, f) |
     apply!(cst_parser, f) |
+    apply!(var_parser, f) |
     apply!(op_parser, f) |
     apply!(quantified_parser, f) |
     apply!(let_parser, f) |
@@ -234,105 +235,209 @@ pub fn term_parser<'a>(
 
 
 
-// #[cfg(test)]
-// macro_rules! try_parse_id {
-//   ($fun:expr, $arg:expr, $state:expr, $id:expr) => (
-//     try_parse!($fun, $arg,
-//       (s, res) -> {
-//         let (id, state) = res ;
-//         let exp: Option<State> = $state ;
-//         if exp != state {
-//           panic!("expected state {:?}, got {:?}", exp, state)
-//         } else {
-//           assert_eq!(id, $id)
-//         }
-//       }
-//     )
-//   ) ;
-//   ($fun:expr, $arg:expr, $state:expr) => (
-//     try_parse_id!(
-//       $fun, $arg, $state, ::std::str::from_utf8($arg).unwrap()
-//     )
-//   ) ;
-// }
+#[cfg(test)]
+macro_rules! try_parse_term {
+  ($fun:expr, $factory:expr, $arg:expr, $e:expr) => (
+    try_parse!($fun, $factory, $arg,
+      (s, res) -> {
+        assert_eq!(res, $e)
+      }
+    )
+  ) ;
+}
 
-// #[cfg(test)]
-// mod simpl_sym {
-//   use term::State ;
-//   #[test]
-//   fn nsvar() {
-//     use super::* ;
-//     try_parse_id!(id_parser, b"bla", None, "bla") ;
-//     try_parse_id!(id_parser, b"_bla!52740>^^&", None, "_bla!52740>^^&") ;
-//   }
-//   #[test]
-//   fn svar0() {
-//     use super::* ;
-//     try_parse_id!(id_parser, b"state.bla", Some(State::Curr), "bla") ;
-//     try_parse_id!(
-//       id_parser, b"state.!52@_740>^^&", Some(State::Curr), "!52@_740>^^&"
-//     ) ;
-//   }
-//   #[test]
-//   fn svar1() {
-//     use super::* ;
-//     try_parse_id!(id_parser, b"next.bla", Some(State::Next), "bla") ;
-//     try_parse_id!(
-//       id_parser, b"next._sath%mis?/$$0", Some(State::Next), "_sath%mis?/$$0"
-//     ) ;
-//   }
-//   #[test]
-//   #[should_panic]
-//   fn illegal_first_is_digit() {
-//     use super::* ;
-//     try_parse!(id_parser, b"7bla") ;
-//   }
-//   #[test]
-//   #[should_panic]
-//   fn illegal_first_is_at() {
-//     use super::* ;
-//     try_parse!(id_parser, b"@bla") ;
-//     try_parse!(id_parser, b"state.@bla") ;
-//     try_parse!(id_parser, b"next.@bla") ;
-//   }
-// }
 
-// #[cfg(test)]
-// mod quoted_sym {
-//   use term::State ;
-//   #[test]
-//   fn nsvar() {
-//     use super::* ;
-//     try_parse_id!(id_parser, b"|bla|", None, "bla") ;
-//     try_parse_id!(
-//       id_parser, b"|b  ;][&])=(!&]+)=$&[]})*=la!52740>^^&|",
-//       None, "b  ;][&])=(!&]+)=$&[]})*=la!52740>^^&"
-//     ) ;
-//   }
-//   #[test]
-//   fn svar0() {
-//     use super::* ;
-//     try_parse_id!(id_parser, b"|state.bla|", Some(State::Curr), "bla") ;
-//     try_parse_id!(
-//       id_parser, b"|state.[ !52@_74;[&{(0>^^]*!#&// |",
-//       Some(State::Curr), "[ !52@_74;[&{(0>^^]*!#&// "
-//     ) ;
-//   }
-//   #[test]
-//   fn svar1() {
-//     use super::* ;
-//     try_parse_id!(id_parser, b"|next.bla|", Some(State::Next), "bla") ;
-//     try_parse_id!(
-//       id_parser, b"|next._sa%~3^^^\"th%mis?{}]+)!#/$$0|",
-//     Some(State::Next), "_sa%~3^^^\"th%mis?{}]+)!#/$$0"
-//     ) ;
-//   }
-//   #[test]
-//   #[should_panic]
-//   fn illegal_first_is_at() {
-//     use super::* ;
-//     try_parse!(id_parser, b"|@bla|") ;
-//     try_parse!(id_parser, b"|state.@bla|") ;
-//     try_parse!(id_parser, b"|next.@bla|") ;
-//   }
-// }
+#[cfg(test)]
+mod terms {
+  use base::{ State, PrintSts2 } ;
+  use sym::* ;
+  use var::* ;
+  use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
+  use factory::* ;
+  use typ::* ;
+  use std::str::FromStr ;
+
+  #[test]
+  fn cst() {
+    use super::* ;
+    let factory = Factory::mk() ;
+    let res = factory.cst( Int::from_str("7").unwrap() ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"7",
+      res
+    ) ;
+    let res = factory.cst(
+      Rat::new(
+        Int::from_str("5357").unwrap(),
+        Int::from_str("2046").unwrap()
+      )
+    ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"(/ 5357 2046)",
+      res
+    ) ;
+    let res = factory.cst( true ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"true",
+      res
+    ) ;
+    let res = factory.cst( false ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"false",
+      res
+    ) ;
+  }
+
+  #[test]
+  fn var() {
+    use super::* ;
+    let factory = Factory::mk() ;
+    let res = factory.var( factory.sym("bla") ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"bla",
+      res
+    ) ;
+    let res = factory.svar( factory.sym("bla"), State::Curr ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"(state bla)",
+      res
+    ) ;
+    let res = factory.svar( factory.sym("bla"), State::Next ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"(next bla)",
+      res
+    ) ;
+  }
+
+  #[test]
+  fn op() {
+    use super::* ;
+    let factory = Factory::mk() ;
+
+    let bla_plus_7 = factory.op(
+      Operator::Add, vec![
+        factory.var( factory.sym("bla") ),
+        factory.cst( Int::from_str("7").unwrap() )
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    bla_plus_7.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      bla_plus_7
+    ) ;
+
+    let nested = factory.op(
+      Operator::Le, vec![
+        factory.cst( Int::from_str("17").unwrap() ),
+        bla_plus_7
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
+
+    let nested = factory.op(
+      Operator::And, vec![
+        factory.svar( factory.sym("svar"), State::Curr ),
+        nested
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
+
+    let nested = factory.op(
+      Operator::Or, vec![
+        factory.svar( factory.sym("something else"), State::Next ),
+        nested
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
+  }
+
+  #[test]
+  fn app() {
+    use super::* ;
+    let factory = Factory::mk() ;
+
+    let bla_plus_7 = factory.app(
+      factory.sym("function symbol"), vec![
+        factory.var( factory.sym("bla") ),
+        factory.cst( Int::from_str("7").unwrap() )
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    bla_plus_7.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      bla_plus_7
+    ) ;
+
+    let nested = factory.app(
+      factory.sym("another function symbol"), vec![
+        factory.cst( Int::from_str("17").unwrap() ),
+        bla_plus_7
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
+
+    let nested = factory.app(
+      factory.sym("yet another one"), vec![
+        factory.svar( factory.sym("svar"), State::Curr ),
+        nested
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
+
+    let nested = factory.op(
+      Operator::Or, vec![
+        factory.svar( factory.sym("something else"), State::Next ),
+        nested
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
+  }
+}
+

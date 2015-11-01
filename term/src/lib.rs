@@ -25,10 +25,10 @@ variables can be either in
 * the next state ([`State`][state]`::Next`).
 
 **In SMT Lib 2** the offset of state-variables (*i.e.* unrolling) is given
-when printing. For more details, see
+when printing terms. For more details, see
 
 * trait [`PrintSmt2`][print smt 2] for printing, and
-* struct [`Smt2Offset`][smt 2 offset] to specify the offset.
+* struct [`Offset2`][offset2] to specify the offset.
 
 
 ## Conventions *when interacting with SMT-solvers*
@@ -43,11 +43,9 @@ as a function symbol `| <var>|`. This way, a variable declared in a STS as
 stateful variable `|@42my_var|` SMT-Lib-2-wise.
 
 
-
-
 ## Parsing
 
-Parsing is different when parsing STS versus parsing answers in SMT Lib.
+Parsing STS and parsing answers in SMT Lib is different.
 
 * STS is standardized and do not have offsets *per say*. Stateful variables
   are specified with
@@ -64,16 +62,20 @@ Parsing is different when parsing STS versus parsing answers in SMT Lib.
 
 ## TODO
 
+* [`StateWritable::write`][state writable] for terms copies way too much stuff
 * `num::rational` crash if denominator is zero. Can happen in parser. Parsing
 only non-zero denominator will push the problem to function symbol application. Need proper handling.
-* `PrintSmt2::to_smt2` for terms copies way too much stuff
+* document [`write` module][write module]
 
 
 [state]: enum.State.html (State enum type)
 [print smt 2]: trait.PrintSmt2.html (PrintSmt2 trait)
 [factory]: struct.Factory.html (Term factory struct)
-[smt 2 offset]: struct.Offset2.html (Offset2 struct)
+[offset2]: struct.Offset2.html (Offset2 struct)
+[smt 2 offset]: enum.Smt2Offset.html (Smt2Offset struct)
 [parse smt 2]: trait.ParseSmt2.html (ParseSmt2 trait)
+[state writable]: write/trait.StateWritable.html (StateWritable trait)
+[write module]: write/index.html (write module)
 */
 
 extern crate num ;
@@ -89,7 +91,7 @@ macro_rules! unimpl {
 
 mod base ;
 pub use base::{
-  State, PrintSmt2, Offset, Offset2, Smt2Offset
+  State, PrintSmt2, PrintSts2, Offset, Offset2, Smt2Offset
 } ;
 mod typ ;
 pub use typ::{ Type, Bool, Int, Rat } ;
@@ -97,17 +99,27 @@ mod sym ;
 pub use sym::{ Sym, SymMaker } ;
 mod cst ;
 pub use cst::{ Cst } ;
+mod var ;
+pub use var::{ Var, VarMaker } ;
 mod term ;
 pub use term::{
-  Term, VarMaker, CstMaker, OpMaker, BindMaker, AppMaker, UnTermOps
+  Term, CstMaker, OpMaker, BindMaker, AppMaker
 } ;
 mod parser ;
 mod factory ;
-pub use factory::{ Factory, ParseSts2 } ;
+pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 
 /** Real, underlying representation of symbols, constants and terms. */
 pub mod real {
   pub use sym::RealSym as Sym ;
+  pub use var::RealVar as Var ;
   pub use cst::RealCst as Cst ;
   pub use term::RealTerm as Term ;
+}
+
+/** Internal traits used for SMT Lib 2 and STS Lib 2 writing.
+
+Exposed for extensibility. */
+pub mod write {
+  pub use base::{ Writable, SVarWriter, StateWritable } ;
 }
