@@ -64,7 +64,7 @@ macro_rules! try_parse {
   ) ;
 }
 
-pub mod smtrans ;
+pub mod sts2 ;
 pub mod smt2 ;
 
 named!{ pub type_parser<Type>,

@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Parsers for the `smtrans` format. */
+/*! Parsers for the `sts` format. */
 
 use std::str ;
 
@@ -18,7 +18,10 @@ use term::{ Term, VarMaker } ;
 use factory::Factory ;
 
 use super::{
+  type_parser,
   simple_symbol_head, simple_symbol_tail,
+  operator_parser,
+  quantifier_parser, Quantifier
 } ;
 
 named!{ state<State>,
@@ -53,7 +56,7 @@ named!{ pub id_parser<String>,
 
 
 pub fn var_parser<'a>(
-  f: Factory, bytes: & 'a [u8]
+  bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Term> {
   use sym::SymMaker ;
   alt!(
@@ -76,10 +79,154 @@ pub fn var_parser<'a>(
   )
 }
 
+pub fn cst_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Term> {
+  use term::CstMaker ;
+  map!(
+    bytes,
+    apply!( super::cst_parser, f.cst_consign() ),
+    |cst| f.cst(cst)
+  )
+}
+
+pub fn op_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Term> {
+  use term::OpMaker ;
+  chain!(
+    bytes,
+    char!('(') ~
+    opt!(multispace) ~
+    op: operator_parser ~
+    multispace ~
+    args: separated_list!(
+      multispace, apply!(term_parser, f)
+    ) ~
+    opt!(multispace) ~
+    char!(')'),
+    || f.op(op, args)
+  )
+}
 
 
+pub fn quantified_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Term> {
+  use sym::SymMaker ;
+  use term::BindMaker ;
+  chain!(
+    bytes,
+    char!('(') ~
+    opt!(multispace) ~
+    quantifier: quantifier_parser ~
+    opt!(multispace) ~
+    char!('(') ~
+    bindings: separated_list!(
+      opt!(multispace),
+      delimited!(
+        char!('('),
+        chain!(
+          opt!(multispace) ~
+          sym: map!(
+            id_parser,
+            |sym| f.sym(sym)
+          ) ~
+          multispace ~
+          ty: type_parser ~
+          opt!(multispace),
+          || (sym, ty)
+        ),
+        char!(')')
+      )
+    ) ~
+    opt!(multispace) ~
+    char!(')') ~
+    opt!(multispace) ~
+    term: apply!(term_parser, f) ~
+    opt!(multispace) ~
+    char!(')'),
+    || match quantifier {
+      Quantifier::Forall => f.forall(bindings, term),
+      Quantifier::Exists => f.exists(bindings, term),
+    }
+  )
+}
+
+pub fn let_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Term> {
+  use sym::SymMaker ;
+  use term::BindMaker ;
+  chain!(
+    bytes,
+    char!('(') ~
+    opt!(multispace) ~
+    tag!("let") ~
+    opt!(multispace) ~
+    char!('(') ~
+    bindings: separated_list!(
+      opt!(multispace),
+      delimited!(
+        char!('('),
+        chain!(
+          opt!(multispace) ~
+          sym: map!(
+            id_parser,
+            |sym| f.sym(sym)
+          ) ~
+          multispace ~
+          term: apply!(term_parser, f) ~
+          opt!(multispace),
+          || (sym, term)
+        ),
+        char!(')')
+      )
+    ) ~
+    opt!(multispace) ~
+    char!(')') ~
+    opt!(multispace) ~
+    term: apply!(term_parser, f) ~
+    opt!(multispace) ~
+    char!(')'),
+    || f.let_b(bindings, term)
+  )
+}
+
+fn app_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Term> {
+  use sym::SymMaker ;
+  use term::AppMaker ;
+  chain!(
+    bytes,
+    char!('(') ~
+    opt!(multispace) ~
+    sym: id_parser ~
+    multispace ~
+    args: separated_list!(
+      multispace, apply!(term_parser, f)
+    ) ~
+    opt!(multispace) ~
+    char!(')'),
+    || f.app( f.sym(sym), args )
+  )
+}
 
 
+pub fn term_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Term> {
+  alt!(
+    bytes,
+    apply!(var_parser, f) |
+    apply!(cst_parser, f) |
+    apply!(op_parser, f) |
+    apply!(quantified_parser, f) |
+    apply!(let_parser, f) |
+    apply!(app_parser, f)
+  )
+}
 
 
 
