@@ -7,47 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[macro_use]
+extern crate nom ;
 extern crate term ;
 
-use term::{ Sym, Type, Term } ;
-
-pub struct Sig {
-  vars: Vec<Type>,
-}
-pub struct NamedSig {
-  vars: Vec<(Sym, Type)>,
-}
-
-pub struct State {
-  sym: Sym,
-  sig: NamedSig,
-}
-
-pub struct Body {
-  body: Vec<Term>,
-  calls: Vec<Sym>,
-}
-
-pub struct FunDec {
-  sym: Sym,
-  sig: Sig,
-  typ: Type,
-}
-
-pub struct FunDef {
-  sym: Sym,
-  sig: NamedSig,
-  typ: Type,
-  body: Body,
-}
-
-pub struct Pred {
-  sym: Sym,
-  state: Sym,
-}
-
-pub struct Sys {
-  sym: Sym,
-  state: State,
-  body: Body,
-}
+pub mod base ;
+pub mod parse ;

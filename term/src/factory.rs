@@ -61,6 +61,10 @@ impl Factory {
       term: TermConsign::mk(),
     }
   }
+  /** Parses a type. */
+  pub fn parse_type<'a>(bytes: & 'a [u8]) -> IResult<'a, & 'a [u8], Type> {
+    parser::type_parser(bytes)
+  }
   /** The hash cons table for constants. */
   pub fn cst_consign(& self) -> & CstConsign {
     & self.cst
