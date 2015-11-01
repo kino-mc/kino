@@ -1,26 +1,44 @@
-/*! Symbol-related structures and parsers. */
+/*! Function symbols. */
 
-use base::* ;
+use std::io ;
 
+use base::{ PrintSmt2, Offset2, HConsed, HConsign } ;
+
+
+/** Underlying representation for function symbols. */
 #[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
-pub struct Symbol {
+pub struct RealSym {
+  /** The `String` representing the function symbol. */
   sym: String
 }
 
-pub type Sym = HConsed<Symbol> ;
+/** Hash consed function symbol. */
+pub type Sym = HConsed<RealSym> ;
 
-pub type SymConsign = HConsign<Symbol> ;
-
-pub trait SymFactory {
-  fn of_str(& self, & str) -> Sym ;
-  fn of_string(& self, String) -> Sym ;
+impl PrintSmt2 for Sym {
+  #[inline(always)]
+  fn to_smt2(& self, writer: & mut io::Write, _: & Offset2) -> io::Result<()> {
+    write!(writer, "{}", self.get().sym)
+  }
 }
 
-impl SymFactory for SymConsign {
-  fn of_str(& self, sym: & str) -> Sym {
-    self.lock().unwrap().mk( Symbol { sym: sym.to_string() } )
+/** Hash cons table for function symbols. */
+pub type SymConsign = HConsign<RealSym> ;
+
+/** Can create a function symbol. */
+pub trait SymMaker<T> {
+  /** Creates a function symbol. */
+  #[inline(always)]
+  fn sym(& self, T) -> Sym ;
+}
+
+impl SymMaker<String> for SymConsign {
+  fn sym(& self, sym: String) -> Sym {
+    self.lock().unwrap().mk( RealSym { sym: sym } )
   }
-  fn of_string(& self, sym: String) -> Sym {
-    self.lock().unwrap().mk( Symbol { sym: sym } )
+}
+impl<'a> SymMaker<& 'a str> for SymConsign {
+  fn sym(& self, sym: & 'a str) -> Sym {
+    self.lock().unwrap().mk( RealSym { sym: sym.to_string() } )
   }
 }

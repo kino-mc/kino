@@ -7,15 +7,43 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/** Parsers and such. */
+/*! Parsers and such. */
 
-use nom::multispace ;
+use nom::{ multispace, IResult } ;
 
-use ::typ::{ Type, Bool, Int, Rat } ;
+use cst::ConstMaker ;
+
+use typ::{ Type, Bool, Int, Rat } ;
+use cst::Cst ;
+use term::Operator ;
 
 /** Used in tests for parsers. */
 #[cfg(test)]
 macro_rules! try_parse {
+  (
+    $fun:expr, $factory:expr, $arg:expr,
+    ($s:ident, $res:ident) -> $b:block
+  ) => (
+    {
+      let $s = ::std::str::from_utf8($arg).unwrap() ;
+      println!("| parsing \"{}\"", $s) ;
+      match $fun(& $arg[..], $factory) {
+        ::nom::IResult::Done(_,$res) => {
+          println!("| done: {:?}", $res) ;
+          $b
+        },
+        ::nom::IResult::Error(
+          ::nom::Err::Position(pos,txt)
+        ) => panic!(
+          "position error at {}: {}",
+          pos, ::std::str::from_utf8(txt).unwrap()
+        ),
+        ::nom::IResult::Error(e) => panic!("error: {:?}", e),
+        ::nom::IResult::Incomplete(n) => panic!("incomplete: {:?}", n),
+      } ;
+      println!("") ;
+    }
+  ) ;
   ($fun:expr, $arg:expr, ($s:ident, $res:ident) -> $b:block) => (
     {
       let $s = ::std::str::from_utf8($arg).unwrap() ;
@@ -47,10 +75,25 @@ named!{ pub type_parser<Type>,
   )
 }
 
+
+
 named!{ pub bool_parser<Bool>,
   alt!(
-    map!( tag!("true" ), |_| true  ) |
-    map!( tag!("false"), |_| false )
+    chain!(
+      char!('t') ~
+      char!('r') ~
+      char!('u') ~
+      char!('e'),
+      || true
+    ) |
+    chain!(
+      char!('f') ~
+      char!('a') ~
+      char!('l') ~
+      char!('s') ~
+      char!('e'),
+      || false
+    )
   )
 }
 
@@ -80,6 +123,19 @@ named!{ pub rat_parser<Rat>,
   )
 }
 
+pub fn cst_parser<
+  'a, F: ConstMaker<Bool> + ConstMaker<Int> + ConstMaker<Rat>
+>(
+  bytes: & 'a [u8], f: & F
+) -> IResult<'a, & 'a [u8], Cst> {
+  alt!(
+    bytes,
+    map!( int_parser, |i| f.constant(i) ) |
+    map!( rat_parser, |r| f.constant(r) ) |
+    map!( bool_parser, |b| f.constant(b) )
+  )
+}
+
 /** Matches the head of a simple symbol. */
 named!{ pub simple_symbol_head<char>,
   one_of!("\
@@ -102,6 +158,114 @@ named!{ pub simple_symbol_tail,
 }
 
 
+
+named!{ pub operator_parser<Operator>,
+  alt!(
+    map!( tag!("ite"), |_| Operator::Ite ) |
+    map!( tag!("not"), |_| Operator::Not ) |
+    map!( tag!("and"), |_| Operator::And ) |
+    map!( tag!("or"), |_| Operator::Or ) |
+    map!( tag!("impl"), |_| Operator::Impl ) |
+    map!( tag!("xor"), |_| Operator::Xor ) |
+    map!( tag!("distinct"), |_| Operator::Distinct ) |
+    map!( tag!("+"), |_| Operator::Add ) |
+    map!( tag!("-"), |_| Operator::Sub ) |
+    map!( tag!("-"), |_| Operator::Neg ) |
+    map!( tag!("*"), |_| Operator::Mul ) |
+    map!( tag!("/"), |_| Operator::Div ) |
+    map!( tag!("<="), |_| Operator::Le ) |
+    map!( tag!(">="), |_| Operator::Ge ) |
+    map!( tag!("<"), |_| Operator::Lt ) |
+    map!( tag!(">"), |_| Operator::Gt )
+  )
+}
+
+
+enum Quantifier {
+  Forall, Exists
+}
+
+named!{ quantifier_parser<Quantifier>,
+  alt!(
+    map!( tag!("forall"), |_| Quantifier::Forall ) |
+    map!( tag!("exists"), |_| Quantifier::Exists )
+  )
+}
+
+
+
+// pub enum TermAst {
+//   App(Sym),
+//   Forall(Vec<(Sym, Type)>),
+//   Exists(Vec<(Sym, Type)>),
+//   Let1,
+//   Let2(Sym, Vec<(Sym, Term)>),
+//   Let3(Vec<(Sym, Term)>),
+// }
+
+// impl TermAst {
+//   pub fn name(& self) -> & 'static str {
+//     match * self {
+//       App(_) => "application"
+
+//     }
+//   }
+// }
+
+// pub struct Ast<'a> {
+//   cons: & 'a TermConsign,
+//   top: Vec<Term>,
+//   ctxt: Vec<(TermAst,Vec<Term>)>,
+// }
+
+
+// impl<'a> Ast<'a> {
+//   pub fn mk(consign: & 'a TermConsign) -> Self {
+//     Ast { cons: consign, top: vec![], ctxt: vec![] }
+//   }
+
+//   pub fn app(& mut self, sym: Sym) {
+//     self.ctxt.push( TermAst::App(sym) )
+//   }
+//   pub fn forall(& mut self, vars: Vec<(Sym, Type)>) {
+//     self.ctxt.push( TermAst::Forall(vars) )
+//   }
+//   pub fn exists(& mut self, vars: Vec<(Sym, Type)>) {
+//     self.ctxt.push( TermAst::Exists(vars) )
+//   }
+//   pub fn let_b(& mut self) {
+//     self.ctxt.push( TermAst::Let1( vec![] ) )
+//   }
+//   pub fn binding_sym(& mut self, sym: Sym) -> Result<(), TermAst> {
+//     match self.ctxt.pop() {
+//       (Let1, terms) => {
+//         assert!( terms.is_empty() ) ;
+//         self.ctxt.push( Let2(Sym, vec![]) ) ;
+//         Ok(())
+//       },
+//       (Let3(bindings), terms) => {
+//         assert!( terms.is_empty() ) ;
+//         self.ctxt.push( Let2(Sym, vec![]) ) ;
+//         Ok(())
+//       },
+//       (illegal, terms) => Err(illegal),
+//     }
+//   }
+
+//   pub fn leaf(& mut self, mut term: Term) {
+//     match self.ctxt.pop() {
+//       Some( (something, terms) ) => {
+//         terms.push(term) ;
+//         self.ctxt.push( (something, terms) )
+//       }
+//       None => self.top.push(term),
+//     }
+//   }
+
+//   // pub fn go_up(& mut self) {
+//   //   match self.ctxt.
+//   // }
+// }
 
 
 

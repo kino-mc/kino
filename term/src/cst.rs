@@ -7,45 +7,70 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Constant structures. */
+/*! Constants. */
 
-use ::base::* ;
-use ::typ ;
+use std::io ;
 
-use self::Constant::* ;
+use base::{ PrintSmt2, Offset2, HConsed, HConsign } ;
+use typ ;
 
+use self::RealCst::* ;
+
+/** Underlying representation of constants. */
 #[derive(Debug,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
-pub enum Constant {
+pub enum RealCst {
+  /** Boolean constant. */
   Bool(typ::Bool),
+  /** Integer constant. */
   Int(typ::Int),
+  /** Rational constant. */
   Rat(typ::Rat),
 }
 
-pub type Cst = HConsed<Constant> ;
-pub type CstConsign = HConsign<Constant> ;
+/** Hash consed constant. */
+pub type Cst = HConsed<RealCst> ;
 
-pub trait CstMaker<Const> {
-  fn cst(& self, Const) -> Cst ;
-}
-impl<
-  'a, Const: Clone, T: Sized + CstMaker<Const>
-> CstMaker<& 'a Const> for T {
-  fn cst(& self, cst: & 'a Const) -> Cst {
-    (self as & CstMaker<Const>).cst(cst.clone())
+impl PrintSmt2 for Cst {
+  fn to_smt2(
+    & self, writer: & mut io::Write, _: & Offset2
+  ) -> io::Result<()> {
+    match * self.get() {
+      Bool(ref b) => write!( writer, "{}", b ),
+      Int(ref i) => write!( writer, "{}", i ),
+      Rat(ref r) => write!( writer, "(/ {} {})", r.numer(), r.denom() ),
+    }
   }
 }
-impl CstMaker<typ::Bool> for CstConsign {
-  fn cst(& self, b: typ::Bool) -> Cst {
+
+/** Hash cons table for constants. */
+pub type CstConsign = HConsign<RealCst> ;
+
+/** Can create a hash consed constant. */
+pub trait ConstMaker<Const> {
+  /** Creates a hash consed constant. */
+  #[inline(always)]
+  fn constant(& self, Const) -> Cst ;
+}
+
+impl<
+  'a, Const: Clone, T: Sized + ConstMaker<Const>
+> ConstMaker<& 'a Const> for T {
+  fn constant(& self, cst: & 'a Const) -> Cst {
+    (self as & ConstMaker<Const>).constant(cst.clone())
+  }
+}
+impl ConstMaker<typ::Bool> for CstConsign {
+  fn constant(& self, b: typ::Bool) -> Cst {
     self.lock().unwrap().mk( Bool(b) )
   }
 }
-impl CstMaker<typ::Int> for CstConsign {
-  fn cst(& self, i: typ::Int) -> Cst {
+impl ConstMaker<typ::Int> for CstConsign {
+  fn constant(& self, i: typ::Int) -> Cst {
     self.lock().unwrap().mk( Int(i) )
   }
 }
-impl CstMaker<typ::Rat> for CstConsign {
-  fn cst(& self, r: typ::Rat) -> Cst {
+impl ConstMaker<typ::Rat> for CstConsign {
+  fn constant(& self, r: typ::Rat) -> Cst {
     self.lock().unwrap().mk( Rat(r) )
   }
 }

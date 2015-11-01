@@ -11,8 +11,9 @@
 
 ## TODO
 
-`num::rational` crash if denominator is zero. Can happen in parser. Parsing
+* `num::rational` crash if denominator is zero. Can happen in parser. Parsing
 only non-zero denominator will push the problem to function symbol application.
+* `to_smt2` for terms copies way too much stuff
 
 */
 
@@ -22,13 +23,31 @@ extern crate nom ;
 extern crate hashconsing as hcons ;
 extern crate rsmt2 as smt ;
 
-mod base ;
-pub mod typ ;
-pub mod sym ;
-// pub mod id ;
-pub mod cst ;
-pub mod term ;
-pub mod parser ;
-pub mod factory ;
+macro_rules! unimpl {
+  () => ( panic!("not implemented") ) ;
+}
 
-pub use base::* ;
+mod base ;
+pub use base::{
+  State, PrintSmt2, Offset, Offset2, Smt2Offset
+} ;
+mod typ ;
+pub use typ::{ Type, Bool, Int, Rat } ;
+mod sym ;
+pub use sym::{ Sym, SymMaker } ;
+mod cst ;
+pub use cst::{ Cst } ;
+mod term ;
+pub use term::{
+  Term, VarMaker, CstMaker, OpMaker, BindMaker, AppMaker, UnTermOps
+} ;
+mod parser ;
+mod factory ;
+pub use factory::{ Factory } ;
+
+/** Real, underlying representation of symbols, constants and terms. */
+pub mod real {
+  pub use sym::RealSym as Sym ;
+  pub use cst::RealCst as Cst ;
+  pub use term::RealTerm as Term ;
+}
