@@ -42,11 +42,11 @@ impl Writable for Type {
   }
 }
 
-/** Type used for boolean values. */
+/** Type of boolean values. */
 pub type Bool = bool ;
 
-/** Type used for integer values. */
+/** Type of integer values. */
 pub type Int = ::num::BigInt ;
 
-/** Type used for rational values. */
+/** Type of rational values. */
 pub type Rat = ::num::rational::BigRational ;

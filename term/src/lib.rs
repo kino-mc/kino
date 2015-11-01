@@ -14,7 +14,7 @@ Function symbols (`Sym`), constants (`Cst`) and terms (`Term`) are hash consed
 for perfect/maximal **and concurrent** sharing.
 
 In the following STS stands for the *SMT Lib Transition System* Standard as
-defined in `panic!(undefined)`.
+defined in `panic!("undefined")`.
 
 ## Handling the state
 
@@ -24,7 +24,7 @@ variables can be either in
 * the current state ([`State`][state]`::Curr`), or
 * the next state ([`State`][state]`::Next`).
 
-**In SMT Lib 2** the offset of state-variables (*i.e.* unrolling) is given
+**For SMT Lib 2** the offset of state-variables (*i.e.* unrolling) is given
 when printing terms. For more details, see
 
 * trait [`PrintSmt2`][print smt 2] for printing, and
@@ -57,8 +57,8 @@ Parsing STS and parsing answers in SMT Lib is different.
   or a `get-model`, the unrolling will *a priori* mess up the current/next
   convention for terms.
   This is why the [SMT Lib 2 parsing][parse smt 2] trait implementation for
-  expressions in [Factory][factory] returns a term and an
-  [`Smt2Offset`][smt 2 offset].
+  expressions in [Factory][factory] returns a variable and an
+  [`Offset`][offset] option.
 
 ## TODO
 
@@ -71,6 +71,7 @@ only non-zero denominator will push the problem to function symbol application. 
 [state]: enum.State.html (State enum type)
 [print smt 2]: trait.PrintSmt2.html (PrintSmt2 trait)
 [factory]: struct.Factory.html (Term factory struct)
+[offset]: struct.Offset.html (Offset struct)
 [offset2]: struct.Offset2.html (Offset2 struct)
 [smt 2 offset]: enum.Smt2Offset.html (Smt2Offset struct)
 [parse smt 2]: trait.ParseSmt2.html (ParseSmt2 trait)

@@ -262,7 +262,7 @@ impl ParseSmt2 for Factory {
 }
 
 
-/** Parsers for SMT Lib 2 Transition Systems */
+/** Parsers for STS Systems */
 pub trait ParseSts2 {
   /** Type of identifiers when parsing an STS system. */
   type Ident ;
