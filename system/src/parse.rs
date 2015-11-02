@@ -224,3 +224,78 @@ pub fn sys_parser<'a>(
     || Sys::mk(sym, state, init, trans)
   )
 }
+
+
+
+pub fn item_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Item> {
+  use base::Item::* ;
+  alt!(
+    bytes,
+    map!( apply!(state_parser, f), |out| St(out) ) |
+    map!( apply!(fun_dec_parser, f), |out| FDc(out) ) |
+    map!( apply!(fun_def_parser, f), |out| FDf(out) ) |
+    map!( apply!(pred_parser, f), |out| P(out) ) |
+    map!( apply!(init_def_parser, f), |out| I(out) ) |
+    map!( apply!(trans_def_parser, f), |out| T(out) ) |
+    map!( apply!(sys_parser, f), |out| S(out) )
+  )
+}
+
+
+
+pub fn check_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], (Sym,Vec<Sym>,Vec<Sym>)> {
+  chain!(
+    bytes,
+    char!('(') ~
+    opt!(multispace) ~
+    tag!("check") ~
+    multispace ~
+    sys: apply!(sym_parser, f) ~
+    opt!(multispace) ~
+    props: delimited!(
+      char!('('),
+      delimited!(
+        opt!(multispace),
+        separated_list!(
+          multispace,
+          apply!(sym_parser, f)
+        ),
+        opt!(multispace)
+      ),
+      char!(')')
+    ) ~
+    opt!(multispace) ~
+    candidates: delimited!(
+      char!('('),
+      delimited!(
+        opt!(multispace),
+        separated_list!(
+          multispace,
+          apply!(sym_parser, f)
+        ),
+        opt!(multispace)
+      ),
+      char!(')')
+    ) ~
+    opt!(multispace) ~
+    char!(')'),
+    || (sys, props, candidates)
+  )
+}
+
+named!{
+  pub exit_parser,
+  delimited!(
+    char!('('),
+    delimited!(
+      opt!(multispace),
+      tag!("exit"),
+      opt!(multispace)
+    ),
+    char!(')')
+  )
+}

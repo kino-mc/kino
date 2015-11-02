@@ -7,9 +7,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::io ;
+use std::thread::sleep_ms ;
 use std::collections::{ HashSet, HashMap } ;
 
-use term::{ Sym, Type, Term } ;
+use term::{ Sym, Type, Term, Factory } ;
 
 #[derive(Clone)]
 pub struct Sig {
@@ -194,9 +196,24 @@ pub enum Item {
   St(State),
   FDc(FunDec),
   FDf(FunDef),
+  P(Pred),
   I(Init),
   T(Trans),
   S(Sys),
+}
+impl Item {
+  pub fn sym(& self) -> & Sym {
+    use base::Item::* ;
+    match * self {
+      St(ref bla) => bla.sym(),
+      FDc(ref bla) => bla.sym(),
+      FDf(ref bla) => bla.sym(),
+      P(ref bla) => bla.sym(),
+      I(ref bla) => bla.sym(),
+      T(ref bla) => bla.sym(),
+      S(ref bla) => bla.sym(),
+    }
+  }
 }
 
 pub enum Callable {
@@ -205,24 +222,45 @@ pub enum Callable {
 }
 
 pub struct Context {
+  buffer: Vec<u8>,
+  factory: Factory,
   all: HashSet<Sym>,
   states: HashMap<Sym, State>,
   callables: HashMap<Sym, Callable>,
+  preds: HashMap<Sym, Pred>,
   inits: HashMap<Sym, Init>,
   transs: HashMap<Sym, Trans>,
   syss: HashMap<Sym, Sys>,
 }
 impl Context {
-  pub fn mk() -> Self {
+  pub fn mk(factory: Factory, buffer: usize) -> Self {
     Context {
+      buffer: Vec::with_capacity(buffer),
+      factory: factory,
       all: HashSet::new(),
       states: HashMap::new(),
       callables: HashMap::new(),
+      preds: HashMap::new(),
       inits: HashMap::new(),
       transs: HashMap::new(),
       syss: HashMap::new(),
     }
   }
+
+  // pub fn read(
+  //   & mut self, reader: & mut io::Read
+  // ) -> io::Result< Option<(Sym, Vec<Sym>, Vec<Sym>)> > {
+  //   use nom::IResult::* ;
+  //   loop {
+  //     match reader.read(& mut buffer) {
+  //       Ok(0) => sleep_ms(100u32),
+  //       Ok(n) => match item_parser(& self.buffer, self.factory) {
+  //         Done(chars, item) => self.add
+  //       },
+  //       Err(e) => return Err(e),
+  //     }
+  //   }
+  // }
 
   fn check(& self, sym: & Sym) -> Result<(),Item> {
     use self::Item::* ;
@@ -236,6 +274,10 @@ impl Context {
         None => (),
         Some(& Dec(ref f)) => return Err( FDc(f.clone()) ),
         Some(& Def(ref f)) => return Err( FDf(f.clone()) ),
+      } ;
+      match self.preds.get(sym) {
+        None => (),
+        Some(pred) => return Err( P(pred.clone()) ),
       } ;
       match self.inits.get(sym) {
         None => (),
@@ -259,6 +301,22 @@ impl Context {
 pub trait CanAdd<T> {
   fn add(& mut self, T) -> Result<(),(Item,Item)> ;
 }
+
+impl CanAdd<Item> for Context {
+  fn add(& mut self, i: Item) -> Result<(),(Item,Item)> {
+    use base::Item::* ;
+    match i {
+      St(bla) => self.add(bla),
+      FDc(bla) => self.add(bla),
+      FDf(bla) => self.add(bla),
+      P(bla) => self.add(bla),
+      I(bla) => self.add(bla),
+      T(bla) => self.add(bla),
+      S(bla) => self.add(bla),
+    }
+  }
+}
+
 macro_rules! impl_add {
   ($input:ident, ($slf:ident, $i:ident) -> $b:block, $err:ident) => (
     impl CanAdd<$input> for Context {
@@ -296,19 +354,7 @@ impl_add!{
   },
   FDc
 }
+impl_add!{ Pred, preds, P }
 impl_add!{ Init, inits, I }
 impl_add!{ Trans, transs, T }
 impl_add!{ Sys, syss, S }
-
-// impl CanAdd<State> for Context {
-//   fn add(& mut self, s: State) -> Result<(),(Item,Item)> {
-//     match self.check(s.sym()) {
-//       Ok(()) => {
-//         self.all.insert(s.sym().clone()) ;
-//         self.states.insert(s.sym().clone(), s) ;
-//         Ok(())
-//       },
-//       Err(i) => Err( (Item::St(s), i) ),
-//     }
-//   }
-// }
