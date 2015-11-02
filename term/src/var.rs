@@ -10,6 +10,7 @@
 /*! Variables, stateful and non-stateful. */
 
 use std::io ;
+use std::fmt ;
 
 use base::{
   State, Writable, SVarWriter, StateWritable, SymPrintStyle, SymWritable,
@@ -24,6 +25,20 @@ pub enum RealVar {
   Var(Sym),
   /** Stateful variable. */
   SVar(Sym, State),
+}
+
+impl fmt::Display for RealVar {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      RealVar::Var(ref s) => write!(fmt, "|{}|", s.get().sym()),
+      RealVar::SVar(ref s, State::Curr) => write!(
+        fmt, "(state |{}|)", s.get().sym()
+      ),
+      RealVar::SVar(ref s, State::Next) => write!(
+        fmt, "(next |{}|)", s.get().sym()
+      ),
+    }
+  }
 }
 
 /** Hash consed variable. */

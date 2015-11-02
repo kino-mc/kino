@@ -11,7 +11,7 @@
 
 use std::str ;
 
-use nom::{ multispace, IResult } ;
+use nom::{ IResult } ;
 
 use base::State ;
 use var::VarMaker ;
@@ -20,6 +20,7 @@ use factory::Factory ;
 
 use super::{
   type_parser,
+  space_comment,
   simple_symbol_head, simple_symbol_tail,
   operator_parser,
   quantifier_parser, Quantifier
@@ -64,13 +65,13 @@ pub fn var_parser<'a>(
     bytes,
     chain!(
       char!('(') ~
-      opt!(multispace) ~
+      opt!(space_comment) ~
       state: state ~
-      multispace ~
+      space_comment ~
       sym: map!(
         id_parser, |s| f.sym(s)
       ) ~
-      opt!(multispace) ~
+      opt!(space_comment) ~
       char!(')'),
       || f.svar(sym, state)
     ) |
@@ -98,13 +99,13 @@ pub fn op_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     op: operator_parser ~
-    multispace ~
+    space_comment ~
     args: separated_list!(
-      multispace, apply!(term_parser, f)
+      space_comment, apply!(term_parser, f)
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || f.op(op, args)
   )
@@ -119,33 +120,33 @@ pub fn quantified_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     quantifier: quantifier_parser ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!('(') ~
     bindings: separated_list!(
-      opt!(multispace),
+      opt!(space_comment),
       delimited!(
         char!('('),
         chain!(
-          opt!(multispace) ~
+          opt!(space_comment) ~
           sym: map!(
             id_parser,
             |sym| f.sym(sym)
           ) ~
-          multispace ~
+          space_comment ~
           ty: type_parser ~
-          opt!(multispace),
+          opt!(space_comment),
           || (sym, ty)
         ),
         char!(')')
       )
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     term: apply!(term_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || match quantifier {
       Quantifier::Forall => f.forall(bindings, term),
@@ -162,33 +163,33 @@ pub fn let_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("let") ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!('(') ~
     bindings: separated_list!(
-      opt!(multispace),
+      opt!(space_comment),
       delimited!(
         char!('('),
         chain!(
-          opt!(multispace) ~
+          opt!(space_comment) ~
           sym: map!(
             id_parser,
             |sym| f.sym(sym)
           ) ~
-          multispace ~
+          space_comment ~
           term: apply!(term_parser, f) ~
-          opt!(multispace),
+          opt!(space_comment),
           || (sym, term)
         ),
         char!(')')
       )
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     term: apply!(term_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || f.let_b(bindings, term)
   )
@@ -202,13 +203,13 @@ fn app_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    space_comment ~
     sym: id_parser ~
-    multispace ~
+    space_comment ~
     args: separated_list!(
-      multispace, apply!(term_parser, f)
+      space_comment, apply!(term_parser, f)
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || f.app( f.sym(sym), args )
   )
@@ -302,6 +303,12 @@ mod terms {
       b"bla",
       res
     ) ;
+    let res = factory.var( factory.sym("bly.bla") ) ;
+    try_parse_term!(
+      term_parser, & factory,
+      b"bly.bla",
+      res
+    ) ;
     let res = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
       term_parser, & factory,
@@ -376,6 +383,31 @@ mod terms {
       & s,
       nested
     ) ;
+
+    let nested = factory.op(
+      Operator::Ite, vec![
+        factory.var( factory.sym("bla.bla") ),
+        factory.op(
+          Operator::Eq, vec![
+            factory.var( factory.sym("bli.blu") ),
+            factory.cst( Int::from_str("1").unwrap() )
+          ]
+        ),
+        factory.op(
+          Operator::Eq, vec![
+            factory.var( factory.sym("bli.blu") ),
+            factory.cst( Int::from_str("0").unwrap() )
+          ]
+        ),
+      ]
+    ) ;
+    let mut s: Vec<u8> = vec![] ;
+    nested.to_sts2(& mut s).unwrap() ;
+    try_parse_term!(
+      term_parser, & factory,
+      & s,
+      nested
+    ) ;
   }
 
   #[test]
@@ -438,6 +470,17 @@ mod terms {
       & s,
       nested
     ) ;
+  }
+
+  #[test]
+  fn empty() {
+    use super::* ;
+    let factory = Factory::mk() ;
+    match super::term_parser(& b""[..], & factory) {
+      ::nom::IResult::Incomplete(_) => (),
+      other => panic!("unexpected result on parsing empty string: {:?}", other)
+    } ;
+    ()
   }
 }
 

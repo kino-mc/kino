@@ -10,6 +10,8 @@
 /*! Type representation and their values. */
 
 use std::io ;
+use std::fmt ;
+
 use base::{ Writable } ;
 
 /** A primitive type. */
@@ -21,6 +23,19 @@ pub enum Type {
   Int,
   /** Rat type. */
   Rat
+}
+
+impl fmt::Display for Type {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(
+      fmt, "{}",
+      match * self {
+        Type::Bool => "Bool",
+        Type::Int => "Int",
+        Type::Rat => "Rat",
+      }
+    )
+  }
 }
 
 impl Type {

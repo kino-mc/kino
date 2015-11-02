@@ -10,6 +10,7 @@
 /*! Function symbols. */
 
 use std::io ;
+use std::fmt ;
 
 use base::{ SymPrintStyle, SymWritable, HConsed, HConsign } ;
 
@@ -19,6 +20,15 @@ use base::{ SymPrintStyle, SymWritable, HConsed, HConsign } ;
 pub struct RealSym {
   /** The `String` representing the function symbol. */
   sym: String
+}
+impl RealSym {
+  pub fn sym(& self) -> & str { & self.sym }
+}
+
+impl fmt::Display for RealSym {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "|{}|", self.sym)
+  }
 }
 
 /** Hash consed function symbol. */

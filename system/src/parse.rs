@@ -7,24 +7,45 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use nom::{ IResult, multispace } ;
+use nom::{ IResult, multispace, not_line_ending } ;
 
 use base::* ;
 use term::{
   Sym, Term, Factory, ParseSts2
 } ;
 
+named!{
+  comment,
+  chain!(
+    char!(';') ~
+    many0!(not_line_ending),
+    || & []
+  )
+}
+
+named!{
+  space_comment<()>,
+  map!(
+    many0!(
+      alt!(
+        comment | multispace
+      )
+    ),
+    |_| ()
+  )
+}
+
 
 named!{
   pub sig_parser<Sig>,
   chain!(
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     args: separated_list!(
-      opt!(multispace),
+      opt!(space_comment),
       Factory::parse_type
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || Sig::mk(args)
   )
@@ -44,13 +65,15 @@ pub fn args_parser<'a>(
   map!(
     bytes,
     separated_list!(
-      opt!(multispace),
+      opt!(space_comment),
       delimited!(
         char!('('),
         chain!(
+          opt!(space_comment) ~
           sym: apply!(sym_parser, f) ~
-          multispace ~
-          typ: call!(Factory::parse_type),
+          space_comment ~
+          typ: call!(Factory::parse_type) ~
+          opt!(space_comment),
           || (sym, typ)
         ),
         char!(')')
@@ -67,13 +90,13 @@ pub fn state_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("define-state") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     args: apply!(args_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || State::mk(sym, args)
   )
@@ -86,15 +109,15 @@ pub fn fun_dec_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("declare-fun") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     sig: sig_parser ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     typ: call!(Factory::parse_type) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || FunDec::mk(sym, sig, typ)
   )
@@ -123,17 +146,17 @@ pub fn fun_def_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("define-fun") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     args: apply!(args_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     typ: call!(Factory::parse_type) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     body: apply!(body_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || FunDef::mk(sym, args, typ, body)
   )
@@ -146,15 +169,15 @@ pub fn pred_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("define-pred") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    multispace ~
+    space_comment ~
     state: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     body: apply!(body_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || Pred::mk(sym, state, body)
   )
@@ -167,15 +190,15 @@ pub fn init_def_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("define-init") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    multispace ~
+    space_comment ~
     state: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     body: apply!(body_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || Init::mk(sym, state, body)
   )
@@ -188,15 +211,15 @@ pub fn trans_def_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("define-trans") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    multispace ~
+    space_comment ~
     state: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     body: apply!(body_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || Trans::mk(sym, state, body)
   )
@@ -209,37 +232,41 @@ pub fn sys_parser<'a>(
   chain!(
     bytes,
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("define-system") ~
-    multispace ~
+    space_comment ~
     sym: apply!(sym_parser, f) ~
-    multispace ~
+    space_comment ~
     state: apply!(sym_parser, f) ~
-    multispace ~
+    space_comment ~
     init: apply!(sym_parser, f) ~
-    multispace ~
+    space_comment ~
     trans: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || Sys::mk(sym, state, init, trans)
   )
 }
 
-
-
 pub fn item_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Item> {
+  bytes: & 'a [u8], c: & mut Context
+) -> IResult<'a, & 'a [u8], Result<(), (Item,Item)>> {
   use base::Item::* ;
-  alt!(
+  map!(
     bytes,
-    map!( apply!(state_parser, f), |out| St(out) ) |
-    map!( apply!(fun_dec_parser, f), |out| FDc(out) ) |
-    map!( apply!(fun_def_parser, f), |out| FDf(out) ) |
-    map!( apply!(pred_parser, f), |out| P(out) ) |
-    map!( apply!(init_def_parser, f), |out| I(out) ) |
-    map!( apply!(trans_def_parser, f), |out| T(out) ) |
-    map!( apply!(sys_parser, f), |out| S(out) )
+    preceded!(
+      many0!(space_comment),
+      alt!(
+        map!( apply!(state_parser, c.factory()), |out| St(out) ) |
+        map!( apply!(fun_dec_parser, c.factory()), |out| FDc(out) ) |
+        map!( apply!(fun_def_parser, c.factory()), |out| FDf(out) ) |
+        map!( apply!(pred_parser, c.factory()), |out| P(out) ) |
+        map!( apply!(init_def_parser, c.factory()), |out| I(out) ) |
+        map!( apply!(trans_def_parser, c.factory()), |out| T(out) ) |
+        map!( apply!(sys_parser, c.factory()), |out| S(out) )
+      )
+    ),
+    |item| c.add(item)
   )
 }
 
@@ -250,38 +277,39 @@ pub fn check_parser<'a>(
 ) -> IResult<'a, & 'a [u8], (Sym,Vec<Sym>,Vec<Sym>)> {
   chain!(
     bytes,
+    opt!(space_comment) ~
     char!('(') ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     tag!("check") ~
-    multispace ~
+    space_comment ~
     sys: apply!(sym_parser, f) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     props: delimited!(
       char!('('),
       delimited!(
-        opt!(multispace),
+        opt!(space_comment),
         separated_list!(
-          multispace,
+          space_comment,
           apply!(sym_parser, f)
         ),
-        opt!(multispace)
+        opt!(space_comment)
       ),
       char!(')')
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     candidates: delimited!(
       char!('('),
       delimited!(
-        opt!(multispace),
+        opt!(space_comment),
         separated_list!(
-          multispace,
+          space_comment,
           apply!(sym_parser, f)
         ),
-        opt!(multispace)
+        opt!(space_comment)
       ),
       char!(')')
     ) ~
-    opt!(multispace) ~
+    opt!(space_comment) ~
     char!(')'),
     || (sys, props, candidates)
   )
@@ -289,13 +317,16 @@ pub fn check_parser<'a>(
 
 named!{
   pub exit_parser,
-  delimited!(
-    char!('('),
+  preceded!(
+    opt!(space_comment),
     delimited!(
-      opt!(multispace),
-      tag!("exit"),
-      opt!(multispace)
-    ),
-    char!(')')
+      char!('('),
+      delimited!(
+        opt!(space_comment),
+        tag!("exit"),
+        opt!(space_comment)
+      ),
+      char!(')')
+    )
   )
 }

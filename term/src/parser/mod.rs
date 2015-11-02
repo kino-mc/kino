@@ -9,7 +9,7 @@
 
 /*! Parsers and such. */
 
-use nom::{ multispace, IResult } ;
+use nom::{ digit, multispace, IResult, not_line_ending } ;
 
 use cst::ConstMaker ;
 
@@ -75,6 +75,26 @@ named!{ pub type_parser<Type>,
   )
 }
 
+named!{
+  comment,
+  chain!(
+    char!(';') ~
+    many0!(not_line_ending),
+    || & []
+  )
+}
+
+named!{
+  space_comment<()>,
+  map!(
+    many0!(
+      alt!(
+        comment | multispace
+      )
+    ),
+    |_| ()
+  )
+}
 
 
 named!{ pub bool_parser<Bool>,
@@ -98,10 +118,11 @@ named!{ pub bool_parser<Bool>,
 }
 
 named!{ pub int_parser<Int>,
-  map!(
-    is_a!("0123456789"),
+  chain!(
+    peek!( one_of!("0123456789") ) ~
+    bytes: digit,
     // Unwraping cannot fail.
-    |bytes| Int::parse_bytes(bytes, 10).unwrap()
+    || Int::parse_bytes(bytes, 10).unwrap()
   )
 }
 
@@ -109,13 +130,13 @@ named!{ pub rat_parser<Rat>,
   alt!(
     chain!(
       char!('(') ~
-      opt!(multispace) ~
+      opt!(space_comment) ~
       char!('/') ~
-      multispace ~
+      space_comment ~
       num: int_parser ~
-      multispace ~
+      space_comment ~
       den: int_parser ~
-      opt!(multispace) ~
+      opt!(space_comment) ~
       char!(')'),
       // Unchecked division by 0.
       || Rat::new(num, den)
@@ -161,11 +182,12 @@ named!{ pub simple_symbol_tail,
 
 named!{ pub operator_parser<Operator>,
   alt!(
+    map!( tag!("="), |_| Operator::Eq ) |
     map!( tag!("ite"), |_| Operator::Ite ) |
     map!( tag!("not"), |_| Operator::Not ) |
     map!( tag!("and"), |_| Operator::And ) |
     map!( tag!("or"), |_| Operator::Or ) |
-    map!( tag!("impl"), |_| Operator::Impl ) |
+    map!( tag!("=>"), |_| Operator::Impl ) |
     map!( tag!("xor"), |_| Operator::Xor ) |
     map!( tag!("distinct"), |_| Operator::Distinct ) |
     map!( tag!("+"), |_| Operator::Add ) |
@@ -341,6 +363,15 @@ mod int {
       int_parser, b"74205432075342042",
       Int::from_str("74205432075342042").unwrap()
     )
+  }
+  #[test]
+  fn empty() {
+    use super::* ;
+    match int_parser(& b""[..]) {
+      ::nom::IResult::Incomplete(_) => (),
+      other => panic!("unexpected result on parsing empty string: {:?}", other)
+    } ;
+    ()
   }
 }
 

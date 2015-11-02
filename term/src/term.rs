@@ -10,6 +10,7 @@
 /*! Terms. */
 
 use std::io ;
+use std::fmt ;
 
 use base::{
   StateWritable, Writable, SVarWriter, PrintSmt2, PrintSts2, SymWritable,
@@ -24,6 +25,8 @@ use self::RealTerm::* ;
 /** Standard operators. */
 #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum Operator {
+  /** Equality. */
+  Eq,
   /** If then else operator. */
   Ite,
   /** Negation operator. */
@@ -58,6 +61,15 @@ pub enum Operator {
   Gt,
 }
 
+impl fmt::Display for Operator {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    use std::str::from_utf8 ;
+    let mut s: Vec<u8> = vec![] ;
+    self.write(& mut s).unwrap() ;
+    write!(fmt, "{}", from_utf8(& s).unwrap())
+  }
+}
+
 impl Writable for Operator {
   fn write(
     & self, writer: & mut io::Write
@@ -66,11 +78,12 @@ impl Writable for Operator {
       writer,
       "{}",
       match * self {
+        Operator::Eq => "=",
         Operator::Ite => "ite",
         Operator::Not => "not",
         Operator::And => "and",
         Operator::Or => "or",
-        Operator::Impl => "impl",
+        Operator::Impl => "=>",
         Operator::Xor => "xor",
         Operator::Distinct => "distinct",
         Operator::Add => "+",
@@ -104,6 +117,56 @@ pub enum RealTerm {
   Let(Vec<(Sym, Term)>, Term),
   /** An application of a function symbol. */
   App(Sym, Vec<Term>),
+}
+
+impl fmt::Display for RealTerm {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      V(ref v) => write!(fmt, "{}", v),
+      C(ref c) => write!(fmt, "{}", c),
+      Op(ref op, ref terms) => {
+        try!( write!(fmt, "({}", op) ) ;
+        for t in terms.iter() {
+          try!( write!(fmt, " {}", t) )
+        } ;
+        write!(fmt, ")")
+      },
+      Forall(ref bindings, ref term) => {
+        try!( write!(fmt, "(forall (") ) ;
+        for & (ref sym, ref typ) in bindings.iter() {
+          try!( write!(fmt, " ({} {})", sym, typ) )
+        } ;
+        try!( write!(fmt, " ) ") ) ;
+        try!( write!(fmt, "{}", term) ) ;
+        write!(fmt, ")")
+      },
+      Exists(ref bindings, ref term) => {
+        try!( write!(fmt, "(exists (") ) ;
+        for & (ref sym, ref typ) in bindings.iter() {
+          try!( write!(fmt, " ({} {})", sym, typ) )
+        } ;
+        try!( write!(fmt, " ) ") ) ;
+        try!( write!(fmt, "{}", term) ) ;
+        write!(fmt, ")")
+      },
+      Let(ref bindings, ref term) => {
+        try!( write!(fmt, "(let (") ) ;
+        for & (ref sym, ref term) in bindings.iter() {
+          try!( write!(fmt, " ({} {})", sym, term) )
+        } ;
+        try!( write!(fmt, " ) ") ) ;
+        try!( write!(fmt, "{}", term) ) ;
+        write!(fmt, ")")
+      },
+      App(ref sym, ref args) => {
+        try!( write!(fmt, "({}", sym) ) ;
+        for term in args.iter() {
+          try!( write!(fmt, " {}", term) )
+        } ;
+        write!(fmt, ")")
+      },
+    }
+  }
 }
 
 /** Hash consed term. */

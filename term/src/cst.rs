@@ -10,6 +10,7 @@
 /*! Constants. */
 
 use std::io ;
+use std::fmt ;
 
 use base::{ Writable, HConsed, HConsign } ;
 use typ ;
@@ -25,6 +26,16 @@ pub enum RealCst {
   Int(typ::Int),
   /** Rational constant. */
   Rat(typ::Rat),
+}
+
+impl fmt::Display for RealCst {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      Bool(ref b) => write!(fmt, "{}", b),
+      Int(ref i) => write!(fmt, "{}", i),
+      Rat(ref r) => write!(fmt, "{}", r),
+    }
+  }
 }
 
 /** Hash consed constant. */
