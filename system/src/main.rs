@@ -4,8 +4,7 @@ extern crate term ;
 
 use std::io::Read ;
 
-pub mod base ;
-pub mod parse ;
+mod parse ;
 use parse::Res ;
 
 fn main() {

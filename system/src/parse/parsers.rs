@@ -9,8 +9,8 @@
 
 use nom::{ IResult, multispace, not_line_ending } ;
 
-use base::* ;
-use parse::* ;
+use super::base::* ;
+use super::* ;
 use term::{
   Sym, StsResult, Factory, ParseSts2
 } ;
@@ -253,7 +253,7 @@ pub fn sys_parser<'a>(
 pub fn item_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
-  use base::Item::* ;
+  use super::base::Item::* ;
   map!(
     bytes,
     preceded!(

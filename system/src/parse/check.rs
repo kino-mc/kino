@@ -17,8 +17,8 @@ use term ;
 use term::{ Sym, Var } ;
 use term::real ;
 
-use base::* ;
-use parse::Context ;
+use super::base::* ;
+use super::Context ;
 
 use self::Error::* ;
 
@@ -53,7 +53,7 @@ pub enum Error {
 }
 impl fmt::Display for Error {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
-    use base::Item::* ;
+    use parse::base::Item::* ;
     use term::real::Var::* ;
     match * self {
       Redef(ref i1, ref i2) => {
@@ -154,7 +154,7 @@ declaration/definition for the variable's symbol with arity zero. */
 fn var_defined(
   ctxt: & Context, sym: & Sym
 ) -> bool {
-  use base::Callable::* ;
+  use parse::base::Callable::* ;
   match ctxt.get_callable(sym) {
     None => false,
     Some(& Dec(ref f)) => f.sig().len() == 0,
@@ -167,7 +167,7 @@ declaration/definition for a symbol with arity greater than zero. */
 fn app_defined(
   ctxt: & Context, sym: & Sym
 ) -> bool {
-  use base::Callable::* ;
+  use parse::base::Callable::* ;
   match ctxt.get_callable(sym) {
     None => false,
     Some(& Dec(ref f)) => f.sig().len() > 0,
@@ -360,7 +360,7 @@ fn check_sys(
     },
   } ;
   match ctxt.get_trans(trans) {
-    None => return Err( UkInit(sys.clone()) ),
+    None => return Err( UkTrans(sys.clone()) ),
     Some(trans) => if trans.state() != state.sym() {
       return Err( IncState(sys.clone(), Item::T(trans.clone())) )
     },
@@ -372,7 +372,7 @@ fn check_sys(
 pub fn check_item(
   ctxt: & Context, i: & Item
 ) -> Result<(), Error> {
-  use base::Item::* ;
+  use parse::base::Item::* ;
   match * i {
     St(ref state) => check_state(ctxt, state, i),
     FDc(ref f) => check_fun_dec(ctxt, f, i),

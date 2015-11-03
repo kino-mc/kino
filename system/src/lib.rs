@@ -24,5 +24,4 @@ Context:
 extern crate nom ;
 extern crate term ;
 
-mod base ;
 pub mod parse ;

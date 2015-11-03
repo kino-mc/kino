@@ -16,8 +16,8 @@ use std::io ;
 
 use term::{ Sym, Factory } ;
 
-use base::* ;
-
+mod base ;
+use self::base::* ;
 mod parsers ;
 mod check ;
 pub use self::check::Error ;
@@ -173,8 +173,8 @@ impl Context {
 
   /** Option of the item corresponding to an identifier. */
   pub fn item_of_sym(& self, sym: & Sym) -> Option<Item> {
-    use base::Item::* ;
-    use base::Callable::* ;
+    use self::base::Item::* ;
+    use self::base::Callable::* ;
     if ! self.all.contains(sym) { None } else {
       try_get!(
         self.states, sym, state => { St(state.clone()) }
@@ -208,8 +208,8 @@ impl Context {
 
   /** Checks the item is legal and adds it where it belongs if it is. */
   pub fn add(& mut self, i: Item) -> Result<(), Error> {
-    use base::Item::* ;
-    use base::Callable::* ;
+    use self::base::Item::* ;
+    use self::base::Callable::* ;
     try!( check::check_item(& self, & i) ) ;
     let sym = i.sym().clone() ;
     match i {
@@ -298,9 +298,6 @@ impl Context {
     let s = map_to_lines(& self.syss, "syss:", s) ;
     s
   }
-
-  /** Underlying buffer as bytes. */
-  pub fn bytes(& self) -> & [u8] { self.buffer.as_bytes() }
 
   /** Underlying term factory. */
   pub fn factory(& self) -> & Factory { & self.factory }
