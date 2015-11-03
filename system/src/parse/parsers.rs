@@ -15,6 +15,7 @@ use term::{
   Sym, StsResult, Factory, ParseSts2
 } ;
 
+/** Parses a multispace and a comment. */
 named!{
   pub comment,
   chain!(
@@ -25,6 +26,7 @@ named!{
   )
 }
 
+/** Parses a repetition of multispace/comment. */
 named!{
   space_comment<()>,
   map!(
@@ -37,9 +39,9 @@ named!{
   )
 }
 
-
+/** Parses a signature. */
 named!{
-  pub sig_parser<Sig>,
+  sig_parser<Sig>,
   chain!(
     char!('(') ~
     opt!(space_comment) ~
@@ -53,15 +55,15 @@ named!{
   )
 }
 
-
-pub fn sym_parser<'a>(
+/** Parses a symbol. */
+fn sym_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Sym> {
   f.parse_ident(bytes)
 }
 
-
-pub fn args_parser<'a>(
+/** Parses some arguments. */
+fn args_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Args> {
   map!(
@@ -85,8 +87,8 @@ pub fn args_parser<'a>(
   )
 }
 
-
-pub fn state_parser<'a>(
+/** Parses a state declaration. */
+fn state_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], State> {
   chain!(
@@ -104,8 +106,8 @@ pub fn state_parser<'a>(
   )
 }
 
-
-pub fn fun_dec_parser<'a>(
+/** Parses a function declaration. */
+fn fun_dec_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], FunDec> {
   chain!(
@@ -125,13 +127,15 @@ pub fn fun_dec_parser<'a>(
   )
 }
 
-pub fn term_parser<'a>(
+/** Parses a term. */
+fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], StsResult> {
   f.parse_expr(bytes)
 }
 
-pub fn body_parser<'a>(
+/** Parses a body (term). */
+fn body_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Body> {
   map!(
@@ -141,8 +145,8 @@ pub fn body_parser<'a>(
   )
 }
 
-
-pub fn fun_def_parser<'a>(
+/** Parses a function definition. */
+fn fun_def_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], FunDef> {
   chain!(
@@ -164,8 +168,8 @@ pub fn fun_def_parser<'a>(
   )
 }
 
-
-pub fn pred_parser<'a>(
+/** Parses a predicate definition. */
+fn pred_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Pred> {
   chain!(
@@ -185,8 +189,8 @@ pub fn pred_parser<'a>(
   )
 }
 
-
-pub fn init_def_parser<'a>(
+/** Parses an init definition. */
+fn init_def_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Init> {
   chain!(
@@ -206,8 +210,8 @@ pub fn init_def_parser<'a>(
   )
 }
 
-
-pub fn trans_def_parser<'a>(
+/** Parses a trans definition. */
+fn trans_def_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Trans> {
   chain!(
@@ -227,8 +231,8 @@ pub fn trans_def_parser<'a>(
   )
 }
 
-
-pub fn sys_parser<'a>(
+/** Parses a system definition. */
+fn sys_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Sys> {
   chain!(
@@ -250,6 +254,7 @@ pub fn sys_parser<'a>(
   )
 }
 
+/** Parses an item. */
 pub fn item_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
@@ -272,8 +277,7 @@ pub fn item_parser<'a>(
   )
 }
 
-
-
+/** Parses a check. */
 pub fn check_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], (Sym,Vec<Sym>)> {
@@ -304,6 +308,7 @@ pub fn check_parser<'a>(
   )
 }
 
+/** Parses exit. */
 named!{
   pub exit_parser,
   preceded!(
