@@ -38,5 +38,5 @@
 )
 
 ;; Check.
-( check sys_a (out_positive) () )
+( check sys_a (out_positive) )
 

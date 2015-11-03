@@ -24,6 +24,7 @@ use term::{
   bump
 } ;
 use parser ;
+use parser::sts2::StsResult ;
 
 macro_rules! try_parse {
   ($fun:expr, $arg: expr, $res:pat => $b:block) => (
@@ -68,6 +69,14 @@ impl Factory {
   /** The hash cons table for constants. */
   pub fn cst_consign(& self) -> & CstConsign {
     & self.cst
+  }
+  /** The hash cons table for variables. */
+  pub fn var_consign(& self) -> & VarConsign {
+    & self.var
+  }
+  /** Creates a variable from a `Var`. */
+  pub fn mk_var(& self, var: Var) -> Term {
+    self.term.var(var)
   }
 }
 
@@ -270,8 +279,8 @@ impl ParseSmt2 for Factory {
 pub trait ParseSts2 {
   /** Type of identifiers when parsing an STS system. */
   type Ident ;
-  /** Type of expressions when parsing an STS system. */
-  type Expr ;
+  /** Type for the result of expression parsing. */
+  type ExprRes ;
   /** Type of types when parsing an STS system. */
   type Type ;
   /** Parses an identifier in STS format. */
@@ -281,7 +290,7 @@ pub trait ParseSts2 {
   /** Parses an expression in STS format. */
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Self::Expr> ;
+  ) -> IResult<'a, & 'a [u8], Self::ExprRes> ;
   /** Parses a Type in STS format. */
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]
@@ -290,7 +299,7 @@ pub trait ParseSts2 {
 
 impl ParseSts2 for Factory {
   type Ident = Sym ;
-  type Expr = Term ;
+  type ExprRes = StsResult ;
   type Type = Type ;
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
@@ -303,7 +312,7 @@ impl ParseSts2 for Factory {
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Term> {
+  ) -> IResult<'a, & 'a [u8], StsResult> {
     parser::sts2::term_parser(bytes, self)
   }
   fn parse_type<'a>(

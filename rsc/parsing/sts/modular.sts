@@ -23,7 +23,7 @@
 
 ;; Defines a transition predicate over some state.
 (define-trans trans_of_a state_of_a
-  (ite (next in) (= (next out) (+ (state out) 1)) (= next.out (state out)))
+  (ite (next in) (= (next out) (+ (state out) 1)) (= (next out) (state out)))
 )
 
 ;; Defines a transition system from some initial and transition predicates.
@@ -56,15 +56,15 @@
   ( |pre(output(b,out))| Int ) ;; For the property.
 )
 
-(define-pred |prop(b,1)| sys_b
-  (=> 
+(define-pred |prop(b,1)| state_of_b
+  (=>
     ( or (not (state |input(b,act)|)) (state |pre(input(b,deact))|) )
     (= (state |output(b,out)|) (state |pre(output(b,out))|))
   )
   ;; 'state.' is mandatory to distinguish with "constants" (e.g. `oracle`).
 )
 
-(define-pred |cand(b,1)| sys_b
+(define-pred |cand(b,1)| state_of_b
   (=>
     ( and (state |input(b,act)|) (not (state |input(b,deact)|)) )
     (= (state |output(b,out)|) (+ (state |pre(output(b,out))|) 1))
@@ -97,9 +97,16 @@
     (= (next |pre(input(b,deact))|) (state |input(b,deact)|))
     (= (next |pre(output(b,out))|) (state |output(b,out)|))
     ;; trans_of_a can be used as
-    ;; > (define-fun trans_of_a ((in Bool) (out Bool)) ...)
+    ;; > (define-fun trans_of_a (
+    ;; >   (state.in Bool) (state.out Bool) (next.in Bool) (next.in Bool)
+    ;; > ) ...)
     ;; That is, consistently with its _state_ signature.
     (trans_of_a
+      (and
+        (next |input(b,act)|)
+        (not (next |pre(input(b,deact))|))
+      )
+      (next |output(b,out)|)
       (and
         (next |input(b,act)|)
         (not (next |pre(input(b,deact))|))
@@ -127,4 +134,4 @@
   trans_of_b
 )
 
-( check sys_b (|prop(b,1)|) (|cand(b,1)|) )
+( check sys_b (|prop(b,1)|) )

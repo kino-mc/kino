@@ -19,5 +19,5 @@
   (>= (state out) 0)
 )
 
-( check sys_a (out_positive) ())
+( check sys_a (out_positive) )
 

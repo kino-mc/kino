@@ -28,6 +28,17 @@ pub enum RealCst {
   Rat(typ::Rat),
 }
 
+impl RealCst {
+  /** The type of a `RealCst`. */
+  pub fn typ(& self) -> typ::Type {
+    match * self {
+      Bool(_) => typ::Type::Bool,
+      Int(_) => typ::Type::Int,
+      Rat(_) => typ::Type::Rat,
+    }
+  }
+}
+
 impl fmt::Display for RealCst {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     match * self {

@@ -110,6 +110,7 @@ pub use term::{
   Term, CstMaker, OpMaker, BindMaker, AppMaker
 } ;
 mod parser ;
+pub use parser::sts2::StsResult ;
 mod factory ;
 pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 

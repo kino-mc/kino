@@ -10,13 +10,15 @@
 use nom::{ IResult, multispace, not_line_ending } ;
 
 use base::* ;
+use parse::* ;
 use term::{
-  Sym, Term, Factory, ParseSts2
+  Sym, StsResult, Factory, ParseSts2
 } ;
 
 named!{
-  comment,
+  pub comment,
   chain!(
+    opt!(multispace) ~
     char!(';') ~
     many0!(not_line_ending),
     || & []
@@ -125,7 +127,7 @@ pub fn fun_dec_parser<'a>(
 
 pub fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Term> {
+) -> IResult<'a, & 'a [u8], StsResult> {
   f.parse_expr(bytes)
 }
 
@@ -250,12 +252,12 @@ pub fn sys_parser<'a>(
 
 pub fn item_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), (Item,Item)>> {
+) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   use base::Item::* ;
   map!(
     bytes,
     preceded!(
-      many0!(space_comment),
+      opt!(multispace),
       alt!(
         map!( apply!(state_parser, c.factory()), |out| St(out) ) |
         map!( apply!(fun_dec_parser, c.factory()), |out| FDc(out) ) |
@@ -274,7 +276,7 @@ pub fn item_parser<'a>(
 
 pub fn check_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], (Sym,Vec<Sym>,Vec<Sym>)> {
+) -> IResult<'a, & 'a [u8], (Sym,Vec<Sym>)> {
   chain!(
     bytes,
     opt!(space_comment) ~
@@ -297,21 +299,8 @@ pub fn check_parser<'a>(
       char!(')')
     ) ~
     opt!(space_comment) ~
-    candidates: delimited!(
-      char!('('),
-      delimited!(
-        opt!(space_comment),
-        separated_list!(
-          space_comment,
-          apply!(sym_parser, f)
-        ),
-        opt!(space_comment)
-      ),
-      char!(')')
-    ) ~
-    opt!(space_comment) ~
     char!(')'),
-    || (sys, props, candidates)
+    || (sys, props)
   )
 }
 

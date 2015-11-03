@@ -182,12 +182,12 @@ named!{ pub simple_symbol_tail,
 
 named!{ pub operator_parser<Operator>,
   alt!(
+    map!( tag!("=>"), |_| Operator::Impl ) |
     map!( tag!("="), |_| Operator::Eq ) |
     map!( tag!("ite"), |_| Operator::Ite ) |
     map!( tag!("not"), |_| Operator::Not ) |
     map!( tag!("and"), |_| Operator::And ) |
     map!( tag!("or"), |_| Operator::Or ) |
-    map!( tag!("=>"), |_| Operator::Impl ) |
     map!( tag!("xor"), |_| Operator::Xor ) |
     map!( tag!("distinct"), |_| Operator::Distinct ) |
     map!( tag!("+"), |_| Operator::Add ) |

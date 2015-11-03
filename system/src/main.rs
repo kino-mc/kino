@@ -2,10 +2,11 @@
 extern crate nom ;
 extern crate term ;
 
-use std::io::{ Read, BufRead } ;
+use std::io::Read ;
 
 pub mod base ;
 pub mod parse ;
+use parse::Res ;
 
 fn main() {
   use std::fs::File ;
@@ -22,39 +23,32 @@ fn main() {
 
   for file in args {
     let factory = term::Factory::mk() ;
-    let mut context = base::Context::mk(factory, 10000) ;
+    let mut context = parse::Context::mk(factory, 10000) ;
 
     println!("opening \"{}\"", file) ;
     match File::open(& file) {
       Ok(mut f) => {
-        println!("parsing...") ;
+        print!("parsing ... ") ;
         match context.read(& mut f) {
-          Ok( Ok(None) ) => println!("got exit"),
-          Ok( Ok( Some( (sys, props, cands) ) ) ) => {
-            println!("...done") ;
+          Ok( Res::Exit ) => println!("got exit"),
+          Ok( Res::Check(sys, props) ) => {
+            println!("done") ;
             println!("") ;
             println!("") ;
-            println!("Context:") ;
-            for line in context.lines().lines() {
-              println!("| {}", line)
-            } ;
+            context.stdin_print() ;
             println!("") ;
             println!("got a check") ;
             println!("| sys: \"{}\"", sys) ;
             println!("| props:") ;
-            for prop in props.iter() { println!("    {}", prop) } ;
-            println!("| cands:") ;
-            for cand in cands.iter() { println!("    {}", cand) } ;
+            for prop in props.iter() { println!("  {}", prop) } ;
           },
-          Ok( Err( (i1, i2) ) ) => {
-            println!("parse error: multiple definition for same symbol:") ;
-            println!(" first {:?}", i2) ;
-            println!(" then  {:?}", i1) ;
+          Err( e ) => {
+            println!("error") ;
+            println!("> {}", e)
           },
-          Err(e) => println!("io error: {}", e),
         }
       },
-      Err(e) => println!("error: {}", e),
+      Err(e) => println!("error\n  {}", e),
     } ;
     println!("") ;
     println!("") ;

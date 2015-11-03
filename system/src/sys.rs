@@ -7,22 +7,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Transition system library.
+use base::{ State, Callable } ;
 
-## Remarks
-
-## To do
-
-Context:
-
-* hash of `Item` should be hash of `Sym`, and replace hash maps with hash sets
-
-*/
+pub struct Sys {
+  state: State,
+  fun_calls: Vec<Callable>,
+  sub_sys: Vec<Sys>,
+  preds: Vec<Pred>,
+}
 
 
-#[macro_use]
-extern crate nom ;
-extern crate term ;
-
-mod base ;
-pub mod parse ;

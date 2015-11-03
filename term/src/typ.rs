@@ -15,7 +15,7 @@ use std::fmt ;
 use base::{ Writable } ;
 
 /** A primitive type. */
-#[derive(Clone,Debug,PartialEq,Eq,PartialOrd,Ord, Hash)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum Type {
   /** Bool type. */
   Bool,

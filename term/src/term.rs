@@ -319,25 +319,34 @@ pub trait BindMaker<Trm> {
 impl<
   'a, Trm: Clone, T: Sized + BindMaker<Trm>
 > BindMaker<& 'a Trm> for T {
+  #[inline(always)]
   fn forall(& self, bind: Vec<(Sym, Type)>, term: & 'a Trm) -> Term {
     self.forall( bind, term.clone() )
   }
+  #[inline(always)]
   fn exists(& self, bind: Vec<(Sym, Type)>, term: & 'a Trm) -> Term {
     self.exists( bind, term.clone() )
   }
+  #[inline(always)]
   fn let_b(& self, bind: Vec<(Sym, Term)>, term: & 'a Trm) -> Term {
     self.let_b( bind, term.clone() )
   }
 }
 impl BindMaker<Term> for TermConsign {
   fn forall(& self, bind: Vec<(Sym, Type)>, term: Term) -> Term {
-    self.lock().unwrap().mk( Forall(bind, term) )
+    if bind.is_empty() { term } else {
+      self.lock().unwrap().mk( Forall(bind, term) )
+    }
   }
   fn exists(& self, bind: Vec<(Sym, Type)>, term: Term) -> Term {
-    self.lock().unwrap().mk( Exists(bind, term) )
+    if bind.is_empty() { term } else {
+      self.lock().unwrap().mk( Exists(bind, term) )
+    }
   }
   fn let_b(& self, bind: Vec<(Sym, Term)>, term: Term) -> Term {
-    self.lock().unwrap().mk( Let(bind, term) )
+    if bind.is_empty() { term } else {
+      self.lock().unwrap().mk( Let(bind, term) )
+    }
   }
 }
 
