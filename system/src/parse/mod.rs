@@ -21,6 +21,7 @@ static uf_desc:    & 'static str = "function declaration" ;
 static fun_desc:   & 'static str = "function definition"  ;
 static prop_desc:  & 'static str = "property definition"  ;
 static sys_desc:   & 'static str = "system definition"    ;
+static check_desc: & 'static str = "verify query"         ;
 
 use std::io ;
 use std::fmt ;
@@ -90,23 +91,6 @@ These will be done elsewhere for efficiency.
 ## Checks
 
 During parsing, checks the errors corresponding to [`Error`][error].
-That is, checks that none of the following happens
-
-| *description*                                   | `Error` variant |
-|:------------------------------------------------|:----------------|
-| redefinition of identifier                      | `Redef`         |
-| state variables in a `define-fun`               | `SVarInDef`     |
-| application of unknown function symbol          | `UkCall`        |
-| unknown state identifier                        | `UkState`       |
-| unknown (state) variable *w.r.t.* current state | `UkVar`         |
-| unknown init identifier in system               | `UkInit`        |
-| unknown trans identifier in system              | `UkTrans`       |
-| inconsistent state between systems and init     | `IncInitState`  |
-| inconsistent state between systems and trans    | `IncTransState` |
-| unknown system identifier in check              | `UkSys`         |
-| unknown prop identifier in check                | `UkProp`        |
-| inconsistent state of props in check            | `IncPropState`  |
-| state variable used in next state in init       | `NxtInit`       |
 
 [error]: enum.Error.html (The Error enum)
 */

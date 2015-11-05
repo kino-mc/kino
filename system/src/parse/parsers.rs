@@ -224,7 +224,7 @@ fn locals_parser<'a>(
 }
 
 /** Parses a system definition. */
-fn new_sys_parser<'a>(
+fn sys_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
@@ -250,7 +250,7 @@ fn new_sys_parser<'a>(
     sub_syss: apply!(sub_sys_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || check_new_sys(c, sym, state, locals, init, trans, sub_syss)
+    || check_sys(c, sym, state, locals, init, trans, sub_syss)
   )
 }
 
@@ -265,7 +265,7 @@ pub fn item_parser<'a>(
       apply!(fun_dec_parser, c) |
       apply!(fun_def_parser, c) |
       apply!(prop_parser, c) |
-      apply!(new_sys_parser, c)
+      apply!(sys_parser, c)
     )
   )
 }

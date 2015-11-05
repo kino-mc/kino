@@ -33,10 +33,14 @@ pub enum Error {
   UkCall(Sym, Sym, & 'static str),
   /** Use of unknown (state) variable. */
   UkVar(Var, Sym, & 'static str),
-  /** Use of unknown system identifier in check. */
-  UkSys(Sym),
-  /** Use of unknown prop identifier. */
+  /** Use of unknown system identifier in verify or property. */
+  UkSys(Sym, & 'static str, Option<Sym>),
+  /** Use of unknown prop identifier in verify. */
   UkProp(Sym),
+  /** Illegal use of state variable. */
+  IllSVar(Var, & 'static str, Sym),
+  /** Illegal use of next state variable. */
+  IllNxtSVar(Var, & 'static str, Sym),
   /** Inconsistent property state in check. */
   IncPropState(Rc<Sys>, Rc<Prop>),
   /** Illegal next state variable in init. */
@@ -71,8 +75,20 @@ impl fmt::Display for Error {
           fmt, "unknown state variable {} in {} {}", var, desc, sym
         ),
       },
-      UkSys(ref sym) => write!(fmt, "unknown system {} in check", sym),
+      UkSys(ref sym, ref desc, ref sym_opt) => {
+        let desc = match * sym_opt {
+          None => desc.to_string(),
+          Some(ref sym) => format!("{} {}", desc, sym),
+        } ;
+        write!(fmt, "unknown system {} in {}", sym, desc)
+      }
       UkProp(ref sym) => write!(fmt, "unknown prop {} in check", sym),
+      IllSVar(ref var, ref desc, ref sym) => write!(
+        fmt, "illegal use of state variable {} in {} {}", var, desc, sym
+      ),
+      IllNxtSVar(ref var, ref desc, ref sym) => write!(
+        fmt, "illegal use of next state variable {} in {} {}", var, desc, sym
+      ),
       IncPropState(ref sys, ref prop) => write!(
         fmt, "\
           property {} over system {} \
@@ -81,8 +97,10 @@ impl fmt::Display for Error {
         prop.sym(), prop.sys().sym(), sys.sym(), sys.state()
       ),
       NxtInit(ref var_sym, ref sym) => write!(
-        fmt, "init definition {} uses state variable {} in next state",
-        sym, var_sym
+        fmt, "\
+          init definition in system {} \
+          uses state variable {} in next state\
+        ", sym, var_sym
       ),
       /** Uknown system call in system definition. */
       UkSysCall(ref sub_sym, ref sym) => write!(
@@ -144,7 +162,7 @@ fn app_defined(
 }
 
 /** Checks that a state variables belongs to a state. */
-fn new_svar_in_state(
+fn svar_in_state(
   svar: & Sym, state: & Args
 ) -> bool {
   for & (ref s, _) in state.args().iter() {
@@ -214,7 +232,7 @@ pub fn check_prop(
   let sys = match ctxt.get_sys(& sys) {
     Some(s) => s.clone(),
     None => {
-      panic!("[check::check_prop] undefined system id in prop definition") ;
+      return Err( UkSys(sys, desc, Some(sym)) )
     },
   } ;
   // All symbols used in applications actually exist.
@@ -232,7 +250,7 @@ pub fn check_prop(
       },
       // Stateful var belong to state.
       // Next and current allowed.
-      real::Var::SVar(ref var_sym, _) => if ! new_svar_in_state(
+      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
         var_sym, sys.state()
       ) {
         return Err( UkVar(var.clone(), sym, desc) )
@@ -273,19 +291,19 @@ fn check_term_and_dep(
         // No need to check if state vars are allowed.
         // There's locals so we're in a system.
         Some(is_next) => if is_next && ! next_allowed {
-          panic!("next svar forbidden here in def of {}", var)
+          return Err( IllNxtSVar(var.clone(), desc, sym.clone()) )
         },
         None => if var_defined(ctxt, var_sym) {
           return Err( UkVar(var.clone(), sym.clone(), desc) )
         },
       },
       SVar(ref var_sym, ref st) => if ! svar_allowed {
-        panic!("svar fordibdden here {}", var)
+        return Err( IllSVar(var.clone(), desc, sym.clone()) )
       } else {
         if Next == * st && ! next_allowed {
-          panic!("next svar forbidden here {}", var)
+          return Err( IllNxtSVar(var.clone(), desc, sym.clone()) )
         } else {
-          if ! new_svar_in_state(var_sym, state) {
+          if ! svar_in_state(var_sym, state) {
             return Err( UkVar(var.clone(), sym.clone(), desc) )
           }
         }
@@ -303,7 +321,7 @@ fn check_term_and_dep(
 }
 
 /** Checks that a system definition is legal. */
-pub fn check_new_sys(
+pub fn check_sys(
   ctxt: & mut Context, sym: Sym, state: Args,
   locals: Vec<(Sym, Type, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
@@ -342,7 +360,7 @@ pub fn check_new_sys(
           },
         },
         // Stateful var exists in state.
-        real::Var::SVar(ref var_sym, ref st) => if ! new_svar_in_state(
+        real::Var::SVar(ref var_sym, ref st) => if ! svar_in_state(
           var_sym, & state
         ) {
           return Err( UkVar(var.clone(), sym, desc) )
@@ -387,7 +405,7 @@ pub fn check_new_sys(
         NxtInit(var_sym.clone(), sym)
       ),
       // Current stateful var belong to state.
-      real::Var::SVar(ref var_sym, _) => if ! new_svar_in_state(
+      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
         var_sym, & state
       ) {
         return Err( UkVar(var.clone(), sym, desc) )
@@ -419,7 +437,7 @@ pub fn check_new_sys(
         },
       },
       // Stateful var belong to state.
-      real::Var::SVar(ref var_sym, _) => if ! new_svar_in_state(
+      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
         var_sym, & state
       ) {
         return Err( UkVar(var.clone(), sym, desc) )
@@ -475,8 +493,9 @@ pub fn check_new_sys(
 pub fn check_check(
   ctxt: & Context, & (ref sys, ref props): & (Sym, Vec<Sym>)
 ) -> Result<(), Error> {
+  let desc = super::check_desc ;
   let sys = match ctxt.get_sys(sys) {
-    None => return Err( UkSys(sys.clone()) ),
+    None => return Err( UkSys(sys.clone(), desc, None) ),
     Some(sys) => sys,
   } ;
   for prop in props.iter() {
