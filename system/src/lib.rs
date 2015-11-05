@@ -1,3 +1,4 @@
+#![allow(non_upper_case_globals)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -9,14 +10,24 @@
 
 /*! Transition system library.
 
-## Remarks
+## Hash consing
+
+[`Sym`][sym type] and [`Term`][term type] come from the kinō
+[`term`][term crate] crate and are hash consed. Remember that one should
+**never** create more that one [Factory][factory struct] for these. It is
+thread-safe and can be cloned.
+[`Context`][context struct] holds one for parsing.
 
 ## To do
 
-Context:
+* more clever input consumption in [`Context`][context struct]
+* less copy in [`Context`][context struct]
 
-* hash of `Item` should be hash of `Sym`, and replace hash maps with hash sets
-
+[sym type]: ../term/type.Sym.html (Sym type)
+[term type]: ../term/type.Term.html (Term type)
+[term crate]: ../term/index.html (term crate)
+[factory struct]: ../term/struct.Factory.html (Factory struct)
+[context struct]: ctxt/struct.Context.html (Context struct)
 */
 
 
@@ -24,4 +35,22 @@ Context:
 extern crate nom ;
 extern crate term ;
 
-pub mod parse ;
+mod base ;
+pub use base::{
+  Sig, Args, Uf, Fun, Prop, Sys
+} ;
+
+mod parse ;
+
+/** Reads and remembers what has been read. */
+pub mod ctxt {
+  pub use super::base::Callable ;
+  pub use super::parse::{
+    Res, Context
+  } ;
+  pub use super::parse::check::Error ;
+
+}
+
+// mod sys ;
+// pub use sys::* ;

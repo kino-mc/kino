@@ -65,7 +65,7 @@ pub trait SVarWriter<Sym: SymWritable> {
 
 /** Can write itself given a state writer and a print style. */
 pub trait StateWritable<S: SymWritable, Svw: SVarWriter<S>> {
-  /** Write itself given a state writer and a print style. */
+  /** Writes itself given a state writer and a print style. */
   fn write(& self, & mut io::Write, & Svw, SymPrintStyle) -> io::Result<()> ;
 }
 

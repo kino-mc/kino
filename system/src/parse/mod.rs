@@ -7,20 +7,33 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! System parsing. */
+/*! System parsing.
 
+## To do
+
+Context:
+
+* hash of `Item` should be hash of its `Sym`, and replace hash maps with hash
+  sets
+*/
+
+static uf_desc:    & 'static str = "function declaration" ;
+static fun_desc:   & 'static str = "function definition"  ;
+static prop_desc:  & 'static str = "property definition"  ;
+static sys_desc:   & 'static str = "system definition"    ;
+
+use std::io ;
+use std::fmt ;
+use std::rc::Rc ;
 use std::thread::sleep_ms ;
 use std::collections::{ HashSet, HashMap } ;
-use std::fmt ;
-use std::io ;
 
 use term::{ Sym, Factory } ;
 
-mod base ;
-use self::base::* ;
+use base::* ;
 mod parsers ;
-mod check ;
-pub use self::check::Error ;
+pub mod check ;
+use self::check::Error ;
 
 use self::parsers::* ;
 
@@ -34,11 +47,10 @@ fn map_to_lines<
     for (_, ref v) in map.iter() {
       acc = format!("{}\n  {}", acc, v)
     } ;
-    acc = format!("{}\n}}", acc)
+    format!("{}\n}}", acc)
   } else {
-    acc = format!("{}}}", acc)
-  } ;
-  acc
+    format!("{}}}", acc)
+  }
 }
 
 macro_rules! try_get {
@@ -46,6 +58,12 @@ macro_rules! try_get {
     match $map.get($sym) {
       None => (),
       Some($id) => return Some($b),
+    }
+  ) ;
+  ($map:expr, $sym:expr, $e:expr) => (
+    match $map.get($sym) {
+      None => (),
+      Some(_) => return Some($e),
     }
   ) ;
 }
@@ -58,36 +76,43 @@ pub enum Res {
   Check(Sym, Vec<Sym>),
 }
 
-/** Maintains the parsing context and parses commands from a `io::Read`.
+/** Maintains the context and can read commands from an `io::Read`.
 
-During parsing, checks the errors corresponding to `Error`.
-That is, checks that none of the following happens
+Input is read line per line.
 
-| *description*                                     | `Error` variant |
-|:--------------------------------------------------|:----------------|
-| redefinition of identifier                        | `Redef`         |
-| state variables in `define-fun`s                  | `SVarInDef`     |
-| application of unknown function symbol            | `UkCall`        |
-| unknown state identifier                          | `UkState`       |
-| unknown (state) variable *w.r.t.* current state   | `UkVar`         |
-| unknown init identifier in system                 | `UkInit`        |
-| unknown trans identifier in system                | `UkTrans`       |
-| inconsistent state between systems and init/trans | `IncState`      |
-| unknown system identifier in check                | `UkSys`         |
-| unknown pred identifier in check                  | `UkPred`        |
-| inconsistent state of preds in check              | `IncPredState`  |
-| state variable used in next state in init         | `NxtInit`       |
-
-
-**Does not** do
+## Does **not** check
 
 * function symbol application arity checking
 * type checking
 
+These will be done elsewhere for efficiency.
+
+## Checks
+
+During parsing, checks the errors corresponding to [`Error`][error].
+That is, checks that none of the following happens
+
+| *description*                                   | `Error` variant |
+|:------------------------------------------------|:----------------|
+| redefinition of identifier                      | `Redef`         |
+| state variables in a `define-fun`               | `SVarInDef`     |
+| application of unknown function symbol          | `UkCall`        |
+| unknown state identifier                        | `UkState`       |
+| unknown (state) variable *w.r.t.* current state | `UkVar`         |
+| unknown init identifier in system               | `UkInit`        |
+| unknown trans identifier in system              | `UkTrans`       |
+| inconsistent state between systems and init     | `IncInitState`  |
+| inconsistent state between systems and trans    | `IncTransState` |
+| unknown system identifier in check              | `UkSys`         |
+| unknown prop identifier in check                | `UkProp`        |
+| inconsistent state of props in check            | `IncPropState`  |
+| state variable used in next state in init       | `NxtInit`       |
+
+[error]: enum.Error.html (The Error enum)
 */
 pub struct Context {
   /** Number of lines **read** so far. Does not correspond to where the parser
-  is currently at. */
+  is currently at. Not really used at the moment. */
   line: usize,
   /** String buffer for swapping when reading, and remember stuff when reading
   from stdin. */
@@ -96,18 +121,18 @@ pub struct Context {
   factory: Factory,
   /** All symbols defined. Used for faster redefinition checking. */
   all: HashSet<Sym>,
-  /** State definitions. */
-  states: HashMap<Sym, State>,
+  // /** State definitions. */
+  // states: HashMap<Sym, Rc<State>>,
   /** Function symbol declarations and definitions. */
-  callables: HashMap<Sym, Callable>,
-  /** Prediacte definitions. */
-  preds: HashMap<Sym, Pred>,
-  /** Init predicate definitions. */
-  inits: HashMap<Sym, Init>,
-  /** Transition predicate definitions. */
-  transs: HashMap<Sym, Trans>,
+  callables: HashMap<Sym, Rc<Callable>>,
+  /** Propiacte definitions. */
+  props: HashMap<Sym, Rc<Prop>>,
+  // /** Init property definitions. */
+  // inits: HashMap<Sym, Rc<Init>>,
+  // /** Transition property definitions. */
+  // transs: HashMap<Sym, Rc<Trans>>,
   /** Systems. */
-  syss: HashMap<Sym, Sys>,
+  syss: HashMap<Sym, Rc<Sys>>,
 }
 impl Context {
   /** Creates an empty context.
@@ -121,84 +146,75 @@ impl Context {
       buffer: String::with_capacity(buffer_size),
       factory: factory,
       all: HashSet::with_capacity(127),
-      states: HashMap::with_capacity(23),
+      // states: HashMap::with_capacity(23),
       callables: HashMap::with_capacity(23),
-      preds: HashMap::with_capacity(53),
-      inits: HashMap::with_capacity(23),
-      transs: HashMap::with_capacity(23),
+      props: HashMap::with_capacity(53),
+      // inits: HashMap::with_capacity(23),
+      // transs: HashMap::with_capacity(23),
       syss: HashMap::with_capacity(23),
     }
   }
 
-  /** Option of the state corresponding to an identifier. */
-  #[inline(always)]
-  pub fn get_state(& self, sym: & Sym) -> Option<& State> {
-    self.states.get(sym)
-  }
+  // /** Option of the state corresponding to an identifier. */
+  // #[inline(always)]
+  // pub fn get_state(& self, sym: & Sym) -> Option<& Rc<State>> {
+  //   self.states.get(sym)
+  // }
   /** Option of the function declaration/definition corresponding to an
   identifier. */
   #[inline(always)]
-  pub fn get_callable(& self, sym: & Sym) -> Option<& Callable> {
+  pub fn get_callable(& self, sym: & Sym) -> Option<& Rc<Callable>> {
     self.callables.get(sym)
   }
-  /** Option of the predicate corresponding to an identifier. */
+  /** Option of the property corresponding to an identifier. */
   #[inline(always)]
-  pub fn get_pred(& self, sym: & Sym) -> Option<& Pred> {
-    self.preds.get(sym)
+  pub fn get_prop(& self, sym: & Sym) -> Option<& Rc<Prop>> {
+    self.props.get(sym)
   }
-  /** Option of the init corresponding to an identifier. */
-  #[inline(always)]
-  pub fn get_init(& self, sym: & Sym) -> Option<& Init> {
-    self.inits.get(sym)
-  }
-  /** Option of the trans corresponding to an identifier. */
-  #[inline(always)]
-  pub fn get_trans(& self, sym: & Sym) -> Option<& Trans> {
-    self.transs.get(sym)
-  }
+  // /** Option of the init corresponding to an identifier. */
+  // #[inline(always)]
+  // pub fn get_init(& self, sym: & Sym) -> Option<& Rc<Init>> {
+  //   self.inits.get(sym)
+  // }
+  // /** Option of the trans corresponding to an identifier. */
+  // #[inline(always)]
+  // pub fn get_trans(& self, sym: & Sym) -> Option<& Rc<Trans>> {
+  //   self.transs.get(sym)
+  // }
   /** Option of the system corresponding to an identifier. */
   #[inline(always)]
-  pub fn get_sys(& self, sym: & Sym) -> Option<& Sys> {
+  pub fn get_sys(& self, sym: & Sym) -> Option<& Rc<Sys>> {
     self.syss.get(sym)
   }
 
   /** Prints the state of the context to stdin. Used for debugging. See also
-  `lines(& self)`. */
+  [the `lines` function][lines fun].
+
+  [lines fun]: struct.Context.html#method.lines (The lines function) */
   pub fn stdin_print(& self) {
     println!("Context:") ;
     for line in self.lines().lines() {
-      println!("| {}", line)
+      println!("  {}", line)
     }
   }
 
   /** Option of the item corresponding to an identifier. */
-  pub fn item_of_sym(& self, sym: & Sym) -> Option<Item> {
-    use self::base::Item::* ;
-    use self::base::Callable::* ;
+  pub fn sym_unused(& self, sym: & Sym) -> Option<& 'static str> {
+    use base::Callable::* ;
     if ! self.all.contains(sym) { None } else {
-      try_get!(
-        self.states, sym, state => { St(state.clone()) }
-      ) ;
+      // try_get!(self.states, sym, state_desc) ;
       try_get!(
         self.callables, sym, callable => {
-          match * callable {
-            Dec(ref f) => FDc(f.clone()),
-            Def(ref f) => FDf(f.clone()),
+          match * * callable {
+            Dec(_) => uf_desc,
+            Def(_) => fun_desc,
           }
         }
       ) ;
-      try_get!(
-        self.preds, sym, pred => { P(pred.clone()) }
-      ) ;
-      try_get!(
-        self.inits, sym, init => { I(init.clone()) }
-      ) ;
-      try_get!(
-        self.transs, sym, trans => { T(trans.clone()) }
-      ) ;
-      try_get!(
-        self.syss, sym, sys => { S(sys.clone()) }
-      ) ;
+      try_get!(self.props, sym, prop_desc) ;
+      // try_get!(self.inits, sym, init_desc) ;
+      // try_get!(self.transs, sym, trans_desc) ;
+      try_get!(self.syss, sym, sys_desc) ;
       self.stdin_print() ;
       println!("") ;
       println!("error, sym \"{}\" is in `all` but in none of the maps", sym) ;
@@ -206,100 +222,22 @@ impl Context {
     }
   }
 
-  /** Checks the item is legal and adds it where it belongs if it is. */
-  pub fn add(& mut self, i: Item) -> Result<(), Error> {
-    use self::base::Item::* ;
-    use self::base::Callable::* ;
-    try!( check::check_item(& self, & i) ) ;
-    let sym = i.sym().clone() ;
-    match i {
-      St(state) => {
-        match self.states.insert(sym, state) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in states", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-      FDc(f) => {
-        match self.callables.insert(sym, Dec(f)) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in callables", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-      FDf(f) => {
-        match self.callables.insert(sym, Def(f)) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in callables", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-      P(pred) => {
-        match self.preds.insert(sym, pred) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in preds", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-      I(init) => {
-        match self.inits.insert(sym, init) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in inits", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-      T(trans) => {
-        match self.transs.insert(sym, trans) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in transs", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-      S(sys) => {
-        match self.syss.insert(sym, sys) {
-          None => (),
-          Some(e) => {
-            self.stdin_print() ;
-            println!("added {} which already exists in syss", e.sym()) ;
-            unreachable!()
-          }
-        }
-      },
-    }
-    Ok(())
-  }
-
   /** A multiline string representation of the state of a context. */
   pub fn lines(& self) -> String {
-    let s = format!("line: {}\nbuffer: {}", self.line, self.buffer) ;
-    let s = map_to_lines(& self.callables, "function symbols:", s) ;
-    let s = map_to_lines(& self.states, "states:", s) ;
-    let s = map_to_lines(& self.preds, "preds:", s) ;
-    let s = map_to_lines(& self.inits, "inits:", s) ;
-    let s = map_to_lines(& self.transs, "transs:", s) ;
-    let s = map_to_lines(& self.syss, "syss:", s) ;
-    s
+    let mut s = format!("line: {}\nbuffer: {}", self.line, self.buffer) ;
+    s = map_to_lines(& self.callables, "function symbols:", s) ;
+    s = format!("{}\nsystems: {{", s) ;
+    for (_, ref sys) in self.syss.iter() {
+      for line in sys.lines().lines() {
+        s = format!("{}\n  {}", s, line)
+      }
+    } ;
+    if ! self.syss.is_empty() { s = format!("{}\n}}", s) } ;
+    map_to_lines(& self.props, "properties:", s)
   }
 
-  /** Underlying term factory. */
+  /** Underlying symbol, constant and term factory. */
+  #[inline(always)]
   pub fn factory(& self) -> & Factory { & self.factory }
 
   /** Reads lines and parses them until it finds
@@ -401,6 +339,66 @@ impl Context {
           }
         }
       }
+    }
+  }
+
+
+
+  // fn build_sys(ctxt: & self, sym: Sym) -> super::sys::Sys {
+  //   let mut ufs = vec![] ;
+  //   let mut sub_sys = HashMap::new() ;
+  //   let mut funs = vec![] ;
+
+  //   // The unwraps below cannot fail, this comes after dependency checking. */
+
+  //   let top = self.get(& sym).unwrap() ;
+  //   let state = top.state().clone() ;
+  //   let init = self.get(top.init()).unwrap() ;
+  //   let trans = self.get(top.trans()).unwrap() ;
+  // }
+}
+
+
+
+pub trait CanAdd {
+  fn add_callable(& mut self, Callable) ;
+  fn add_prop(& mut self, Prop) ;
+  fn add_sys(& mut self, Sys) ;
+}
+
+
+impl CanAdd for Context {
+  fn add_callable(& mut self, fun: Callable) {
+    let sym = fun.sym().clone() ;
+    match self.callables.insert(sym, Rc::new(fun)) {
+      None => (),
+      Some(e) => {
+        self.stdin_print() ;
+        println!("added {} which already exists in callables", e) ;
+        unreachable!()
+      },
+    }
+  }
+  fn add_prop(& mut self, prop: Prop) {
+    let sym = prop.sym().clone() ;
+    match self.props.insert(sym, Rc::new(prop)) {
+      None => (),
+      Some(e) => {
+        self.stdin_print() ;
+        println!("added {} which already exists in props", e) ;
+        unreachable!()
+      },
+    }
+  }
+  fn add_sys(& mut self, sys: Sys) {
+    let sym = sys.sym().clone() ;
+    match self.syss.insert(sym, Rc::new(sys)) {
+      None => (),
+      Some(e) => {
+        self.stdin_print() ;
+        println!("added {} which already exists in syss", e) ;
+        unreachable!()
+      },
     }
   }
 }

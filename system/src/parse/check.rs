@@ -12,127 +12,89 @@
 See `parse::Context` for the description of the checks. */
 
 use std::fmt ;
+use std::rc::Rc ;
+use std::collections::HashSet ;
 
-use term ;
-use term::{ Sym, Var } ;
+use term::{ TermAndDep, Type, Sym, Var, Term } ;
 use term::real ;
 
-use super::base::* ;
-use super::Context ;
+use base::* ;
+use super::{ Context, CanAdd } ;
 
 use self::Error::* ;
 
 /** Parse error. */
 pub enum Error {
   /** Redefinition of identifier. */
-  Redef(Item, Item),
+  Redef(Sym, & 'static str, & 'static str),
   /** State var in define-fun. */
-  SVarInDef(Var, FunDef),
+  SVarInDef(Var, Sym),
   /** Use of unknown symbol in application. */
-  UkCall(Item, Sym),
-  /** Use of unknown state symbol. */
-  UkState(Item),
+  UkCall(Sym, Sym, & 'static str),
   /** Use of unknown (state) variable. */
-  UkVar(Var, Item),
-  /** Use of unknown init identifier. */
-  UkInit(Sys),
-  /** Use of unknown trans identifier. */
-  UkTrans(Sys),
-  /** Inconsistent state between items. */
-  IncState(Sys, Item),
+  UkVar(Var, Sym, & 'static str),
   /** Use of unknown system identifier in check. */
   UkSys(Sym),
-  /** Use of unknown pred identifier. */
-  UkPred(Sym),
-  /** Inconsistent predicate state in check. */
-  IncPredState(Sys, Pred),
+  /** Use of unknown prop identifier. */
+  UkProp(Sym),
+  /** Inconsistent property state in check. */
+  IncPropState(Rc<Sys>, Rc<Prop>),
   /** Illegal next state variable in init. */
-  NxtInit(Sym, Init),
+  NxtInit(Sym, Sym),
+  /** Uknown system call in system definition. */
+  UkSysCall(Sym, Sym),
+  /** Inconsistent arity of system call in system definition. */
+  IncSysCall(Sym, usize, Sym, usize),
   /** I/O error. */
   Io(::std::io::Error),
 }
 impl fmt::Display for Error {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
-    use parse::base::Item::* ;
     use term::real::Var::* ;
     match * self {
-      Redef(ref i1, ref i2) => {
-        assert_eq!(i1.sym(), i2.sym()) ;
-        let (sym, d1, d2) = (i1.sym(), i1.desc(), i2.desc()) ;
-        if d1 == d2 {
-          write!(fmt, "duplicate {} for {}", d1, sym)
-        } else {
-          write!(fmt, "{} for {} conflicts with previous {}", d2, sym, d1)
-        }
-      },
-      SVarInDef(ref var, ref f) => write!(
-        fmt, "use of state variable {} in define-fun {}", var, f.sym()
+      Redef(ref sym, ref original, ref redef) => write!(
+        fmt, "{} for {} conflicts with previous {}", sym, original, redef
       ),
-      UkCall(ref i, ref sym) => write!(
-        fmt,
-        "application of unknown function symbol {} in {} {}",
-        sym, i.desc(), i.sym()
+      SVarInDef(ref var, ref sym) => write!(
+        fmt, "use of state variable {} in define-fun {}", var, sym
       ),
-      UkState(ref i) => match i.state() {
-        None => panic!(
-          "unknown state stateless item {} {}", i.desc(), i.sym()
-        ),
-        Some(state) => write!(
-          fmt, "unknown state {} in {} {}", state, i.desc(), i.sym()
-        ),
-      },
-      UkVar(ref var, ref i) => match * var.get() {
+      UkCall(ref call_sym, ref sym, ref desc) => write!(
+        fmt, "application of unknown function symbol {} in {} {}",
+        call_sym, desc, sym
+      ),
+      UkVar(ref var, ref sym, ref desc) => match * var.get() {
         Var(_) => write!(
           fmt, "unknown nullary function symbol {} in {} {}",
-          var, i.desc(), i.sym()
+          var, desc, sym
         ),
-        SVar(_,_) => match i.state() {
-          None => panic!(
-            "unknown state variable {} in stateless item {} {}",
-            var, i.desc(), i.sym()
-          ),
-          Some(state) => write!(
-            fmt, "unknown state variable {} in {} {} over {}",
-            var, i.desc(), i.sym(), state
-          ),
-        },
+        SVar(_,_) => write!(
+          fmt, "unknown state variable {} in {} {}", var, desc, sym
+        ),
       },
-      UkInit(ref sys) => write!(
-        fmt, "unknown init predicate {} in system definition {}",
-        sys.init(), sys.sym()
-      ),
-      UkTrans(ref sys) => write!(
-        fmt, "unknown trans predicate {} in system definition {}",
-        sys.trans(), sys.sym()
-      ),
-      IncState(ref sys, I(ref init)) => write!(
-        fmt,
-        "system definition {} has state {} but init predicate {} has state {}",
-        sys.sym(), sys.state(), init.sym(), init.state()
-      ),
-      IncState(ref sys, T(ref trans)) => write!(
-        fmt, "\
-          system definition {} has state {} \
-          but trans predicate {} has state {}\
-        ",
-        sys.sym(), sys.state(), trans.sym(), trans.state()
-      ),
-      IncState(ref sys, ref i) => panic!(
-        "inconsistent state error between system {} and {} {}",
-        sys.sym(), i.desc(), i.sym()
-      ),
       UkSys(ref sym) => write!(fmt, "unknown system {} in check", sym),
-      UkPred(ref sym) => write!(fmt, "unknown pred {} in check", sym),
-      IncPredState(ref sys, ref pred) => write!(
+      UkProp(ref sym) => write!(fmt, "unknown prop {} in check", sym),
+      IncPropState(ref sys, ref prop) => write!(
         fmt, "\
-          predicate {} over state {} \
+          property {} over system {} \
           cannot be checked for system {} with state {}\
         ",
-        pred.sym(), pred.state(), sys.sym(), sys.state()
+        prop.sym(), prop.sys().sym(), sys.sym(), sys.state()
       ),
-      NxtInit(ref sym, ref init) => write!(
+      NxtInit(ref var_sym, ref sym) => write!(
         fmt, "init definition {} uses state variable {} in next state",
-        init.sym(), sym
+        sym, var_sym
+      ),
+      /** Uknown system call in system definition. */
+      UkSysCall(ref sub_sym, ref sym) => write!(
+        fmt, "unknown system call to {} in {} {}",
+        sub_sym, sym, super::sys_desc
+      ),
+      /** Inconsistent arity of system call in system definition. */
+      IncSysCall(ref sub_sym, ref arity, ref sym, ref arg_count) => write!(
+        fmt, "\
+          illegal system call to {} in {} {}: \
+          {} parameters given but {} has arity {}\
+        ", sub_sym, super::sys_desc, sym, arg_count, sub_sym, arity
       ),
       Io(ref e) => write!(fmt, "i/o error \"{}\"", e),
     }
@@ -140,13 +102,15 @@ impl fmt::Display for Error {
 }
 
 /** Checks that an identifier is unused. */
-fn sym_unused(
-  ctxt: & Context, i: & Item
-) -> Result<(), Error> {
-  match ctxt.item_of_sym(i.sym()) {
-    None => Ok(()),
-    Some(original) => Err( Redef(original, i.clone()) ),
-  }
+macro_rules! check_sym {
+  ($ctxt:expr, $sym:expr, $desc:expr) => (
+    match $ctxt.sym_unused(& $sym) {
+      None => (),
+      Some(original) => return Err(
+        Redef($sym, original, $desc)
+      ),
+    }
+  )
 }
 
 /** Checks that a variable is defined. That is, looks for a function symbol
@@ -154,11 +118,13 @@ declaration/definition for the variable's symbol with arity zero. */
 fn var_defined(
   ctxt: & Context, sym: & Sym
 ) -> bool {
-  use parse::base::Callable::* ;
+  use base::Callable::* ;
   match ctxt.get_callable(sym) {
     None => false,
-    Some(& Dec(ref f)) => f.sig().len() == 0,
-    Some(& Def(ref f)) => f.args().len() == 0,
+    Some(f) => match * * f {
+      Dec(ref f) => f.sig().len() == 0,
+      Def(ref f) => f.args().len() == 0,
+    },
   }
 }
 
@@ -167,26 +133,19 @@ declaration/definition for a symbol with arity greater than zero. */
 fn app_defined(
   ctxt: & Context, sym: & Sym
 ) -> bool {
-  use parse::base::Callable::* ;
+  use base::Callable::* ;
   match ctxt.get_callable(sym) {
     None => false,
-    Some(& Dec(ref f)) => f.sig().len() > 0,
-    Some(& Def(ref f)) => f.args().len() > 0,
+    Some(f) => match * * f {
+      Dec(ref f) => f.sig().len() > 0,
+      Def(ref f) => f.args().len() > 0,
+    },
   }
 }
 
-/** Checks that a symbol is defined as an init or trans predicate. Used to
-check the function symbol applications of init and trans predicates. */
-fn sys_app_defined(
-  ctxt: & Context, sym: & Sym
-) -> bool {
-  ctxt.get_init(sym).is_some() ||
-  ctxt.get_trans(sym).is_some()
-}
-
 /** Checks that a state variables belongs to a state. */
-fn svar_in_state(
-  svar: & Sym, state: & State
+fn new_svar_in_state(
+  svar: & Sym, state: & Args
 ) -> bool {
   for & (ref s, _) in state.args().iter() {
     if s == svar { return true }
@@ -194,211 +153,339 @@ fn svar_in_state(
   false
 }
 
-/** Checks that a state is legal. */
-fn check_state(
-  ctxt: & Context, _: & State, i: & Item
-) -> Result<(), Error> {
-  sym_unused(ctxt,i)
-}
-
 /** Checks that a function declaration is legal. */
-fn check_fun_dec(
-  ctxt: & Context, _: & FunDec, i: & Item
+pub fn check_fun_dec(
+  ctxt: & mut Context, sym: Sym, sig: Sig, typ: Type
 ) -> Result<(), Error> {
-  sym_unused(ctxt,i)
+  let desc = super::uf_desc ;
+  check_sym!(ctxt, sym, desc) ;
+  ctxt.add_callable(
+    Callable::Dec( Uf::mk(sym, sig, typ) )
+  ) ;
+  Ok(())
 }
 
 /** Checks that a function definition is legal. */
-fn check_fun_def(
-  ctxt: & Context, fd: & FunDef, i: & Item
+pub fn check_fun_def(
+  ctxt: & mut Context, sym: Sym, args: Args, typ: Type, body: TermAndDep
 ) -> Result<(), Error> {
-  try!(sym_unused(ctxt,i)) ;
-  let body = fd.body().body() ;
+  let desc = super::fun_desc ;
+  check_sym!(ctxt, sym, desc) ;
+  let desc = super::fun_desc ;
+  let mut funs = HashSet::new() ;
   // All symbols used in applications actually exist.
-  for sym in body.apps.iter() {
-    if ! app_defined(ctxt, sym) {
-      return Err( UkCall(i.clone(), sym.clone()) )
+  for call_sym in body.apps.iter() {
+    if ! app_defined(ctxt, call_sym) {
+      return Err( UkCall(call_sym.clone(), sym, desc) )
+    } else {
+      // Don't care if it was already there.
+      funs.insert(call_sym.clone()) ;
     }
   } ;
   // No stateful var, all non-stateful vars exist.
   for var in body.vars.iter() {
     match * var.get() {
-      real::Var::Var(ref sym) => {
+      real::Var::Var(ref var_sym) => {
         let mut exists = false ;
-        if ! var_defined(ctxt, sym) {
-          for & (ref dsym, _) in fd.args() {
-            if dsym == sym { exists = true }
+        if ! var_defined(ctxt, var_sym) {
+          for & (ref dsym, _) in args.args() {
+            if dsym == var_sym { exists = true }
           }
         } else { exists = true } ;
         if ! exists {
-          return Err( UkVar(var.clone(), i.clone()) )
+          return Err( UkVar(var.clone(), sym, desc) )
         }
       },
-      _ => return Err( SVarInDef(var.clone(), fd.clone()) ),
+      _ => return Err( SVarInDef(var.clone(), sym) ),
     }
   } ;
+  ctxt.add_callable(
+    Callable::Def( Fun::mk(sym, args, typ, body.term) )
+  ) ;
   Ok(())
 }
 
-/** Checks that a predicate definition is legal. */
-fn check_pred(
-  ctxt: & Context, pred: & Pred, i: & Item
+/** Checks that a proposition definition is legal. */
+pub fn check_prop(
+  ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
 ) -> Result<(), Error> {
-  try!(sym_unused(ctxt,i)) ;
-  let state = match ctxt.get_state(pred.state()) {
-    Some(s) => s,
-    None => return Err( UkState(i.clone()) ),
+  let desc = super::prop_desc ;
+  check_sym!(ctxt, sym, desc) ;
+  let sys = match ctxt.get_sys(& sys) {
+    Some(s) => s.clone(),
+    None => {
+      panic!("[check::check_prop] undefined system id in prop definition") ;
+    },
   } ;
-  let body = pred.body().body() ;
   // All symbols used in applications actually exist.
-  for sym in body.apps.iter() {
-    if ! app_defined(ctxt, sym) {
-      return Err( UkCall(i.clone(), sym.clone()) )
+  for app_sym in body.apps.iter() {
+    if ! app_defined(ctxt, app_sym) {
+      return Err( UkCall(app_sym.clone(), sym, desc) )
     }
   } ;
-  // Stateful var belong to state, non-stateful var exist.
+  // Stateful var belong to state of system, non-stateful var exist.
   for var in body.vars.iter() {
     match * var.get() {
       // Non-stateful var exist.
-      real::Var::Var(ref sym) => if ! var_defined(ctxt, sym) {
-        return Err( UkVar(var.clone(), i.clone()) )
+      real::Var::Var(ref var_sym) => if ! var_defined(ctxt, var_sym) {
+        return Err( UkVar(var.clone(), sym, desc) )
       },
       // Stateful var belong to state.
       // Next and current allowed.
-      real::Var::SVar(ref sym, _) => if ! svar_in_state(sym, state) {
-        return Err( UkVar(var.clone(), i.clone()) )
+      real::Var::SVar(ref var_sym, _) => if ! new_svar_in_state(
+        var_sym, sys.state()
+      ) {
+        return Err( UkVar(var.clone(), sym, desc) )
       },
     }
   } ;
+  ctxt.add_prop(
+    Prop::mk(sym, sys, body.term)
+  ) ;
   Ok(())
 }
 
-/** Checks that an init predicate definition is legal. */
-fn check_init(
-  ctxt: & Context, init: & Init, i: & Item
-) -> Result<(), Error> {
-  try!(sym_unused(ctxt,i)) ;
-  let state = match ctxt.get_state(init.state()) {
-    Some(s) => s,
-    None => return Err( UkState(i.clone()) ),
+/** Checks that a symbol is in a list of local definitions. Returns a None if
+it's not there, otherwise an option of a bool indicating if the term it is
+bound to mentions next. */
+fn is_sym_in_locals(
+  sym: & Sym, locals: & [(Sym, Type, Term, bool)]
+) -> Option<bool> {
+  for &(ref local_sym, _, _, ref has_next) in locals.iter() {
+    if sym == local_sym { return Some(* has_next) }
   } ;
-  let body = init.body().body() ;
-  // All symbols used in applications actually exist.
-  for sym in body.apps.iter() {
-    if ( ! app_defined(ctxt, sym) ) && ( ! sys_app_defined(ctxt, sym) ) {
-      return Err( UkCall(i.clone(), sym.clone()) )
-    }
-  } ;
-  // Current stateful var belong to state, non-stateful var exist.
-  for var in body.vars.iter() {
-    match * var.get() {
-      // Non-stateful var exist.
-      real::Var::Var(ref sym) => if ! var_defined(ctxt, sym) {
-        return Err( UkVar(var.clone(), i.clone()) )
-      },
-      // Next state variables are illegal.
-      real::Var::SVar(ref sym, term::State::Next) => return Err(
-        NxtInit(sym.clone(), init.clone())
-      ),
-      // Current stateful var belong to state.
-      real::Var::SVar(ref sym, _) => if ! svar_in_state(sym, state) {
-        return Err( UkVar(var.clone(), i.clone()) )
-      },
-    }
-  } ;
-  Ok(())
+  None
 }
 
-/** Checks that a trans predicate definition is legal. */
-fn check_trans(
-  ctxt: & Context, trans: & Trans, i: & Item
+fn check_term_and_dep(
+  term: & TermAndDep,
+  ctxt: & Context, sym: & Sym, state: & Args,
+  locals: & [ (Sym, Type, Term, bool) ],
+  svar_allowed: bool, next_allowed: bool, desc: & 'static str
 ) -> Result<(), Error> {
-  try!(sym_unused(ctxt,i)) ;
-  let state = match ctxt.get_state(trans.state()) {
-    Some(s) => s,
-    None => return Err( UkState(i.clone()) ),
-  } ;
-  let body = trans.body().body() ;
-  // All symbols used in applications actually exist.
-  for sym in body.apps.iter() {
-    if ( ! app_defined(ctxt, sym) ) && ( ! sys_app_defined(ctxt, sym) ) {
-      return Err( UkCall(i.clone(), sym.clone()) )
-    }
-  } ;
-  // Stateful var belong to state, non-stateful var exist.
-  for var in body.vars.iter() {
+  use term::real::Var::Var as NSVar ;
+  use term::real::Var::SVar ;
+  use term::State::* ;
+
+  for var in term.vars.iter() {
     match * var.get() {
-      // Non-stateful var exist.
-      real::Var::Var(ref sym) => if ! var_defined(ctxt, sym) {
-        return Err( UkVar(var.clone(), i.clone()) )
+      NSVar(ref var_sym) => match is_sym_in_locals(var_sym, locals) {
+        // No need to check if state vars are allowed.
+        // There's locals so we're in a system.
+        Some(is_next) => if is_next && ! next_allowed {
+          panic!("next svar forbidden here in def of {}", var)
+        },
+        None => if var_defined(ctxt, var_sym) {
+          return Err( UkVar(var.clone(), sym.clone(), desc) )
+        },
       },
-      // Stateful var belong to state.
-      // Next and current allowed.
-      real::Var::SVar(ref sym, _) => if ! svar_in_state(sym, state) {
-        return Err( UkVar(var.clone(), i.clone()) )
+      SVar(ref var_sym, ref st) => if ! svar_allowed {
+        panic!("svar fordibdden here {}", var)
+      } else {
+        if Next == * st && ! next_allowed {
+          panic!("next svar forbidden here {}", var)
+        } else {
+          if ! new_svar_in_state(var_sym, state) {
+            return Err( UkVar(var.clone(), sym.clone(), desc) )
+          }
+        }
       },
     }
   } ;
+
+  for app_sym in term.apps.iter() {
+    if ! app_defined(ctxt, app_sym) {
+      return Err( UkCall(app_sym.clone(), sym.clone(), desc) )
+    }
+  } ;
+
   Ok(())
 }
 
 /** Checks that a system definition is legal. */
-fn check_sys(
-  ctxt: & Context, sys: & Sys, i: & Item
+pub fn check_new_sys(
+  ctxt: & mut Context, sym: Sym, state: Args,
+  locals: Vec<(Sym, Type, TermAndDep)>,
+  init: TermAndDep, trans: TermAndDep,
+  sub_syss: Vec<(Sym, Vec<TermAndDep>)>
 ) -> Result<(), Error> {
-  try!(sym_unused(ctxt,i)) ;
-  let state = match ctxt.get_state(sys.state()) {
-    Some(s) => s,
-    None => return Err( UkState(i.clone()) ),
-  } ;
-  let init = sys.init() ;
-  let trans = sys.trans() ;
-  match ctxt.get_init(init) {
-    None => return Err( UkInit(sys.clone()) ),
-    Some(init) => if init.state() != state.sym() {
-      return Err( IncState(sys.clone(), Item::I(init.clone())) )
-    },
-  } ;
-  match ctxt.get_trans(trans) {
-    None => return Err( UkTrans(sys.clone()) ),
-    Some(trans) => if trans.state() != state.sym() {
-      return Err( IncState(sys.clone(), Item::T(trans.clone())) )
-    },
-  } ;
-  Ok(())
-}
+  use term::State::* ;
+  use std::iter::FromIterator ;
 
-/** Checks that an item is legal. */
-pub fn check_item(
-  ctxt: & Context, i: & Item
-) -> Result<(), Error> {
-  use parse::base::Item::* ;
-  match * i {
-    St(ref state) => check_state(ctxt, state, i),
-    FDc(ref f) => check_fun_dec(ctxt, f, i),
-    FDf(ref f) => check_fun_def(ctxt, f, i),
-    P(ref pred) => check_pred(ctxt, pred, i),
-    I(ref init) => check_init(ctxt, init, i),
-    T(ref trans) => check_trans(ctxt, trans, i),
-    S(ref sys) => check_sys(ctxt, sys, i),
-  }
+  let desc = super::sys_desc ;
+  check_sym!(ctxt, sym, desc) ;
+
+  println!("  checking locals") ;
+
+  let mut tmp_locals = Vec::with_capacity(locals.len()) ;
+  // All locals definitions make sense.
+  for (local_sym, typ, def) in locals.into_iter() {
+    let (term, apps, vars) = (def.term, def.apps, def.vars) ;
+    let mut has_next = false ;
+    // Applications mention existing symbols.
+    for app_sym in apps.iter() {
+      if ! app_defined(ctxt, app_sym) {
+        return Err( UkCall(app_sym.clone(), sym, desc) )
+      }
+    } ;
+    // Variables exist.
+    for var in vars.iter() {
+      match * var.get() {
+        // Non-stateful var exists.
+        real::Var::Var(ref var_sym) => match is_sym_in_locals(
+          var_sym, & tmp_locals
+        ) {
+          Some(false) => (),
+          Some(true) => has_next = true,
+          None => if ! var_defined(ctxt, var_sym) {
+            return Err( UkVar(var.clone(), sym, desc) )
+          },
+        },
+        // Stateful var exists in state.
+        real::Var::SVar(ref var_sym, ref st) => if ! new_svar_in_state(
+          var_sym, & state
+        ) {
+          return Err( UkVar(var.clone(), sym, desc) )
+        } else {
+          match * st {
+            Next => has_next = true,
+            _ => (),
+          }
+        },
+      }
+    } ;
+    tmp_locals.push( (local_sym, typ, term, has_next) )
+  } ;
+
+  println!("  checking init") ;
+
+  let (init, init_vars, init_apps) = (init.term, init.vars, init.apps) ;
+  // All symbols used in applications actually exist.
+  for app_sym in init_apps.iter() {
+    if ! app_defined(ctxt, app_sym) {
+      return Err( UkCall(app_sym.clone(), sym, desc) )
+    }
+  } ;
+  // Init:
+  // * no next state vars
+  // * current state vars exist in state
+  // * non-stateful var exist.
+  for var in init_vars.iter() {
+    match * var.get() {
+      // Non-stateful var exist.
+      real::Var::Var(ref var_sym) => match is_sym_in_locals(
+        var_sym, & tmp_locals
+      ) {
+        Some(false) => (),
+        Some(true) => return Err( NxtInit(var_sym.clone(), sym) ),
+        None => if ! var_defined(ctxt, var_sym) {
+          return Err( UkVar(var.clone(), sym, desc) )
+        },
+      },
+      // Next state variables are illegal.
+      real::Var::SVar(ref var_sym, Next) => return Err(
+        NxtInit(var_sym.clone(), sym)
+      ),
+      // Current stateful var belong to state.
+      real::Var::SVar(ref var_sym, _) => if ! new_svar_in_state(
+        var_sym, & state
+      ) {
+        return Err( UkVar(var.clone(), sym, desc) )
+      },
+    }
+  } ;
+
+  println!("  checking trans") ;
+
+  let (trans, trans_vars, trans_apps) = (trans.term, trans.vars, trans.apps) ;
+  // All symbols used in applications actually exist.
+  for app_sym in trans_apps.iter() {
+    if ! app_defined(ctxt, app_sym) {
+      return Err( UkCall(app_sym.clone(), sym, desc) )
+    }
+  } ;
+  // Trans:
+  // * state vars exist in state
+  // * non-stateful var exist.
+  for var in trans_vars.iter() {
+    match * var.get() {
+      // Non-stateful var exist.
+      real::Var::Var(ref var_sym) => match is_sym_in_locals(
+        var_sym, & tmp_locals
+      ) {
+        Some(_) => (),
+        None => if ! var_defined(ctxt, var_sym) {
+          return Err( UkVar(var.clone(), sym, desc) )
+        },
+      },
+      // Stateful var belong to state.
+      real::Var::SVar(ref var_sym, _) => if ! new_svar_in_state(
+        var_sym, & state
+      ) {
+        return Err( UkVar(var.clone(), sym, desc) )
+      },
+    }
+  } ;
+
+  println!("  checking calls") ;
+
+  let mut calls = Vec::with_capacity(sub_syss.len()) ;
+  // Sub systems exist and number of params matches their arity.
+  for (sub_sym, params) in sub_syss.into_iter() {
+    let sub_sys = match ctxt.get_sys(& sub_sym) {
+      None => return Err( UkSysCall(sub_sym.clone(), sym) ),
+      Some(ref sub_sys) => if sub_sys.state().args().len() != params.len() {
+        return Err(
+          IncSysCall(
+            sub_sym.clone(), sub_sys.state().args().len(), sym, params.len()
+          )
+        )
+      } else {
+        (* sub_sys).clone()
+      },
+    } ;
+
+    let mut nu_params = Vec::with_capacity(params.len()) ;
+    for param in params.into_iter() {
+      try!(
+        check_term_and_dep(
+          & param, ctxt, & sym, & state, & tmp_locals,
+          true, false, desc
+        )
+      ) ;
+      nu_params.push(param.term)
+    } ;
+
+    calls.push( (sub_sys, nu_params) )
+  } ;
+
+  // Actual locals vector.
+  let locals = Vec::from_iter(
+    tmp_locals.into_iter().map( |(sym, typ, term, _)| (sym, typ, term) )
+  ) ;
+
+  ctxt.add_sys(
+    Sys::mk(sym, state, locals, init, trans, calls)
+  ) ;
+
+  Ok(())
 }
 
 /** Checks that a check is legal. */
 pub fn check_check(
-  ctxt: & Context, & (ref sys, ref preds): & (Sym, Vec<Sym>)
+  ctxt: & Context, & (ref sys, ref props): & (Sym, Vec<Sym>)
 ) -> Result<(), Error> {
   let sys = match ctxt.get_sys(sys) {
     None => return Err( UkSys(sys.clone()) ),
     Some(sys) => sys,
   } ;
-  for pred in preds.iter() {
-    let pred = match ctxt.get_pred(pred) {
-      None => return Err( UkPred(pred.clone()) ),
-      Some(pred) => pred,
+  for prop in props.iter() {
+    let prop = match ctxt.get_prop(prop) {
+      None => return Err( UkProp(prop.clone()) ),
+      Some(prop) => prop,
     } ;
-    if sys.state() != pred.state() {
-      return Err( IncPredState(sys.clone(), pred.clone()) )
+    if sys.sym() != prop.sys().sym() {
+      return Err( IncPropState(sys.clone(), prop.clone()) )
     }
   } ;
   Ok(())

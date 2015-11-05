@@ -9,11 +9,10 @@
 
 use nom::{ IResult, multispace, not_line_ending } ;
 
-use super::base::* ;
-use super::* ;
-use term::{
-  Sym, StsResult, Factory, ParseSts2
-} ;
+use base::* ;
+use super::Context ;
+use super::check::* ;
+use term::{ Type, Sym, TermAndDep, Factory, ParseSts2 } ;
 
 /** Parses a multispace and a comment. */
 named!{
@@ -39,6 +38,11 @@ named!{
   )
 }
 
+named!{
+  type_parser<Type>,
+  call!(Factory::parse_type)
+}
+
 /** Parses a signature. */
 named!{
   sig_parser<Sig>,
@@ -47,7 +51,7 @@ named!{
     opt!(space_comment) ~
     args: separated_list!(
       opt!(space_comment),
-      Factory::parse_type
+      type_parser
     ) ~
     opt!(space_comment) ~
     char!(')'),
@@ -76,7 +80,7 @@ fn args_parser<'a>(
           opt!(space_comment) ~
           sym: apply!(sym_parser, f) ~
           space_comment ~
-          typ: call!(Factory::parse_type) ~
+          typ: type_parser ~
           opt!(space_comment),
           || (sym, typ)
         ),
@@ -87,170 +91,166 @@ fn args_parser<'a>(
   )
 }
 
-/** Parses a state declaration. */
-fn state_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], State> {
-  chain!(
-    bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-state") ~
-    space_comment ~
-    sym: apply!(sym_parser, f) ~
-    opt!(space_comment) ~
-    args: apply!(args_parser, f) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || State::mk(sym, args)
-  )
-}
-
 /** Parses a function declaration. */
 fn fun_dec_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], FunDec> {
+  bytes: & 'a [u8], c: & mut Context
+) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
     opt!(space_comment) ~
     tag!("declare-fun") ~
     space_comment ~
-    sym: apply!(sym_parser, f) ~
+    sym: apply!(sym_parser, c.factory()) ~
     opt!(space_comment) ~
     sig: sig_parser ~
     opt!(space_comment) ~
-    typ: call!(Factory::parse_type) ~
+    typ: type_parser ~
     opt!(space_comment) ~
     char!(')'),
-    || FunDec::mk(sym, sig, typ)
+    || check_fun_dec(c, sym, sig, typ)
   )
 }
 
 /** Parses a term. */
 fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   f.parse_expr(bytes)
-}
-
-/** Parses a body (term). */
-fn body_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Body> {
-  map!(
-    bytes,
-    apply!(term_parser, f),
-    |term| Body::mk(term)
-  )
 }
 
 /** Parses a function definition. */
 fn fun_def_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], FunDef> {
+  bytes: & 'a [u8], c: & mut Context
+) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
     opt!(space_comment) ~
     tag!("define-fun") ~
     space_comment ~
-    sym: apply!(sym_parser, f) ~
+    sym: apply!(sym_parser, c.factory()) ~
     opt!(space_comment) ~
-    args: apply!(args_parser, f) ~
+    args: apply!(args_parser, c.factory()) ~
     opt!(space_comment) ~
-    typ: call!(Factory::parse_type) ~
+    typ: type_parser ~
     opt!(space_comment) ~
-    body: apply!(body_parser, f) ~
+    body: apply!(term_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || FunDef::mk(sym, args, typ, body)
+    || check_fun_def(c, sym, args, typ, body)
   )
 }
 
-/** Parses a predicate definition. */
-fn pred_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Pred> {
+/** Parses a property definition. */
+fn prop_parser<'a>(
+  bytes: & 'a [u8], c: & mut Context
+) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
     opt!(space_comment) ~
-    tag!("define-pred") ~
+    tag!("define-prop") ~
     space_comment ~
-    sym: apply!(sym_parser, f) ~
+    sym: apply!(sym_parser, c.factory()) ~
     space_comment ~
-    state: apply!(sym_parser, f) ~
+    state: apply!(sym_parser, c.factory()) ~
     opt!(space_comment) ~
-    body: apply!(body_parser, f) ~
+    body: apply!(term_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || Pred::mk(sym, state, body)
+    || check_prop(c, sym, state, body)
   )
 }
 
-/** Parses an init definition. */
-fn init_def_parser<'a>(
+fn sub_sys_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Init> {
-  chain!(
+) -> IResult<'a, & 'a [u8], Vec<(Sym, Vec<TermAndDep>)>> {
+  delimited!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-init") ~
-    space_comment ~
-    sym: apply!(sym_parser, f) ~
-    space_comment ~
-    state: apply!(sym_parser, f) ~
-    opt!(space_comment) ~
-    body: apply!(body_parser, f) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || Init::mk(sym, state, body)
+    char!('('),
+    many0!(
+      chain!(
+        opt!(space_comment) ~
+        char!('(') ~
+        opt!(space_comment) ~
+        sym: apply!(sym_parser, f) ~
+        params: many1!(
+          preceded!(
+            opt!(space_comment),
+            apply!(term_parser, f)
+          )
+        ) ~
+        opt!(space_comment) ~
+        char!(')'),
+        || (sym, params)
+      )
+    ),
+    chain!( opt!(space_comment) ~ char!(')'), || () )
   )
 }
 
-/** Parses a trans definition. */
-fn trans_def_parser<'a>(
+/** Parses a local definitions. */
+fn locals_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Trans> {
-  chain!(
+) -> IResult<'a, & 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
+  delimited!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-trans") ~
-    space_comment ~
-    sym: apply!(sym_parser, f) ~
-    space_comment ~
-    state: apply!(sym_parser, f) ~
-    opt!(space_comment) ~
-    body: apply!(body_parser, f) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || Trans::mk(sym, state, body)
+    char!('('),
+    many0!(
+      preceded!(
+        opt!(space_comment),
+        delimited!(
+          char!('('),
+          chain!(
+            opt!(space_comment) ~
+            sym: apply!(sym_parser, f) ~
+            space_comment ~
+            typ: type_parser ~
+            space_comment ~
+            term: apply!(term_parser, f) ~
+            opt!(space_comment),
+            || (sym, typ, term)
+          ),
+          char!(')')
+        )
+      )
+    ),
+    preceded!(
+      opt!(space_comment),
+      char!(')')
+    )
   )
 }
 
 /** Parses a system definition. */
-fn sys_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Sys> {
+fn new_sys_parser<'a>(
+  bytes: & 'a [u8], c: & mut Context
+) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
     opt!(space_comment) ~
     tag!("define-system") ~
     space_comment ~
-    sym: apply!(sym_parser, f) ~
+    sym: apply!(sym_parser, c.factory()) ~
+    opt!(space_comment) ~
+    char!('(') ~
+    opt!(space_comment) ~
+    state: apply!(args_parser, c.factory()) ~
+    opt!(space_comment) ~
+    char!(')') ~
+    opt!(space_comment) ~
+    locals: apply!(locals_parser, c.factory()) ~
+    opt!(space_comment) ~
+    init: apply!(term_parser, c.factory()) ~
     space_comment ~
-    state: apply!(sym_parser, f) ~
-    space_comment ~
-    init: apply!(sym_parser, f) ~
-    space_comment ~
-    trans: apply!(sym_parser, f) ~
+    trans: apply!(term_parser, c.factory()) ~
+    opt!(space_comment) ~
+    sub_syss: apply!(sub_sys_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || Sys::mk(sym, state, init, trans)
+    || check_new_sys(c, sym, state, locals, init, trans, sub_syss)
   )
 }
 
@@ -258,22 +258,15 @@ fn sys_parser<'a>(
 pub fn item_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
-  use super::base::Item::* ;
-  map!(
+  preceded!(
     bytes,
-    preceded!(
-      opt!(multispace),
-      alt!(
-        map!( apply!(state_parser, c.factory()), |out| St(out) ) |
-        map!( apply!(fun_dec_parser, c.factory()), |out| FDc(out) ) |
-        map!( apply!(fun_def_parser, c.factory()), |out| FDf(out) ) |
-        map!( apply!(pred_parser, c.factory()), |out| P(out) ) |
-        map!( apply!(init_def_parser, c.factory()), |out| I(out) ) |
-        map!( apply!(trans_def_parser, c.factory()), |out| T(out) ) |
-        map!( apply!(sys_parser, c.factory()), |out| S(out) )
-      )
-    ),
-    |item| c.add(item)
+    opt!(multispace),
+    alt!(
+      apply!(fun_dec_parser, c) |
+      apply!(fun_def_parser, c) |
+      apply!(prop_parser, c) |
+      apply!(new_sys_parser, c)
+    )
   )
 }
 

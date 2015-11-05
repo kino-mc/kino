@@ -24,7 +24,7 @@ use term::{
   bump
 } ;
 use parser ;
-use parser::sts2::StsResult ;
+use parser::sts2::TermAndDep ;
 
 macro_rules! try_parse {
   ($fun:expr, $arg: expr, $res:pat => $b:block) => (
@@ -299,7 +299,7 @@ pub trait ParseSts2 {
 
 impl ParseSts2 for Factory {
   type Ident = Sym ;
-  type ExprRes = StsResult ;
+  type ExprRes = TermAndDep ;
   type Type = Type ;
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
@@ -312,7 +312,7 @@ impl ParseSts2 for Factory {
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], StsResult> {
+  ) -> IResult<'a, & 'a [u8], TermAndDep> {
     parser::sts2::term_parser(bytes, self)
   }
   fn parse_type<'a>(

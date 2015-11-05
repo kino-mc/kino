@@ -1,0 +1,88 @@
+;; node a (in: bool) returns (out: int) ;
+;; let
+;;   out = (
+;;    if in then 1 else 0
+;;  ) -> (
+;;    if in then pre out + 1 else pre out
+;;  ) ;
+;;  --%PROPERTY out >= 0 ;
+;; tel
+
+;; Defines a transition system from some initial and transition predicates.
+(define-system sys_a 
+  ;; State signature.
+  ( (in Bool) (out Int) )
+  ;; Local definitions.
+  ()
+  ;; Init.
+  (ite (state in) (= (state out) 1) (= (state out) 0))
+  ;; Trans.
+  (ite (next in) (= (next out) (+ (state out) 1)) (= (next out) (state out)))
+  ;; Composition.
+  ()
+)
+
+;; Defines a predicate over a state.
+(define-prop out_positive sys_a
+  (>= (state out) 0)
+)
+
+
+
+;; node b (act, deact: bool) returns (out: int) ;
+;; let
+;;   out = a( act and pre not deact ) ;
+;;   --%PROPERTY (act and not deact) => ( out = (0 -> pre out + 1) ) ;
+;; tel
+
+(declare-fun oracle () Bool)
+
+(define-system sys_b
+  (
+    ;; Traceable inputs/outputs as quoted idents.
+    (       |input(b,act)| Bool)
+    (     |input(b,deact)| Bool)
+    (|pre(input(b,deact))| Bool)
+    (      |output(b,out)| Int )
+    ( |pre(output(b,out))| Int ) ;; For the property.
+  )
+  ;; Local variables.
+  ()
+  ;; Init.
+  (and
+    (= (state |pre(input(b,deact))|) oracle)
+    ;;                               ^^^^^^~~~ Not a state var.
+    ;; 'state' is mandatory to distinguish with "constants" (e.g. `oracle`).
+    (= (state |pre(output(b,out))|) true)
+  )
+  ;; Trans
+  (and
+    (= (next |pre(input(b,deact))|) (state |input(b,deact)|))
+    (= (next |pre(output(b,out))|) (state |output(b,out)|))
+  )
+  (
+    (sys_a
+      ;; Actual parameter for the first svar of sys_a.
+      (and (state |input(b,act)|) (state |pre(input(b,deact))|))
+      ;; Actual paramater for the second svar of sys_a.
+      (state |output(b,out)|)
+    )
+  )
+)
+
+(define-prop |prop(b,1)| sys_b
+  (=>
+    ( or (not (state |input(b,act)|)) (state |pre(input(b,deact))|) )
+    (= (state |output(b,out)|) (state |pre(output(b,out))|))
+  )
+  ;; 'state.' is mandatory to distinguish with "constants" (e.g. `oracle`).
+)
+
+(define-prop |cand(b,1)| sys_b
+  (=>
+    ( and (state |input(b,act)|) (not (state |input(b,deact)|)) )
+    (= (state |output(b,out)|) (+ (state |pre(output(b,out))|) 1))
+  )
+)
+
+( check sys_b (|prop(b,1)|) )

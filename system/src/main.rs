@@ -1,11 +1,29 @@
+#![allow(non_upper_case_globals)]
+
 #[macro_use]
 extern crate nom ;
 extern crate term ;
 
 use std::io::Read ;
 
+mod base ;
+pub use base::{
+  Sig, Args, Uf, Fun, Prop, Sys
+} ;
+
 mod parse ;
+
 use parse::Res ;
+
+/** Reads and remembers what has been read. */
+pub mod ctxt {
+  pub use super::base::Callable ;
+  pub use super::parse::{
+    Res, Context
+  } ;
+  pub use super::parse::check::Error ;
+
+}
 
 fn main() {
   use std::fs::File ;
@@ -37,9 +55,9 @@ fn main() {
             context.stdin_print() ;
             println!("") ;
             println!("got a check") ;
-            println!("| sys: \"{}\"", sys) ;
-            println!("| props:") ;
-            for prop in props.iter() { println!("  {}", prop) } ;
+            println!("> sys: \"{}\"", sys) ;
+            println!("> props:") ;
+            for prop in props.iter() { println!(">   {}", prop) } ;
           },
           Err( e ) => {
             println!("error") ;

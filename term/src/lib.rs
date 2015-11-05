@@ -50,7 +50,7 @@ prints symbols as quoted symbols.
 
 Parsing STS and parsing answers in SMT Lib is different.
 
-* STS is standardized and do not have offsets *per say*. Stateful variables
+* STS is standardized and do not have offsets *per se*. Stateful variables
   are specified with
 
   *  `(state <my_var>)` to refer to `<my_var>` in the current state, and
@@ -110,7 +110,7 @@ pub use term::{
   Term, CstMaker, OpMaker, BindMaker, AppMaker
 } ;
 mod parser ;
-pub use parser::sts2::StsResult ;
+pub use parser::sts2::TermAndDep ;
 mod factory ;
 pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 

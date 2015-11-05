@@ -33,7 +33,7 @@ use super::{
 
 /** Result of STS parsing. */
 #[derive(Clone,Debug)]
-pub struct StsResult {
+pub struct TermAndDep {
   /** The term parsed. */
   pub term: Term,
   /** The function symbol applications in the term. */
@@ -48,17 +48,17 @@ pub struct StsResult {
   /** Whether the term is quantifier-free. */
   pub qf: bool,
 }
-impl fmt::Display for StsResult {
+impl fmt::Display for TermAndDep {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     self.term.fmt(fmt)
   }
 }
-impl StsResult {
+impl TermAndDep {
   pub fn var(factory: & Factory, var: Var) -> Self {
     let term = factory.mk_var(var.clone()) ;
     let mut vars = HashSet::new() ;
     vars.insert(var) ;
-    StsResult {
+    TermAndDep {
       term: term,
       apps: HashSet::new(),
       vars: vars,
@@ -72,7 +72,7 @@ impl StsResult {
     let mut types = HashSet::new() ;
     types.insert( cst.get().typ() ) ;
     let term = factory.cst(cst) ;
-    StsResult {
+    TermAndDep {
       term: term,
       apps: HashSet::new(),
       vars: HashSet::new(),
@@ -83,7 +83,7 @@ impl StsResult {
   }
 
   #[inline(always)]
-  fn merge(kids: Vec<StsResult>) -> (
+  fn merge(kids: Vec<TermAndDep>) -> (
     Vec<Term>,
     HashSet<Sym>,
     HashSet<Var>,
@@ -114,7 +114,7 @@ impl StsResult {
     ( subs, apps, vars, types, kids_with_vars, linear, qf )
   }
 
-  pub fn op(factory: & Factory, op: Operator, kids: Vec<StsResult>) -> Self {
+  pub fn op(factory: & Factory, op: Operator, kids: Vec<TermAndDep>) -> Self {
     use term::Operator::* ;
     use term::OpMaker ;
     let (
@@ -125,7 +125,7 @@ impl StsResult {
       _ => false,
     } ;
     let term = factory.op(op, subs) ;
-    StsResult {
+    TermAndDep {
       term: term,
       apps: apps,
       vars: vars,
@@ -135,7 +135,7 @@ impl StsResult {
     }
   }
 
-  pub fn app(factory: & Factory, sym: Sym, kids: Vec<StsResult>) -> Self {
+  pub fn app(factory: & Factory, sym: Sym, kids: Vec<TermAndDep>) -> Self {
     use term::AppMaker ;
     let (
       subs, mut apps, vars, types, kids_with_vars, linear, qf
@@ -143,7 +143,7 @@ impl StsResult {
     let linear = linear && kids_with_vars >= 2 ;
     apps.insert(sym.clone()) ;
     let term = factory.app(sym, subs) ;
-    StsResult {
+    TermAndDep {
       term: term,
       apps: apps,
       vars: vars,
@@ -154,7 +154,7 @@ impl StsResult {
   }
 
   fn quantifier(
-    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: StsResult, univ: bool
+    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep, univ: bool
   ) -> Self {
     use term::BindMaker ;
     let term = kid.term ;
@@ -177,7 +177,7 @@ impl StsResult {
     } else {
       factory.exists(binds, term)
     } ;
-    StsResult {
+    TermAndDep {
       term: term,
       apps: apps,
       vars: vars,
@@ -188,19 +188,19 @@ impl StsResult {
   }
 
   pub fn forall(
-    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: StsResult
+    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep
   ) -> Self {
     Self::quantifier(factory, bindings, kid, true)
   }
 
   pub fn exists(
-    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: StsResult
+    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep
   ) -> Self {
     Self::quantifier(factory, bindings, kid, true)
   }
 
   pub fn let_b(
-    factory: & Factory, bindings: Vec<(Sym, StsResult)>, kid: StsResult
+    factory: & Factory, bindings: Vec<(Sym, TermAndDep)>, kid: TermAndDep
   ) -> Self {
     use term::BindMaker ;
     use std::iter::Extend ;
@@ -227,7 +227,7 @@ impl StsResult {
     } ;
     vars.extend(bind_vars) ;
     let term = factory.let_b(binds, term) ;
-    StsResult {
+    TermAndDep {
       term: term,
       apps: apps,
       vars: vars,
@@ -271,7 +271,7 @@ named!{ pub id_parser<String>,
 
 pub fn var_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   alt!(
     bytes,
@@ -287,13 +287,13 @@ pub fn var_parser<'a>(
       char!(')'),
       || {
         let var = f.var_consign().svar(sym, state) ;
-        StsResult::var(f, var)
+        TermAndDep::var(f, var)
       }
     ) |
     map!(
       id_parser, |s| {
         let var = f.var_consign().var( f.sym(s) ) ;
-        StsResult::var(f, var)
+        TermAndDep::var(f, var)
       }
     )
   )
@@ -301,18 +301,18 @@ pub fn var_parser<'a>(
 
 pub fn cst_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   use term::CstMaker ;
   map!(
     bytes,
     apply!( super::cst_parser, f.cst_consign() ),
-    |cst| StsResult::cst(f, cst)
+    |cst| TermAndDep::cst(f, cst)
   )
 }
 
 pub fn op_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   use term::OpMaker ;
   chain!(
     bytes,
@@ -325,14 +325,14 @@ pub fn op_parser<'a>(
     ) ~
     opt!(space_comment) ~
     char!(')'),
-    || StsResult::op(f, op, args)
+    || TermAndDep::op(f, op, args)
   )
 }
 
 
 pub fn quantified_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use term::BindMaker ;
   chain!(
@@ -367,15 +367,15 @@ pub fn quantified_parser<'a>(
     opt!(space_comment) ~
     char!(')'),
     || match quantifier {
-      Quantifier::Forall => StsResult::forall(f, bindings, term),
-      Quantifier::Exists => StsResult::exists(f, bindings, term),
+      Quantifier::Forall => TermAndDep::forall(f, bindings, term),
+      Quantifier::Exists => TermAndDep::exists(f, bindings, term),
     }
   )
 }
 
 pub fn let_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use term::BindMaker ;
   chain!(
@@ -409,13 +409,13 @@ pub fn let_parser<'a>(
     term: apply!(term_parser, f) ~
     opt!(space_comment) ~
     char!(')'),
-    || StsResult::let_b(f, bindings, term)
+    || TermAndDep::let_b(f, bindings, term)
   )
 }
 
 fn app_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use term::AppMaker ;
   chain!(
@@ -431,7 +431,7 @@ fn app_parser<'a>(
     char!(')'),
     || {
       let sym = f.sym(sym) ;
-      StsResult::app(f, sym, args )
+      TermAndDep::app(f, sym, args )
     }
   )
 }
@@ -439,7 +439,7 @@ fn app_parser<'a>(
 
 pub fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], StsResult> {
+) -> IResult<'a, & 'a [u8], TermAndDep> {
   alt!(
     bytes,
     apply!(cst_parser, f) |
