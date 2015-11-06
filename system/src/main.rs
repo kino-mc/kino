@@ -13,8 +13,6 @@ pub use base::{
 
 mod parse ;
 
-use parse::Res ;
-
 /** Reads and remembers what has been read. */
 pub mod ctxt {
   pub use super::base::Callable ;
@@ -47,17 +45,18 @@ fn main() {
       Ok(mut f) => {
         print!("parsing ... ") ;
         match context.read(& mut f) {
-          Ok( Res::Exit ) => println!("got exit"),
-          Ok( Res::Check(sys, props) ) => {
+          Ok(res) => {
             println!("done") ;
             println!("") ;
-            println!("") ;
-            context.stdin_print() ;
-            println!("") ;
-            println!("got a check") ;
-            println!("> sys: \"{}\"", sys) ;
-            println!("> props:") ;
-            for prop in props.iter() { println!(">   {}", prop) } ;
+            println!("|===| Context:") ;
+            for line in context.lines().lines() {
+              println!("| {}", line)
+            } ;
+            println!("|===|\n\n|===| Outcome:") ;
+            for line in res.lines().lines() {
+              println!("| {}", line)
+            } ;
+            println!("|===|")
           },
           Err( e ) => {
             println!("error") ;

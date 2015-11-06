@@ -17,11 +17,12 @@ Context:
   sets
 */
 
-static uf_desc:    & 'static str = "function declaration" ;
-static fun_desc:   & 'static str = "function definition"  ;
-static prop_desc:  & 'static str = "property definition"  ;
-static sys_desc:   & 'static str = "system definition"    ;
-static check_desc: & 'static str = "verify query"         ;
+static uf_desc:        & 'static str = "function declaration"         ;
+static fun_desc:       & 'static str = "function definition"          ;
+static prop_desc:      & 'static str = "property definition"          ;
+static sys_desc:       & 'static str = "system definition"            ;
+static check_desc:     & 'static str = "verify query"                 ;
+static check_ass_desc: & 'static str = "verify with assumption query" ;
 
 use std::io ;
 use std::fmt ;
@@ -29,7 +30,7 @@ use std::rc::Rc ;
 use std::thread::sleep_ms ;
 use std::collections::{ HashSet, HashMap } ;
 
-use term::{ Sym, Factory } ;
+use term::{ Term, Sym, Factory } ;
 
 use base::* ;
 mod parsers ;
@@ -69,12 +70,76 @@ macro_rules! try_get {
   ) ;
 }
 
+/** A positive or negative literal. */
+pub enum Atom {
+  /** A positive literal. */
+  Pos(Sym),
+  /** A negative literal. */
+  Neg(Sym),
+}
+impl Atom {
+  #[inline]
+  pub fn sym(& self) -> & Sym {
+    match * self {
+      Atom::Pos(ref sym) => sym,
+      Atom::Neg(ref sym) => sym,
+    }
+  }
+  #[inline]
+  pub fn into_var(self, f: & Factory) -> Term {
+    use term::VarMaker ;
+    use term::OpMaker ;
+    use term::Operator::Not ;
+    match self {
+      Atom::Pos(sym) => f.var(sym),
+      Atom::Neg(sym) => f.op(Not, vec![ f.var(sym) ]),
+    }
+  }
+}
+
 /** Normal result of a parsing attempt. */
 pub enum Res {
   /** Found an exit command. */
   Exit,
   /** Found a check command. */
-  Check(Sym, Vec<Sym>),
+  Check(Rc<Sys>, Vec<Sym>),
+  /** Found a check with assumptions command. */
+  CheckAss(Rc<Sys>, Vec<Sym>, Vec<Term>)
+}
+impl Res {
+  pub fn lines(& self) -> String {
+    match * self {
+      Res::Exit => "exit".to_string(),
+      Res::Check(ref sys, ref props) => {
+        let mut s = format!("verify {}", sys.sym()) ;
+        for prop in props.iter() {
+          s = format!("{}\n  {}", s, prop.sym())
+        } ;
+        s
+      },
+      Res::CheckAss(ref sys, ref props, ref atoms) => {
+        let mut s = format!("verify {} (", sys.sym()) ;
+        if ! props.is_empty() {
+          for prop in props.iter() {
+            s = format!("{}\n  {}", s, prop.sym())
+          } ;
+          s = format!("{}\n)", s)
+        } else {
+          s = format!("{})", s)
+        } ;
+        s = format!("{} assuming (", s) ;
+        if ! atoms.is_empty() {
+          for atom in atoms.iter() {
+            s = format!("{}\n  {}", s, atom)
+          } ;
+          s = format!("{}\n)", s)
+        } else {
+          s = format!("{})", s)
+        }
+        s
+      },
+    }
+  }
 }
 
 /** Maintains the context and can read commands from an `io::Read`.
@@ -295,31 +360,23 @@ impl Context {
             // println!("  incomplete (item)") ;
             break
           },
-          _ => match check_parser(buffer.as_bytes(), & self.factory) {
-            Done(chars, check) => {
+          _ => match check_exit_parser(buffer.as_bytes(), self) {
+            Done(chars, res) => {
               self.buffer.clear() ;
               self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
-              try!( check::check_check(& self, & check) ) ;
-              return Ok( Res::Check(check.0, check.1) )
+              return res
             },
             Incomplete(_) => {
               println!("  incomplete (check)") ;
               break
             },
-            _ => match exit_parser(buffer.as_bytes()) {
-              Done(_,_) => return Ok(Res::Exit),
-              Incomplete(_) => {
-                // println!("  incomplete (exit)") ;
-                ()
-              },
-              _ => {
-                println!("Context:") ;
-                for line in self.lines().lines() {
-                  println!("| {}", line)
-                } ;
-                panic!("what's that: {}", buffer)
-              },
-            }
+            _ => {
+              println!("Context:") ;
+              for line in self.lines().lines() {
+                println!("| {}", line)
+              } ;
+              panic!("what's that: {}", buffer)
+            },
           }
         }
       }

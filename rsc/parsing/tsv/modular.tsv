@@ -85,4 +85,4 @@
   )
 )
 
-( check sys_b (|prop(b,1)|) )
+( verify sys_b (|prop(b,1)|) )

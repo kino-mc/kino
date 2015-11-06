@@ -11,6 +11,7 @@ use nom::{ IResult, multispace, not_line_ending } ;
 
 use base::* ;
 use super::Context ;
+use super::{ Atom, Res } ;
 use super::check::* ;
 use term::{ Type, Sym, TermAndDep, Factory, ParseSts2 } ;
 
@@ -70,9 +71,11 @@ fn sym_parser<'a>(
 fn args_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Args> {
-  map!(
+  chain!(
     bytes,
-    separated_list!(
+    char!('(') ~
+    opt!(space_comment) ~
+    args: separated_list!(
       opt!(space_comment),
       delimited!(
         char!('('),
@@ -86,8 +89,10 @@ fn args_parser<'a>(
         ),
         char!(')')
       )
-    ),
-    |args| Args::mk(args)
+    ) ~
+    opt!(space_comment) ~
+    char!(')'),
+    || Args::mk(args)
   )
 }
 
@@ -235,11 +240,7 @@ fn sys_parser<'a>(
     space_comment ~
     sym: apply!(sym_parser, c.factory()) ~
     opt!(space_comment) ~
-    char!('(') ~
-    opt!(space_comment) ~
     state: apply!(args_parser, c.factory()) ~
-    opt!(space_comment) ~
-    char!(')') ~
     opt!(space_comment) ~
     locals: apply!(locals_parser, c.factory()) ~
     opt!(space_comment) ~
@@ -272,16 +273,16 @@ pub fn item_parser<'a>(
 
 /** Parses a check. */
 pub fn check_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], (Sym,Vec<Sym>)> {
+  bytes: & 'a [u8], c: & Context
+) -> IResult<'a, & 'a [u8], Result<Res, Error>> {
   chain!(
     bytes,
     opt!(space_comment) ~
     char!('(') ~
     opt!(space_comment) ~
-    tag!("check") ~
+    tag!("verify") ~
     space_comment ~
-    sys: apply!(sym_parser, f) ~
+    sys: apply!(sym_parser, c.factory()) ~
     opt!(space_comment) ~
     props: delimited!(
       char!('('),
@@ -289,7 +290,7 @@ pub fn check_parser<'a>(
         opt!(space_comment),
         separated_list!(
           space_comment,
-          apply!(sym_parser, f)
+          apply!(sym_parser, c.factory())
         ),
         opt!(space_comment)
       ),
@@ -297,23 +298,103 @@ pub fn check_parser<'a>(
     ) ~
     opt!(space_comment) ~
     char!(')'),
-    || (sys, props)
+    || check_check(c, sys, props, None)
+  )
+}
+
+/** Parses an atom. */
+pub fn atom_parser<'a>(
+  bytes: & 'a [u8], f: & Factory
+) -> IResult<'a, & 'a [u8], Atom> {
+  alt!(
+    bytes,
+    map!( apply!(sym_parser, f), |sym| Atom::Pos(sym) ) |
+    delimited!(
+      terminated!(char!('('), opt!(space_comment)),
+      chain!(
+        tag!("not") ~
+        space_comment ~
+        sym: apply!(sym_parser, f),
+        || Atom::Neg(sym)
+      ),
+      preceded!(opt!(space_comment), char!(')'))
+    )
+  )
+}
+
+/** Parses a check with assumptions. */
+pub fn check_assuming_parser<'a>(
+  bytes: & 'a [u8], c: & Context
+) -> IResult<'a, & 'a [u8], Result<Res, Error>> {
+  chain!(
+    bytes,
+    opt!(space_comment) ~
+    char!('(') ~
+    opt!(space_comment) ~
+    tag!("verify-assuming") ~
+    space_comment ~
+    sys: apply!(sym_parser, c.factory()) ~
+    opt!(space_comment) ~
+    props: delimited!(
+      char!('('),
+      delimited!(
+        opt!(space_comment),
+        separated_list!(
+          space_comment,
+          apply!(sym_parser, c.factory())
+        ),
+        opt!(space_comment)
+      ),
+      char!(')')
+    ) ~
+    opt!(space_comment) ~
+    atoms: delimited!(
+      char!('('),
+      delimited!(
+        opt!(space_comment),
+        separated_list!(
+          space_comment,
+          apply!(atom_parser, c.factory())
+        ),
+        opt!(space_comment)
+      ),
+      char!(')')
+    ) ~
+    opt!(space_comment) ~
+    char!(')'),
+    || check_check(c, sys, props, Some(atoms))
   )
 }
 
 /** Parses exit. */
 named!{
-  pub exit_parser,
+  pub exit_parser< Result<Res, Error> >,
   preceded!(
     opt!(space_comment),
     delimited!(
       char!('('),
       delimited!(
         opt!(space_comment),
-        tag!("exit"),
+        map!( tag!("exit"), |_| Ok(Res::Exit) ),
         opt!(space_comment)
       ),
       char!(')')
     )
   )
 }
+
+/** Parses a check with assumptions. */
+pub fn check_exit_parser<'a>(
+  bytes: & 'a [u8], c: & Context
+) -> IResult<'a, & 'a [u8], Result<Res, Error>> {
+  alt!(
+    bytes,
+    apply!(check_parser, c) |
+    apply!(check_assuming_parser, c) |
+    exit_parser
+  )
+}
+
+
+
+

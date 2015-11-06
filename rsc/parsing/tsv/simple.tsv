@@ -27,6 +27,8 @@
   (>= (state out) 0)
 )
 
+(define-fun act () Bool true)
+
 ;; Check.
-( check sys_a (out_positive) )
+( verify-assuming sys_a (out_positive) (act) )
 

@@ -10,7 +10,7 @@
   (>= (state out) 0)
 )
 
-( check sys_a
+( verify sys_a
   (out_positive)
 )
 

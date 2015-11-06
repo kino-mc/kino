@@ -19,7 +19,7 @@ use term::{ TermAndDep, Type, Sym, Var, Term } ;
 use term::real ;
 
 use base::* ;
-use super::{ Context, CanAdd } ;
+use super::{ Context, CanAdd, Atom, Res } ;
 
 use self::Error::* ;
 
@@ -36,13 +36,15 @@ pub enum Error {
   /** Use of unknown system identifier in verify or property. */
   UkSys(Sym, & 'static str, Option<Sym>),
   /** Use of unknown prop identifier in verify. */
-  UkProp(Sym),
+  UkProp(Sym, Sym, & 'static str),
+  /** Unknown atom in check with assumption. */
+  UkAtom(Sym, Sym, & 'static str),
   /** Illegal use of state variable. */
   IllSVar(Var, & 'static str, Sym),
   /** Illegal use of next state variable. */
   IllNxtSVar(Var, & 'static str, Sym),
-  /** Inconsistent property state in check. */
-  IncPropState(Rc<Sys>, Rc<Prop>),
+  /** Inconsistent property in check. */
+  IncProp(Rc<Prop>, Rc<Sys>, & 'static str),
   /** Illegal next state variable in init. */
   NxtInit(Sym, Sym),
   /** Uknown system call in system definition. */
@@ -81,20 +83,24 @@ impl fmt::Display for Error {
           Some(ref sym) => format!("{} {}", desc, sym),
         } ;
         write!(fmt, "unknown system {} in {}", sym, desc)
-      }
-      UkProp(ref sym) => write!(fmt, "unknown prop {} in check", sym),
+      },
+      UkProp(ref prop_sym, ref sym, ref desc) => write!(
+        fmt, "unknown property/relation {} in {} over {}", prop_sym, desc, sym
+      ),
+      UkAtom(ref atom_sym, ref sym, ref desc) => write!(
+        fmt, "unknown literal {} in {} over {}", atom_sym, desc, sym
+      ),
       IllSVar(ref var, ref desc, ref sym) => write!(
         fmt, "illegal use of state variable {} in {} {}", var, desc, sym
       ),
       IllNxtSVar(ref var, ref desc, ref sym) => write!(
         fmt, "illegal use of next state variable {} in {} {}", var, desc, sym
       ),
-      IncPropState(ref sys, ref prop) => write!(
+      IncProp(ref prop, ref sys, desc) => write!(
         fmt, "\
-          property {} over system {} \
-          cannot be checked for system {} with state {}\
-        ",
-        prop.sym(), prop.sys().sym(), sys.sym(), sys.state()
+          property {} is over system {} \
+          but {} is over system {}\
+        ", prop.sym(), prop.sys().sym(), desc, sys.sym()
       ),
       NxtInit(ref var_sym, ref sym) => write!(
         fmt, "\
@@ -333,8 +339,6 @@ pub fn check_sys(
   let desc = super::sys_desc ;
   check_sym!(ctxt, sym, desc) ;
 
-  println!("  checking locals") ;
-
   let mut tmp_locals = Vec::with_capacity(locals.len()) ;
   // All locals definitions make sense.
   for (local_sym, typ, def) in locals.into_iter() {
@@ -375,8 +379,6 @@ pub fn check_sys(
     tmp_locals.push( (local_sym, typ, term, has_next) )
   } ;
 
-  println!("  checking init") ;
-
   let (init, init_vars, init_apps) = (init.term, init.vars, init.apps) ;
   // All symbols used in applications actually exist.
   for app_sym in init_apps.iter() {
@@ -413,8 +415,6 @@ pub fn check_sys(
     }
   } ;
 
-  println!("  checking trans") ;
-
   let (trans, trans_vars, trans_apps) = (trans.term, trans.vars, trans.apps) ;
   // All symbols used in applications actually exist.
   for app_sym in trans_apps.iter() {
@@ -444,8 +444,6 @@ pub fn check_sys(
       },
     }
   } ;
-
-  println!("  checking calls") ;
 
   let mut calls = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.
@@ -491,21 +489,41 @@ pub fn check_sys(
 
 /** Checks that a check is legal. */
 pub fn check_check(
-  ctxt: & Context, & (ref sys, ref props): & (Sym, Vec<Sym>)
-) -> Result<(), Error> {
-  let desc = super::check_desc ;
-  let sys = match ctxt.get_sys(sys) {
-    None => return Err( UkSys(sys.clone(), desc, None) ),
-    Some(sys) => sys,
+  ctxt: & Context, sym: Sym, props: Vec<Sym>, atoms: Option<Vec<Atom>>
+) -> Result<Res, Error> {
+  let desc = if atoms.is_none() {
+    super::check_desc
+  } else {
+    super::check_ass_desc
+  } ;
+
+  let sys = match ctxt.get_sys(& sym) {
+    None => return Err( UkSys(sym.clone(), desc, None) ),
+    Some(sys) => (* sys).clone(),
   } ;
   for prop in props.iter() {
     let prop = match ctxt.get_prop(prop) {
-      None => return Err( UkProp(prop.clone()) ),
-      Some(prop) => prop,
+      None => return Err( UkProp(prop.clone(), sym.clone(), desc) ),
+      Some(prop) => (* prop).clone(),
     } ;
     if sys.sym() != prop.sys().sym() {
-      return Err( IncPropState(sys.clone(), prop.clone()) )
+      return Err( IncProp(prop.clone(), sys.clone(), desc) )
     }
   } ;
-  Ok(())
+
+  match atoms {
+
+    None => Ok( Res::Check(sys, props) ),
+
+    Some(atoms) => {
+      let mut nu_atoms = Vec::with_capacity(atoms.len()) ;
+      for atom in atoms.into_iter() {
+        if ! var_defined(ctxt, atom.sym()) {
+          return Err( UkAtom(atom.sym().clone(), sym.clone(), desc) )
+        } ;
+        nu_atoms.push( atom.into_var(ctxt.factory()) )
+      } ;
+      Ok( Res::CheckAss(sys, props, nu_atoms) )
+    }
+  }
 }
