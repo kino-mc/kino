@@ -36,9 +36,9 @@ extern crate nom ;
 extern crate term ;
 
 mod base ;
-pub use base::{
-  Sig, Args, Uf, Fun, Prop, Sys
-} ;
+// pub use base::{
+//   Sig, Args, Uf, Fun, Prop, Sys
+// } ;
 
 mod parse ;
 
@@ -52,5 +52,5 @@ pub mod ctxt {
 
 }
 
-// mod sys ;
-// pub use sys::* ;
+mod sys ;
+pub use sys::* ;

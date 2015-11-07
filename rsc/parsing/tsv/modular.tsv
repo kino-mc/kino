@@ -22,7 +22,7 @@
   ()
 )
 
-;; Defines a predicate over a state.
+;; Defines a property over a state.
 (define-prop out_positive sys_a
   (>= (state out) 0)
 )
@@ -32,9 +32,11 @@
 ;; node b (act, deact: bool) returns (out: int) ;
 ;; let
 ;;   out = a( act and pre not deact ) ;
+;;   -- Property does not hold.
 ;;   --%PROPERTY (act and not deact) => ( out = (0 -> pre out + 1) ) ;
 ;; tel
 
+;; Will be used as the value of the ungarded pre at init.
 (declare-fun oracle () Bool)
 
 (define-system sys_b
@@ -44,22 +46,35 @@
     (     |input(b,deact)| Bool)
     (|pre(input(b,deact))| Bool)
     (      |output(b,out)| Int )
-    ( |pre(output(b,out))| Int ) ;; For the property.
+    (          |prop(b,1)| Int ) ;; For the property.
   )
   ;; Local variables.
-  ()
+  ( )
   ;; Init.
   (and
+    ;; Unguarded pre.
     (= (state |pre(input(b,deact))|) oracle)
     ;;                               ^^^^^^~~~ Not a state var.
-    ;; 'state' is mandatory to distinguish with "constants" (e.g. `oracle`).
-    (= (state |pre(output(b,out))|) true)
+    (=
+      (state |prop(b,1)|)
+      (=>
+        (and (state |input(b,act)|) (not (state |input(b,deact)|)))
+        (= (state |output(b,out)|) 0)
+      )
+    )
   )
   ;; Trans
   (and
     (= (next |pre(input(b,deact))|) (state |input(b,deact)|))
-    (= (next |pre(output(b,out))|) (state |output(b,out)|))
+    (=
+      (next |prop(b,1)|)
+      (=>
+        (and (next |input(b,act)|) (not (next |input(b,deact)|)))
+        (= (next |output(b,out)|) (+ (state |output(b,out)|) 1))
+      )
+    )
   )
+  ;; Compose with
   (
     (sys_a
       ;; Actual parameter for the first svar of sys_a.

@@ -8,10 +8,17 @@
 // except according to those terms.
 
 use std::fmt ;
-use std::rc::Rc ;
+use std::hash::{ Hash, Hasher } ;
+use std::cmp::{ PartialEq, Eq } ;
+use std::sync::Arc ;
 use std::collections::HashSet ;
 
 use term::{ Sym, Type, Term } ;
+
+/** Set of callables. */
+pub type CallSet = HashSet<Arc<Callable>> ;
+/** Set of properties. */
+pub type PropSet = HashSet<Arc<Prop>> ;
 
 /** A signature, a list of types. Used only in `Uf`. */
 #[derive(Debug,Clone)]
@@ -31,7 +38,6 @@ impl Sig {
 }
 impl fmt::Display for Sig {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
-    try!( write!(fmt, "(") ) ;
     let mut iter = self.types.iter() ;
     if let Some(ref t) = iter.next() {
       try!( write!(fmt, "{}", t) ) ;
@@ -39,7 +45,7 @@ impl fmt::Display for Sig {
         try!( write!(fmt, " {}", t) )
       }
     } ;
-    write!(fmt, ")")
+    Ok(())
   }
 }
 
@@ -58,6 +64,9 @@ impl Args {
   /** The formal parameters. */
   #[inline(always)]
   pub fn args(& self) -> & [(Sym, Type)] { & self.args }
+  /** Number of paramaters. */
+  #[inline(always)]
+  pub fn len(& self) -> usize { self.args.len() }
 }
 impl fmt::Display for Args {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -125,6 +134,17 @@ impl fmt::Display for Uf {
     write!(fmt, "{} ({}) -> {}", self.sym, self.sig, self.typ)
   }
 }
+impl PartialEq for Uf {
+  fn eq(& self, other: & Uf) -> bool {
+    self.sym == other.sym
+  }
+}
+impl Eq for Uf {}
+impl Hash for Uf {
+  fn hash<H: Hasher>(& self, state: & mut H) {
+    self.sym.hash(state)
+  }
+}
 
 /** A function (actually as a macro in SMT-LIB). */
 #[derive(Debug,Clone)]
@@ -137,12 +157,16 @@ pub struct Fun {
   typ: Type,
   /** Body of the function. */
   body: Term,
+  /** Callables used by this function **recursively**. */
+  calls: CallSet,
 }
 impl Fun {
   /** Creates a new function. */
   #[inline(always)]
-  pub fn mk(sym: Sym, args: Args, typ: Type, body: Term) -> Self {
-    Fun { sym: sym, args: args, typ: typ, body: body }
+  pub fn mk(
+    sym: Sym, args: Args, typ: Type, body: Term, calls: CallSet
+  ) -> Self {
+    Fun { sym: sym, args: args, typ: typ, body: body, calls: calls }
   }
   /** Identifier of a function. */
   #[inline(always)]
@@ -156,12 +180,26 @@ impl Fun {
   /** Body of a function. */
   #[inline(always)]
   pub fn body(& self) -> & Term { & self.body }
+  /** Calls of a function. */
+  #[inline(always)]
+  pub fn calls(& self) -> & CallSet { & self.calls }
 }
 impl fmt::Display for Fun {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     write!(
       fmt, "{} ({}) -> {} {{ {} }}", self.sym, self.args, self.typ, self.body
     )
+  }
+}
+impl PartialEq for Fun {
+  fn eq(& self, other: & Fun) -> bool {
+    self.sym == other.sym
+  }
+}
+impl Eq for Fun {}
+impl Hash for Fun {
+  fn hash<H: Hasher>(& self, state: & mut H) {
+    self.sym.hash(state)
   }
 }
 
@@ -171,31 +209,47 @@ pub struct Prop {
   /** Identifier of the property. */
   sym: Sym,
   /** System the property is over. */
-  sys: Rc<Sys>,
+  sys: Arc<Sys>,
   /** Body of the property. */
   body: Term,
+  /** Calls in the property. */
+  calls: CallSet,
 }
 impl Prop {
   /** Creates a new property. */
   #[inline(always)]
-  pub fn mk(sym: Sym, sys: Rc<Sys>, body: Term) -> Self {
-    Prop { sym: sym, sys: sys, body: body }
+  pub fn mk(sym: Sym, sys: Arc<Sys>, body: Term, calls: CallSet) -> Self {
+    Prop { sym: sym, sys: sys, body: body, calls: calls }
   }
   /** Identifier of a property. */
   #[inline(always)]
   pub fn sym(& self) -> & Sym { & self.sym }
   /** System a property ranges over. */
   #[inline(always)]
-  pub fn sys(& self) -> & Rc<Sys> { & self.sys }
+  pub fn sys(& self) -> & Arc<Sys> { & self.sys }
   /** Body of a property. */
   #[inline(always)]
   pub fn body(& self) -> & Term { & self.body }
+  /** Calls of a property. */
+  #[inline(always)]
+  pub fn calls(& self) -> & CallSet { & self.calls }
 }
 impl fmt::Display for Prop {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     write!(
       fmt, "{} ({}) {{ {} }}", self.sym, self.sys.sym(), self.body
     )
+  }
+}
+impl PartialEq for Prop {
+  fn eq(& self, other: & Prop) -> bool {
+    self.sym == other.sym
+  }
+}
+impl Eq for Prop {}
+impl Hash for Prop {
+  fn hash<H: Hasher>(& self, state: & mut H) {
+    self.sym.hash(state)
   }
 }
 
@@ -213,7 +267,9 @@ pub struct Sys {
   /** Identifier of the transition relation of the system. */
   trans: Term,
   /** Calls of the system. */
-  calls: Vec<(Rc<Sys>, Vec<Term>)>
+  subsys: Vec<(Arc<Sys>, Vec<Term>)>,
+  /** Callables used by this system **recursively**. */
+  calls: CallSet,
 }
 impl Sys {
   /** Creates a new system. */
@@ -221,11 +277,13 @@ impl Sys {
   pub fn mk(
     sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
     init: Term, trans: Term,
-    calls: Vec<(Rc<Sys>, Vec<Term>)>
+    subsys: Vec<(Arc<Sys>, Vec<Term>)>,
+    calls: CallSet,
   ) -> Self {
     Sys {
       sym: sym, state: state, locals: locals,
-      init: init, trans: trans, calls: calls
+      init: init, trans: trans,
+      subsys: subsys, calls: calls,
     }
   }
   /** Identifier of a system. */
@@ -240,26 +298,36 @@ impl Sys {
   /** Init predicate of a system. */
   #[inline(always)]
   pub fn init(& self) -> & Term { & self.init }
-  /** Calls of a system. */
-  #[inline(always)]
-  pub fn calls(& self) -> & [ (Rc<Sys>, Vec<Term>) ] { & self.calls }
   /** Transition relation of a system. */
   #[inline(always)]
   pub fn trans(& self) -> & Term { & self.trans }
+  /** Sub-systems of a system. */
+  #[inline(always)]
+  pub fn subsys(& self) -> & [ (Arc<Sys>, Vec<Term>) ] { & self.subsys }
+  /** Calls of a system. */
+  #[inline(always)]
+  pub fn calls(& self) -> & CallSet { & self.calls }
+
   /** String representation of a system as lines. */
   pub fn lines(& self) -> String {
     let mut s = format!(
       "{} ({})\n  init:  {}\n  trans: {}",
       self.sym, self.state, self.init, self.trans
     ) ;
-    if ! self.calls.is_empty() {
-      s = format!("{}\n  calls:", s) ;
-      for & (ref sub_sym, ref params) in self.calls.iter() {
+    if ! self.subsys.is_empty() {
+      s = format!("{}\n  sub-systems:", s) ;
+      for & (ref sub_sym, ref params) in self.subsys.iter() {
         s = format!("{}\n    {} (", s, sub_sym.sym()) ;
         for param in params {
           s = format!("{}\n      {}", s, param) ;
         } ;
         s = format!("{}\n    )", s) ;
+      } ;
+    } ;
+    if ! self.calls.is_empty() {
+      s = format!("{}\n  calls:", s) ;
+      for callable in self.calls.iter() {
+        s = format!("{}\n    {}", s, callable.sym()) ;
       } ;
     } ;
     s
@@ -275,6 +343,7 @@ impl fmt::Display for Sys {
 }
 
 /** Wraps an (uninterpreted) function. */
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum Callable {
   /** Wraps an uninterpreted function. */
   Dec(Uf),

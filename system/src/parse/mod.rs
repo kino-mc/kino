@@ -26,7 +26,7 @@ static check_ass_desc: & 'static str = "verify with assumption query" ;
 
 use std::io ;
 use std::fmt ;
-use std::rc::Rc ;
+use std::sync::Arc ;
 use std::thread::sleep_ms ;
 use std::collections::{ HashSet, HashMap } ;
 
@@ -102,9 +102,9 @@ pub enum Res {
   /** Found an exit command. */
   Exit,
   /** Found a check command. */
-  Check(Rc<Sys>, Vec<Sym>),
+  Check(Arc<Sys>, Vec<Sym>),
   /** Found a check with assumptions command. */
-  CheckAss(Rc<Sys>, Vec<Sym>, Vec<Term>)
+  CheckAss(Arc<Sys>, Vec<Sym>, Vec<Term>)
 }
 impl Res {
   pub fn lines(& self) -> String {
@@ -171,17 +171,19 @@ pub struct Context {
   /** All symbols defined. Used for faster redefinition checking. */
   all: HashSet<Sym>,
   // /** State definitions. */
-  // states: HashMap<Sym, Rc<State>>,
+  // states: HashMap<Sym, Arc<State>>,
   /** Function symbol declarations and definitions. */
-  callables: HashMap<Sym, Rc<Callable>>,
+  callables: HashMap<Sym, Arc<Callable>>,
   /** Propiacte definitions. */
-  props: HashMap<Sym, Rc<Prop>>,
+  props: HashMap<Sym, Arc<Prop>>,
   // /** Init property definitions. */
-  // inits: HashMap<Sym, Rc<Init>>,
+  // inits: HashMap<Sym, Arc<Init>>,
   // /** Transition property definitions. */
-  // transs: HashMap<Sym, Rc<Trans>>,
+  // transs: HashMap<Sym, Arc<Trans>>,
   /** Systems. */
-  syss: HashMap<Sym, Rc<Sys>>,
+  syss: HashMap<Sym, Arc<Sys>>,
+  /** Maps system identifiers to their invariants. */
+  invs: HashMap<Sym, HashSet<Prop>>,
 }
 impl Context {
   /** Creates an empty context.
@@ -201,38 +203,39 @@ impl Context {
       // inits: HashMap::with_capacity(23),
       // transs: HashMap::with_capacity(23),
       syss: HashMap::with_capacity(23),
+      invs: HashMap::with_capacity(127),
     }
   }
 
   // /** Option of the state corresponding to an identifier. */
   // #[inline(always)]
-  // pub fn get_state(& self, sym: & Sym) -> Option<& Rc<State>> {
+  // pub fn get_state(& self, sym: & Sym) -> Option<& Arc<State>> {
   //   self.states.get(sym)
   // }
   /** Option of the function declaration/definition corresponding to an
   identifier. */
   #[inline(always)]
-  pub fn get_callable(& self, sym: & Sym) -> Option<& Rc<Callable>> {
+  pub fn get_callable(& self, sym: & Sym) -> Option<& Arc<Callable>> {
     self.callables.get(sym)
   }
   /** Option of the property corresponding to an identifier. */
   #[inline(always)]
-  pub fn get_prop(& self, sym: & Sym) -> Option<& Rc<Prop>> {
+  pub fn get_prop(& self, sym: & Sym) -> Option<& Arc<Prop>> {
     self.props.get(sym)
   }
   // /** Option of the init corresponding to an identifier. */
   // #[inline(always)]
-  // pub fn get_init(& self, sym: & Sym) -> Option<& Rc<Init>> {
+  // pub fn get_init(& self, sym: & Sym) -> Option<& Arc<Init>> {
   //   self.inits.get(sym)
   // }
   // /** Option of the trans corresponding to an identifier. */
   // #[inline(always)]
-  // pub fn get_trans(& self, sym: & Sym) -> Option<& Rc<Trans>> {
+  // pub fn get_trans(& self, sym: & Sym) -> Option<& Arc<Trans>> {
   //   self.transs.get(sym)
   // }
   /** Option of the system corresponding to an identifier. */
   #[inline(always)]
-  pub fn get_sys(& self, sym: & Sym) -> Option<& Rc<Sys>> {
+  pub fn get_sys(& self, sym: & Sym) -> Option<& Arc<Sys>> {
     self.syss.get(sym)
   }
 
@@ -411,7 +414,7 @@ pub trait CanAdd {
 impl CanAdd for Context {
   fn add_callable(& mut self, fun: Callable) {
     let sym = fun.sym().clone() ;
-    match self.callables.insert(sym, Rc::new(fun)) {
+    match self.callables.insert(sym, Arc::new(fun)) {
       None => (),
       Some(e) => {
         self.stdin_print() ;
@@ -422,7 +425,7 @@ impl CanAdd for Context {
   }
   fn add_prop(& mut self, prop: Prop) {
     let sym = prop.sym().clone() ;
-    match self.props.insert(sym, Rc::new(prop)) {
+    match self.props.insert(sym, Arc::new(prop)) {
       None => (),
       Some(e) => {
         self.stdin_print() ;
@@ -433,7 +436,7 @@ impl CanAdd for Context {
   }
   fn add_sys(& mut self, sys: Sys) {
     let sym = sys.sym().clone() ;
-    match self.syss.insert(sym, Rc::new(sys)) {
+    match self.syss.insert(sym, Arc::new(sys)) {
       None => (),
       Some(e) => {
         self.stdin_print() ;

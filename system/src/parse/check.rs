@@ -12,7 +12,7 @@
 See `parse::Context` for the description of the checks. */
 
 use std::fmt ;
-use std::rc::Rc ;
+use std::sync::Arc ;
 use std::collections::HashSet ;
 
 use term::{ TermAndDep, Type, Sym, Var, Term } ;
@@ -44,7 +44,7 @@ pub enum Error {
   /** Illegal use of next state variable. */
   IllNxtSVar(Var, & 'static str, Sym),
   /** Inconsistent property in check. */
-  IncProp(Rc<Prop>, Rc<Sys>, & 'static str),
+  IncProp(Arc<Prop>, Arc<Sys>, & 'static str),
   /** Illegal next state variable in init. */
   NxtInit(Sym, Sym),
   /** Uknown system call in system definition. */
@@ -141,13 +141,13 @@ macro_rules! check_sym {
 declaration/definition for the variable's symbol with arity zero. */
 fn var_defined(
   ctxt: & Context, sym: & Sym
-) -> bool {
+) -> Option<Arc<Callable>> {
   use base::Callable::* ;
   match ctxt.get_callable(sym) {
-    None => false,
-    Some(f) => match * * f {
-      Dec(ref f) => f.sig().len() == 0,
-      Def(ref f) => f.args().len() == 0,
+    None => None,
+    Some(fun) => match * * fun {
+      Dec(ref f) => if f.sig().len() == 0 { Some(fun.clone()) } else { None },
+      Def(ref f) => if f.args().len() == 0 { Some(fun.clone()) } else { None },
     },
   }
 }
@@ -156,13 +156,13 @@ fn var_defined(
 declaration/definition for a symbol with arity greater than zero. */
 fn app_defined(
   ctxt: & Context, sym: & Sym
-) -> bool {
+) -> Option<Arc<Callable>> {
   use base::Callable::* ;
   match ctxt.get_callable(sym) {
-    None => false,
-    Some(f) => match * * f {
-      Dec(ref f) => f.sig().len() > 0,
-      Def(ref f) => f.args().len() > 0,
+    None => None,
+    Some(fun) => match * * fun {
+      Dec(ref f) => if f.sig().len() > 0 { Some(fun.clone()) } else { None },
+      Def(ref f) => if f.args().len() > 0 { Some(fun.clone()) } else { None },
     },
   }
 }
@@ -195,97 +195,51 @@ pub fn check_fun_def(
 ) -> Result<(), Error> {
   let desc = super::fun_desc ;
   check_sym!(ctxt, sym, desc) ;
-  let desc = super::fun_desc ;
-  let mut funs = HashSet::new() ;
+
+  let mut calls = HashSet::new() ;
+
   // All symbols used in applications actually exist.
   for call_sym in body.apps.iter() {
-    if ! app_defined(ctxt, call_sym) {
-      return Err( UkCall(call_sym.clone(), sym, desc) )
-    } else {
-      // Don't care if it was already there.
-      funs.insert(call_sym.clone()) ;
+    match app_defined(ctxt, call_sym) {
+      None => return Err( UkCall(call_sym.clone(), sym, desc) ),
+      Some(f) => {
+        // Don't care if it was already there.
+        calls.insert(f) ;
+      },
     }
   } ;
   // No stateful var, all non-stateful vars exist.
   for var in body.vars.iter() {
     match * var.get() {
       real::Var::Var(ref var_sym) => {
-        let mut exists = false ;
-        if ! var_defined(ctxt, var_sym) {
-          for & (ref dsym, _) in args.args() {
-            if dsym == var_sym { exists = true }
-          }
-        } else { exists = true } ;
-        if ! exists {
-          return Err( UkVar(var.clone(), sym, desc) )
+        match var_defined(ctxt, var_sym) {
+          None => {
+            let mut exists = false ;
+            for & (ref dsym, _) in args.args() {
+              if dsym == var_sym { exists = true }
+            } ;
+            if ! exists {
+              return Err( UkVar(var.clone(), sym, desc) )
+            }
+          },
+          Some(fun) => { calls.insert(fun) ; },
         }
       },
       _ => return Err( SVarInDef(var.clone(), sym) ),
     }
   } ;
   ctxt.add_callable(
-    Callable::Def( Fun::mk(sym, args, typ, body.term) )
+    Callable::Def( Fun::mk(sym, args, typ, body.term, calls) )
   ) ;
   Ok(())
-}
-
-/** Checks that a proposition definition is legal. */
-pub fn check_prop(
-  ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
-) -> Result<(), Error> {
-  let desc = super::prop_desc ;
-  check_sym!(ctxt, sym, desc) ;
-  let sys = match ctxt.get_sys(& sys) {
-    Some(s) => s.clone(),
-    None => {
-      return Err( UkSys(sys, desc, Some(sym)) )
-    },
-  } ;
-  // All symbols used in applications actually exist.
-  for app_sym in body.apps.iter() {
-    if ! app_defined(ctxt, app_sym) {
-      return Err( UkCall(app_sym.clone(), sym, desc) )
-    }
-  } ;
-  // Stateful var belong to state of system, non-stateful var exist.
-  for var in body.vars.iter() {
-    match * var.get() {
-      // Non-stateful var exist.
-      real::Var::Var(ref var_sym) => if ! var_defined(ctxt, var_sym) {
-        return Err( UkVar(var.clone(), sym, desc) )
-      },
-      // Stateful var belong to state.
-      // Next and current allowed.
-      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
-        var_sym, sys.state()
-      ) {
-        return Err( UkVar(var.clone(), sym, desc) )
-      },
-    }
-  } ;
-  ctxt.add_prop(
-    Prop::mk(sym, sys, body.term)
-  ) ;
-  Ok(())
-}
-
-/** Checks that a symbol is in a list of local definitions. Returns a None if
-it's not there, otherwise an option of a bool indicating if the term it is
-bound to mentions next. */
-fn is_sym_in_locals(
-  sym: & Sym, locals: & [(Sym, Type, Term, bool)]
-) -> Option<bool> {
-  for &(ref local_sym, _, _, ref has_next) in locals.iter() {
-    if sym == local_sym { return Some(* has_next) }
-  } ;
-  None
 }
 
 fn check_term_and_dep(
   term: & TermAndDep,
   ctxt: & Context, sym: & Sym, state: & Args,
   locals: & [ (Sym, Type, Term, bool) ],
-  svar_allowed: bool, next_allowed: bool, desc: & 'static str
+  svar_allowed: bool, next_allowed: bool, desc: & 'static str,
+  calls: & mut HashSet<Arc<Callable>>
 ) -> Result<(), Error> {
   use term::real::Var::Var as NSVar ;
   use term::real::Var::SVar ;
@@ -296,11 +250,15 @@ fn check_term_and_dep(
       NSVar(ref var_sym) => match is_sym_in_locals(var_sym, locals) {
         // No need to check if state vars are allowed.
         // There's locals so we're in a system.
-        Some(is_next) => if is_next && ! next_allowed {
-          return Err( IllNxtSVar(var.clone(), desc, sym.clone()) )
+        Some(is_next) => {
+          assert!(svar_allowed) ;
+          if is_next && ! next_allowed {
+            return Err( IllNxtSVar(var.clone(), desc, sym.clone()) )
+          }
         },
-        None => if var_defined(ctxt, var_sym) {
-          return Err( UkVar(var.clone(), sym.clone(), desc) )
+        None => match var_defined(ctxt, var_sym) {
+          None => return Err( UkVar(var.clone(), sym.clone(), desc) ),
+          Some(fun) => { calls.insert(fun) ; },
         },
       },
       SVar(ref var_sym, ref st) => if ! svar_allowed {
@@ -318,12 +276,73 @@ fn check_term_and_dep(
   } ;
 
   for app_sym in term.apps.iter() {
-    if ! app_defined(ctxt, app_sym) {
-      return Err( UkCall(app_sym.clone(), sym.clone(), desc) )
+    match app_defined(ctxt, app_sym) {
+      None => return Err( UkCall(app_sym.clone(), sym.clone(), desc) ),
+      Some(fun) => {
+        // Don't care if it was already there.
+        calls.insert(fun) ;
+      },
     }
   } ;
 
   Ok(())
+}
+
+/** Checks that a proposition definition is legal. */
+pub fn check_prop(
+  ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
+) -> Result<(), Error> {
+  let desc = super::prop_desc ;
+  check_sym!(ctxt, sym, desc) ;
+  let sys = match ctxt.get_sys(& sys) {
+    Some(s) => s.clone(),
+    None => {
+      return Err( UkSys(sys, desc, Some(sym)) )
+    },
+  } ;
+
+  let mut calls = HashSet::new() ;
+
+  // All symbols used in applications actually exist.
+  for app_sym in body.apps.iter() {
+    match app_defined(ctxt, app_sym) {
+      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+      Some(fun) => { calls.insert(fun) ; },
+    }
+  } ;
+  // Stateful var belong to state of system, non-stateful var exist.
+  for var in body.vars.iter() {
+    match * var.get() {
+      // Non-stateful var exist.
+      real::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
+        None => return Err( UkVar(var.clone(), sym, desc) ),
+        Some(fun) => { calls.insert(fun) ; },
+      },
+      // Stateful var belong to state.
+      // Next and current allowed.
+      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
+        var_sym, sys.state()
+      ) {
+        return Err( UkVar(var.clone(), sym, desc) )
+      },
+    }
+  } ;
+  ctxt.add_prop(
+    Prop::mk(sym.clone(), sys.clone(), body.term, calls)
+  ) ;
+  Ok(())
+}
+
+/** Checks that a symbol is in a list of local definitions. Returns a None if
+it's not there, otherwise an option of a bool indicating if the term it is
+bound to mentions next. */
+fn is_sym_in_locals(
+  sym: & Sym, locals: & [(Sym, Type, Term, bool)]
+) -> Option<bool> {
+  for &(ref local_sym, _, _, ref has_next) in locals.iter() {
+    if sym == local_sym { return Some(* has_next) }
+  } ;
+  None
 }
 
 /** Checks that a system definition is legal. */
@@ -339,6 +358,8 @@ pub fn check_sys(
   let desc = super::sys_desc ;
   check_sym!(ctxt, sym, desc) ;
 
+  let mut calls = HashSet::new() ;
+
   let mut tmp_locals = Vec::with_capacity(locals.len()) ;
   // All locals definitions make sense.
   for (local_sym, typ, def) in locals.into_iter() {
@@ -346,8 +367,12 @@ pub fn check_sys(
     let mut has_next = false ;
     // Applications mention existing symbols.
     for app_sym in apps.iter() {
-      if ! app_defined(ctxt, app_sym) {
-        return Err( UkCall(app_sym.clone(), sym, desc) )
+      match app_defined(ctxt, app_sym) {
+        None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+        Some(fun) => {
+          // Don't care if it was already there.
+          calls.insert(fun) ;
+        },
       }
     } ;
     // Variables exist.
@@ -359,8 +384,9 @@ pub fn check_sys(
         ) {
           Some(false) => (),
           Some(true) => has_next = true,
-          None => if ! var_defined(ctxt, var_sym) {
-            return Err( UkVar(var.clone(), sym, desc) )
+          None => match var_defined(ctxt, var_sym) {
+            None => return Err( UkVar(var.clone(), sym, desc) ),
+            Some(fun) => { calls.insert(fun) ; },
           },
         },
         // Stateful var exists in state.
@@ -382,8 +408,12 @@ pub fn check_sys(
   let (init, init_vars, init_apps) = (init.term, init.vars, init.apps) ;
   // All symbols used in applications actually exist.
   for app_sym in init_apps.iter() {
-    if ! app_defined(ctxt, app_sym) {
-      return Err( UkCall(app_sym.clone(), sym, desc) )
+    match ctxt.get_callable(app_sym) {
+      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+      Some(f) => {
+        // Don't care if it was already there.
+        calls.insert(f.clone()) ;
+      },
     }
   } ;
   // Init:
@@ -398,8 +428,9 @@ pub fn check_sys(
       ) {
         Some(false) => (),
         Some(true) => return Err( NxtInit(var_sym.clone(), sym) ),
-        None => if ! var_defined(ctxt, var_sym) {
-          return Err( UkVar(var.clone(), sym, desc) )
+        None => match var_defined(ctxt, var_sym) {
+          None => return Err( UkVar(var.clone(), sym, desc) ),
+          Some(fun) => { calls.insert(fun) ; },
         },
       },
       // Next state variables are illegal.
@@ -418,8 +449,12 @@ pub fn check_sys(
   let (trans, trans_vars, trans_apps) = (trans.term, trans.vars, trans.apps) ;
   // All symbols used in applications actually exist.
   for app_sym in trans_apps.iter() {
-    if ! app_defined(ctxt, app_sym) {
-      return Err( UkCall(app_sym.clone(), sym, desc) )
+    match ctxt.get_callable(app_sym) {
+      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+      Some(f) => {
+        // Don't care if it was already there.
+        calls.insert(f.clone()) ;
+      },
     }
   } ;
   // Trans:
@@ -432,8 +467,9 @@ pub fn check_sys(
         var_sym, & tmp_locals
       ) {
         Some(_) => (),
-        None => if ! var_defined(ctxt, var_sym) {
-          return Err( UkVar(var.clone(), sym, desc) )
+        None => match var_defined(ctxt, var_sym) {
+          None => return Err( UkVar(var.clone(), sym, desc) ),
+          Some(fun) => { calls.insert(fun) ; },
         },
       },
       // Stateful var belong to state.
@@ -445,7 +481,7 @@ pub fn check_sys(
     }
   } ;
 
-  let mut calls = Vec::with_capacity(sub_syss.len()) ;
+  let mut subsys = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.
   for (sub_sym, params) in sub_syss.into_iter() {
     let sub_sys = match ctxt.get_sys(& sub_sym) {
@@ -466,13 +502,17 @@ pub fn check_sys(
       try!(
         check_term_and_dep(
           & param, ctxt, & sym, & state, & tmp_locals,
-          true, false, desc
+          true, false, desc, & mut calls
         )
       ) ;
       nu_params.push(param.term)
     } ;
 
-    calls.push( (sub_sys, nu_params) )
+    for call in sub_sys.calls().iter() {
+      calls.insert(call.clone()) ;
+    } ;
+
+    subsys.push( (sub_sys, nu_params) )
   } ;
 
   // Actual locals vector.
@@ -481,7 +521,7 @@ pub fn check_sys(
   ) ;
 
   ctxt.add_sys(
-    Sys::mk(sym, state, locals, init, trans, calls)
+    Sys::mk(sym, state, locals, init, trans, subsys, calls)
   ) ;
 
   Ok(())
@@ -518,8 +558,9 @@ pub fn check_check(
     Some(atoms) => {
       let mut nu_atoms = Vec::with_capacity(atoms.len()) ;
       for atom in atoms.into_iter() {
-        if ! var_defined(ctxt, atom.sym()) {
-          return Err( UkAtom(atom.sym().clone(), sym.clone(), desc) )
+        match var_defined(ctxt, atom.sym()) {
+          None => return Err( UkAtom(atom.sym().clone(), sym.clone(), desc) ),
+          Some(_) => (),
         } ;
         nu_atoms.push( atom.into_var(ctxt.factory()) )
       } ;
