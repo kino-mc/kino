@@ -250,8 +250,10 @@ named!{ pub id_parser<String>,
     // Simple symbol.
     chain!(
       head: simple_symbol_head ~
-      tail: map!( simple_symbol_tail, str::from_utf8 ),
-      || format!("{}{}", head, tail.unwrap())
+      tail: opt!(
+        map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
+      ),
+      || format!("{}{}", head, tail.unwrap_or(""))
     ) |
     // Quoted symbol.
     delimited!(

@@ -13,6 +13,8 @@ fn main() {
   let success = success_style.paint("success") ;
   let error_style = ansi::Colour::Red.bold() ;
   let error = error_style.paint("error") ;
+  let unimpl_style = error_style.underline() ;
+  let unimpl = unimpl_style.paint("unimplemented") ;
 
   fn print_trailer_3() { println!("|===|") }
 
@@ -36,17 +38,32 @@ fn main() {
             println!("| {}", success) ;
             print_trailer_3() ;
             println!("") ;
+
             println!("|===| {}:", bold.paint("Context")) ;
             for line in context.lines().lines() {
               println!("| {}", line)
             } ;
             print_trailer_3() ;
             println!("") ;
+
             println!("|===| {}:", bold.paint("Outcome")) ;
             for line in res.lines().lines() {
               println!("| {}", line)
             } ;
-            println!("|===|")
+            println!("|===|") ;
+
+            match res {
+              Res::Exit => (),
+              _ => {
+                println!("") ;
+
+                println!("|===| {}", bold.paint("Running")) ;
+                println!("|") ;
+                println!("| {}", unimpl) ;
+                println!("|") ;
+                print_trailer_3() ;
+              },
+            }
           },
           Err( e ) => {
             println!("|===| {}", error) ;
@@ -65,6 +82,7 @@ fn main() {
         print_trailer_3()
       },
     } ;
+
     println!("") ;
     println!("") ;
   }

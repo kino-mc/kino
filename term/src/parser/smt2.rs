@@ -220,9 +220,11 @@ named!{ pub id_parser< (String, Smt2Offset) >,
     chain!(
       opt!(offset) ~
       head: simple_symbol_head ~
-      tail: simple_symbol_tail,
+      tail: opt!(
+        map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
+      ),
       || {
-        let sym = format!("{}{}", head, str::from_utf8(tail).unwrap()) ;
+        let sym = format!("{}{}", head, tail.unwrap_or("")) ;
         panic!("simple symbol {}", sym)
       }
       // (
