@@ -104,6 +104,13 @@ impl Log {
     } ;
     self.space()
   }
+  fn master_log(& self, bla: String) {
+    println!("{}{}:", prefix, self.success_style.paint("kino")) ;
+    for line in bla.lines() {
+      println!("{}  {}", prefix, line)
+    } ;
+    self.space()
+  }
 }
 
 fn launch(
@@ -114,11 +121,11 @@ fn launch(
   log.title("Running") ;
   log.space() ;
 
-  log.print("creating channel") ;
+  log.master_log("creating channel".to_string()) ;
   let (sender, receiver) = mpsc::channel::<MsgUp>() ;
 
   // Launch BMC.
-  log.print("spawning bmc") ;
+  log.master_log("spawning bmc".to_string()) ;
   let factory = c.factory().clone() ;
   thread::spawn(
     move || bmc::run(
@@ -128,22 +135,21 @@ fn launch(
     )
   ) ;
 
-  log.print("entering receive loop") ;
+  log.master_log("entering receive loop".to_string()) ;
+  log.title("") ;
   log.space() ;
 
   loop {
     match receiver.recv() {
       Ok( Bla(from, bla) ) => log.log(from, bla),
-      Ok(_) => log.print("received event"),
-      Err(e) => {
-        log.error() ;
-        log.error_line( & format!("{}", e) ) ;
+      Ok(_) => log.master_log("received event".to_string()),
+      Err(_) => {
+        log.master_log("channel is closed, exiting".to_string()) ;
         break
       },
     }
   }
 
-  log.space() ;
   log.trail() ;
   Err(())
 }
