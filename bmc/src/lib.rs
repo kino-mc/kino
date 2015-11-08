@@ -8,7 +8,7 @@ use term::smt::sync::* ;
 
 use event::Event ;
 
-use system::{ CallSet, Callable, Sys, Prop } ;
+use system::{ Sys, Prop } ;
 use system::smt::Unroller ;
 
 macro_rules! try_error {
@@ -21,10 +21,9 @@ macro_rules! try_error {
 }
 
 pub fn run(
-  sys: Sys, mut props: Vec<Prop>, event: Event
+  sys: Sys, props: Vec<Prop>, event: Event
 ) {
-  use std::str::from_utf8 ;
-  use term::{ Operator, SymMaker, OpMaker, VarMaker, PrintSmt2, Type } ;
+  use term::{ Operator, SymMaker, OpMaker, VarMaker, Type } ;
   event.log(
     & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
   ) ;
@@ -34,7 +33,7 @@ pub fn run(
   let conf = SolverConf::z3().print_success() ;
   let factory = event.factory().clone() ;
 
-  let mut k = Offset2::init() ;
+  let k = Offset2::init() ;
 
   match Solver::mk(z3_cmd(), conf, factory.clone()) {
     Err(e) => event.log( & format!("error:\n  {:?}", e) ),
@@ -55,7 +54,7 @@ pub fn run(
         solver.assert( & (sys.init_term(), & k) ), event
       ) ;
 
-      let mut cpt = 0 ;
+      let cpt = 0 ;
 
       loop {
 
@@ -73,7 +72,7 @@ pub fn run(
           Operator::Or, neg_props
         ) ;
         event.log(
-          & format!("defining actlit {}\nto be {}", actlit, prop_term)
+          & format!("defining actlit {}\nto imply {}", actlit, prop_term)
         ) ;
 
         try_error!(
@@ -104,6 +103,8 @@ pub fn run(
           Ok(false) => event.log("unsat"),
           Err(e) => event.log( & format!("{:?}", e) ),
         } ;
+
+        event.log("unrolling is not implemented, exiting") ;
 
         break
 

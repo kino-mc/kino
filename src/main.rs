@@ -50,8 +50,8 @@ use sys::ctxt::* ;
 
 use event::Technique ;
 
-static header: & 'static str = "|===| " ;
-static trailer: & 'static str = "|===|" ;
+static header: & 'static str = "|=====| " ;
+static trailer: & 'static str = "|=====|" ;
 static prefix: & 'static str = "| " ;
 
 struct Log {
@@ -172,13 +172,11 @@ fn main() {
         match context.read(& mut f) {
           Ok(res) => {
             log.success() ;
-            log.trail() ;
 
             log.title("Context") ;
             for line in context.lines().lines() {
               log.print(line)
             } ;
-            log.trail() ;
 
             log.title("Query") ;
             for line in res.lines().lines() {
