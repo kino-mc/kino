@@ -4,6 +4,7 @@ extern crate system ;
 
 use term::Offset2 ;
 use term::smt::* ;
+use term::smt::sync::* ;
 
 use event::Event ;
 
@@ -23,7 +24,7 @@ pub fn run(
   sys: Sys, mut props: Vec<Prop>, event: Event
 ) {
   use std::str::from_utf8 ;
-  use term::{ Operator, OpMaker, VarMaker, PrintSmt2 } ;
+  use term::{ Operator, SymMaker, OpMaker, VarMaker, PrintSmt2, Type } ;
   event.log(
     & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
   ) ;
@@ -58,7 +59,8 @@ pub fn run(
 
       loop {
 
-        let actlit = factory.var( format!("fresh_{}", cpt) ) ;
+        let actlit = factory.sym(format!("fresh_{}", cpt)) ;
+        let actlit = factory.var_consign().var( actlit ) ;
         let mut neg_props = Vec::with_capacity(props.len()) ;
         for prop in props.iter() {
           neg_props.push(
@@ -73,6 +75,34 @@ pub fn run(
         event.log(
           & format!("defining actlit {}\nto be {}", actlit, prop_term)
         ) ;
+
+        try_error!(
+          solver.declare_fun(
+            & (& actlit, k.curr()),
+            & Vec::<Type>::new(),
+            & Type::Bool
+          ), event
+        ) ;
+
+        let e = factory.op(
+          Operator::Impl, vec![
+            factory.mk_var(actlit.clone()),
+            prop_term
+          ]
+        ) ;
+
+        try_error!(
+          solver.assert(& (& e, & k)), event
+        ) ;
+
+        event.log("check-sat") ;
+
+        match solver.check_sat_assuming( & vec![(& actlit, k.curr())] ) {
+          Ok(true) => event.log("sat"),
+          Ok(false) => event.log("unsat"),
+          Err(e) => event.log( & format!("{:?}", e) ),
+        } ;
+
         break
 
       }
