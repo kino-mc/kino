@@ -95,7 +95,9 @@ pub fn run(
           solver.assert(& (& e, & k)), event
         ) ;
 
-        event.log("check-sat") ;
+        event.log(
+          & format!("check-sat assuming {}", actlit)
+        ) ;
 
         match solver.check_sat_assuming( & vec![(& actlit, k.curr())] ) {
           Ok(true) => event.log("sat"),
