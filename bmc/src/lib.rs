@@ -20,10 +20,10 @@ macro_rules! try_error {
 }
 
 pub fn run(
-  sys: Sys, props: Vec<Prop>, event: Event
+  sys: Sys, mut props: Vec<Prop>, event: Event
 ) {
   use std::str::from_utf8 ;
-  use term::PrintSmt2 ;
+  use term::{ Operator, OpMaker, VarMaker, PrintSmt2 } ;
   event.log(
     & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
   ) ;
@@ -49,15 +49,33 @@ pub fn run(
         sys.declare_svars(& mut solver, & factory, k.curr()), event
       ) ;
 
-      let mut s: Vec<u8> = vec![] ;
-      sys.init_term().to_smt2(& mut s, & k).unwrap() ;
-      let string = from_utf8(& s).unwrap() ;
-      event.log( & format!("asserting init {}", string) ) ;
+      event.log( "asserting init@0" ) ;
       try_error!(
         solver.assert( & (sys.init_term(), & k) ), event
       ) ;
 
-      event.log("unimplemented")
+      let mut cpt = 0 ;
+
+      loop {
+
+        let actlit = factory.var( format!("fresh_{}", cpt) ) ;
+        let mut neg_props = Vec::with_capacity(props.len()) ;
+        for prop in props.iter() {
+          neg_props.push(
+            factory.op(
+              Operator::Not, vec![prop.body().clone()]
+            )
+          )
+        }
+        let prop_term = factory.op(
+          Operator::Or, neg_props
+        ) ;
+        event.log(
+          & format!("defining actlit {}\nto be {}", actlit, prop_term)
+        ) ;
+        break
+
+      }
     },
   }
 }

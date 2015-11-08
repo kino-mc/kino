@@ -10,6 +10,7 @@
 /*! Basic traits and structures. */
 
 use std::io ;
+use std::fmt ;
 use std::hash::Hash ;
 use std::sync::{ Arc, Mutex } ;
 
@@ -101,9 +102,15 @@ impl Offset {
   }
 }
 
+impl fmt::Display for Offset {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "{}", self.offset)
+  }
+}
+
 impl Writable for Offset {
   fn write(& self, writer: & mut io::Write) -> io::Result<()> {
-    write!(writer, "{}", self.offset)
+    write!(writer, "{}", self)
   }
 }
 
