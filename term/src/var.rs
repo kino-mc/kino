@@ -44,12 +44,12 @@ impl fmt::Display for RealVar {
 /** Hash consed variable. */
 pub type Var = HConsed<RealVar> ;
 
-impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Var {
+impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for RealVar {
   #[inline(always)]
   fn write(
     & self, writer: & mut io::Write, sv_writer: & Svw, style: SymPrintStyle
   ) -> io::Result<()> {
-    match * self.get() {
+    match * self {
       RealVar::Var(ref sym) => {
         try!( write!(writer, "|") ) ;
         try!( sym.write(writer, style) ) ;
@@ -58,6 +58,15 @@ impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Var {
       RealVar::SVar(ref sym, ref st) =>
         sv_writer.write(writer, sym, st, style),
     }
+  }
+}
+
+impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Var {
+  #[inline(always)]
+  fn write(
+    & self, writer: & mut io::Write, sv_writer: & Svw, style: SymPrintStyle
+  ) -> io::Result<()> {
+    self.get().write(writer, sv_writer, style)
   }
 }
 

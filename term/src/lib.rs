@@ -86,8 +86,7 @@ extern crate num ;
 #[macro_use]
 extern crate nom ;
 extern crate hashconsing as hcons ;
-extern crate rsmt2 as smt ;
-pub use smt::ParseSmt2 ;
+extern crate rsmt2 ;
 
 macro_rules! unimpl {
   () => ( panic!("not implemented") ) ;
@@ -127,4 +126,49 @@ pub mod real {
 Exposed for extensibility. */
 pub mod write {
   pub use base::{ Writable, SVarWriter, StateWritable } ;
+}
+
+/** SMT solver. */
+pub mod smt {
+  use ::std::process::Command ;
+
+  use ::rsmt2::{ Sort2Smt, Sym2Smt, Expr2Smt } ;
+
+  /** Wraps an SMT solver. */
+  pub type Solver = ::rsmt2::Solver<::Factory> ;
+  #[inline(always)]
+  pub fn z3_cmd() -> Command { Command::new("z3") } 
+  pub use ::rsmt2::{ SolverConf } ;
+
+  pub use ::rsmt2::sync ;
+  pub use ::rsmt2::async ;
+
+  impl Sym2Smt for ::real::Sym {
+    fn sym_to_smt2(
+      & self, writer: & mut ::std::io::Write
+    ) -> ::std::io::Result<()> {
+      write!(writer, "{}", self)
+    }
+  }
+
+  impl Sort2Smt for ::Type {
+    fn sort_to_smt2(
+      & self, writer: & mut ::std::io::Write
+    ) -> ::std::io::Result<()> {
+      use base::Writable ;
+      self.write(writer)
+    }
+  }
+
+  /** An unrolled term, printable in a solver. */
+  pub struct Unroll(::Term, ::Offset2) ;
+  impl Expr2Smt for Unroll {
+    fn expr_to_smt2(
+      & self, writer: & mut ::std::io::Write
+    ) -> ::std::io::Result<()> {
+      use base::PrintSmt2 ;
+      let Unroll(ref term, ref offset) = * self ;
+      term.to_smt2(writer, offset)
+    }
+  }
 }

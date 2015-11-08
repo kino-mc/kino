@@ -1,25 +1,142 @@
+#![allow(non_upper_case_globals)]
+// Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+// directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 extern crate ansi_term as ansi ;
 extern crate term ;
 extern crate system as sys ;
+extern crate msg ;
+extern crate bmc ;
 
+use std::collections::HashMap ;
+use std::sync::mpsc ;
+use std::thread ;
+use std::thread::sleep_ms ;
+
+use ansi::{ ANSIString, Style, Colour } ;
+
+use term::{ Sym, Term } ;
+
+use sys::{ Prop, Sys } ;
 use sys::ctxt::* ;
+
+use msg::Technique ;
+
+static header: & 'static str = "|===| " ;
+static trailer: & 'static str = "|===|" ;
+static prefix: & 'static str = "| " ;
+
+struct Log {
+  pub bold: Style,
+  pub success_style: Colour,
+  pub success: ANSIString<'static>,
+  pub error_style: Style,
+  pub error: ANSIString<'static>,
+}
+impl Log {
+  fn mk() -> Self {
+    let bold = ansi::Style::new().bold() ;
+    let success_style = ansi::Colour::Green ;
+    let success = success_style.paint("success") ;
+    let error_style = ansi::Colour::Red.bold() ;
+    let error = error_style.paint("error:") ;
+    Log {
+      bold: bold,
+      success_style: success_style,
+      success: success,
+      error_style: error_style,
+      error: error,
+    }
+  }
+  fn space(& self) { println!("{}", prefix) }
+  fn empty_space(& self) { println!("") }
+  fn trail(& self) {
+    println!("{}", trailer) ;
+    println!("")
+  }
+  fn title(& self, e: & str) {
+    println!("{}{}", header, self.bold.paint(e))
+  }
+  fn success(& self) {
+    println!("{}{}", self.success_style.paint(prefix), self.success)
+  }
+  fn error(& self) {
+    println!("{}{}", self.error_style.paint(prefix), self.error)
+  }
+  fn error_line(& self, s: & str) {
+    println!("{}  {}", self.error_style.paint(prefix), s)
+  }
+  fn print(& self, s: & str) {
+    println!("{}{}", prefix, s)
+  }
+  fn log(& self, t: Technique, bla: String) {
+    println!("{}{}:", prefix, self.bold.paint(t.to_str())) ;
+    for line in bla.lines() {
+      println!("{}  {}", prefix, line)
+    } ;
+    self.space()
+  }
+}
+
+fn launch(
+  log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
+) -> Result<(Sys, HashMap<Sym, Term>), ()> {
+  use ::std::sync::mpsc::TryRecvError::* ;
+  use msg::{ MsgUp, Event } ;
+  use msg::MsgUp::* ;
+  log.title("Running") ;
+  log.space() ;
+
+  log.print("creating channel") ;
+  let (sender, receiver) = mpsc::channel::<MsgUp>() ;
+
+  // Launch BMC.
+  log.print("spawning bmc") ;
+  let factory = c.factory().clone() ;
+  thread::spawn(
+    move || bmc::run(
+      sys, props.clone(), Event::mk(
+        sender, Technique::Bmc, factory
+      )
+    )
+  ) ;
+
+  log.print("entering receive loop") ;
+  log.space() ;
+
+  loop {
+    match receiver.try_recv() {
+      Ok( Bla(from, bla) ) => log.log(from, bla),
+      Ok(_) => log.print("received msg"),
+      Err(Disconnected) => {
+        log.error() ;
+        log.error_line("disconnected") ;
+        break
+      },
+      Err(Empty) => (),
+    }
+    sleep_ms(57)
+  }
+
+  log.space() ;
+  log.trail() ;
+  Err(())
+}
 
 fn main() {
   use std::fs::File ;
   use std::env::args ;
 
-  let bold = ansi::Style::new().bold() ;
-  let success_style = ansi::Colour::Green ;
-  let success = success_style.paint("success") ;
-  let error_style = ansi::Colour::Red.bold() ;
-  let error = error_style.paint("error") ;
-  let unimpl_style = error_style.underline() ;
-  let unimpl = unimpl_style.paint("unimplemented") ;
+  let log = Log::mk() ;
 
-  fn print_trailer_3() { println!("|===|") }
-
-  println!("") ;
-  println!("") ;
+  log.empty_space() ;
+  log.empty_space() ;
 
   let mut args = args() ;
   args.next().unwrap() ;
@@ -28,63 +145,59 @@ fn main() {
     let factory = term::Factory::mk() ;
     let mut context = Context::mk(factory, 10000) ;
 
-    println!("|===| {} \"{}\"", bold.paint("opening"), file) ;
+    log.title( & format!("opening \"{}\"", file) ) ;
     match File::open(& file) {
       Ok(mut f) => {
-        println!("| {}", success) ;
-        println!("|===| {}", bold.paint("parsing")) ;
+        log.success() ;
+        log.title("parsing") ;
         match context.read(& mut f) {
           Ok(res) => {
-            println!("| {}", success) ;
-            print_trailer_3() ;
-            println!("") ;
+            log.success() ;
+            log.trail() ;
 
-            println!("|===| {}:", bold.paint("Context")) ;
+            log.title("Context") ;
             for line in context.lines().lines() {
-              println!("| {}", line)
+              log.print(line)
             } ;
-            print_trailer_3() ;
-            println!("") ;
+            log.trail() ;
 
-            println!("|===| {}:", bold.paint("Outcome")) ;
+            log.title("Query") ;
             for line in res.lines().lines() {
-              println!("| {}", line)
+              log.print(line)
             } ;
-            println!("|===|") ;
+            log.trail() ;
 
             match res {
               Res::Exit => (),
-              _ => {
-                println!("") ;
-
-                println!("|===| {}", bold.paint("Running")) ;
-                println!("|") ;
-                println!("| {}", unimpl) ;
-                println!("|") ;
-                print_trailer_3() ;
+              Res::Check(sys, props) => {
+                let _ = launch(& log, & context, sys, props, None) ;
+              },
+              Res::CheckAss(sys, props, ass) => {
+                let _ = launch(& log, & context, sys, props, Some(ass)) ;
               },
             }
           },
           Err( e ) => {
-            println!("|===| {}", error) ;
+            log.space() ;
+            log.error() ;
             for line in ( format!("{}", e) ).lines() {
-              println!("    {} {}", error_style.paint("|"), line)
+              log.error_line(line)
             } ;
-            print_trailer_3()
+            log.trail()
           },
         }
       },
       Err(e) => {
-        println!("|===| {}", error) ;
+        log.space() ;
+        log.error() ;
         for line in ( format!("{}", e) ).lines() {
-          println!("    {} {}", error_style.paint("|"), line)
+          log.error_line(line)
         } ;
-        print_trailer_3()
+        log.trail()
       },
     } ;
 
-    println!("") ;
-    println!("") ;
+    log.empty_space()
   }
   ()
 }

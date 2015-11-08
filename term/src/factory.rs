@@ -11,7 +11,7 @@
 
 use nom::IResult ;
 
-use smt::ParseSmt2 ;
+use rsmt2::ParseSmt2 ;
 
 use base::{ Mkable, State, Offset, Smt2Offset } ;
 use typ::{ Type, Bool, Int, Rat } ;

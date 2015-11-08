@@ -1,0 +1,9 @@
+[package]
+name = "bmc"
+version = "0.1.0"
+authors = ["Adrien Champion <adrien.champion@mail.com>"]
+
+[dependencies]
+term = { path = "../term" }
+msg = { path = "../msg" }
+system = { path = "../system" }

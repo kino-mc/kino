@@ -1,11 +1,8 @@
 [package]
-name = "kino"
+name = "msg"
 version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
-ansi_term = "0.7.0"
 term = { path = "../term" }
-msg = { path = "../msg" }
-bmc = { path = "../bmc" }
 system = { path = "../system" }

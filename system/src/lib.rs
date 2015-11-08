@@ -35,12 +35,18 @@ thread-safe and can be cloned.
 extern crate nom ;
 extern crate term ;
 
+use std::sync::Arc ;
+
 mod base ;
-// pub use base::{
-//   Sig, Args, Uf, Fun, Prop, Sys
-// } ;
 
 mod parse ;
+
+/** Real types of the elements of a context. */
+pub mod real {
+  pub use base::{
+    Sig, Args, Uf, Fun, Prop, Sys, Callable
+  } ;
+}
 
 /** Reads and remembers what has been read. */
 pub mod ctxt {
@@ -49,8 +55,21 @@ pub mod ctxt {
     Res, Context
   } ;
   pub use super::parse::check::Error ;
-
 }
 
-mod sys ;
-pub use sys::* ;
+pub use base::{ CallSet, PropSet } ;
+
+/** A signature, a list of types. Used only in `Uf`. */
+pub type Sig = Arc<base::Sig> ;
+/** A list of typed formal parameters. */
+pub type Args = Arc<base::Args> ;
+/** An uninterpreted function. */
+pub type Uf = Arc<base::Uf> ;
+/** A function (actually as a macro in SMT-LIB). */
+pub type Fun = Arc<base::Fun> ;
+/** Wraps an (uninterpreted) function. */
+pub type Callable = Arc<base::Callable> ;
+/** A property. */
+pub type Prop = Arc<base::Prop> ;
+/** A transition system. */
+pub type Sys = Arc<base::Sys> ;

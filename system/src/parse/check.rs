@@ -12,7 +12,6 @@
 See `parse::Context` for the description of the checks. */
 
 use std::fmt ;
-use std::sync::Arc ;
 use std::collections::HashSet ;
 
 use term::{ TermAndDep, Type, Sym, Var, Term } ;
@@ -44,7 +43,7 @@ pub enum Error {
   /** Illegal use of next state variable. */
   IllNxtSVar(Var, & 'static str, Sym),
   /** Inconsistent property in check. */
-  IncProp(Arc<Prop>, Arc<Sys>, & 'static str),
+  IncProp(::Prop, ::Sys, & 'static str),
   /** Illegal next state variable in init. */
   NxtInit(Sym, Sym),
   /** Uknown system call in system definition. */
@@ -141,7 +140,7 @@ macro_rules! check_sym {
 declaration/definition for the variable's symbol with arity zero. */
 fn var_defined(
   ctxt: & Context, sym: & Sym
-) -> Option<Arc<Callable>> {
+) -> Option<::Callable> {
   use base::Callable::* ;
   match ctxt.get_callable(sym) {
     None => None,
@@ -156,7 +155,7 @@ fn var_defined(
 declaration/definition for a symbol with arity greater than zero. */
 fn app_defined(
   ctxt: & Context, sym: & Sym
-) -> Option<Arc<Callable>> {
+) -> Option<::Callable> {
   use base::Callable::* ;
   match ctxt.get_callable(sym) {
     None => None,
@@ -239,7 +238,7 @@ fn check_term_and_dep(
   ctxt: & Context, sym: & Sym, state: & Args,
   locals: & [ (Sym, Type, Term, bool) ],
   svar_allowed: bool, next_allowed: bool, desc: & 'static str,
-  calls: & mut HashSet<Arc<Callable>>
+  calls: & mut HashSet<::Callable>
 ) -> Result<(), Error> {
   use term::real::Var::Var as NSVar ;
   use term::real::Var::SVar ;
@@ -541,6 +540,8 @@ pub fn check_check(
     None => return Err( UkSys(sym.clone(), desc, None) ),
     Some(sys) => (* sys).clone(),
   } ;
+
+  let mut real_props = Vec::with_capacity(props.len()) ;
   for prop in props.iter() {
     let prop = match ctxt.get_prop(prop) {
       None => return Err( UkProp(prop.clone(), sym.clone(), desc) ),
@@ -548,12 +549,14 @@ pub fn check_check(
     } ;
     if sys.sym() != prop.sys().sym() {
       return Err( IncProp(prop.clone(), sys.clone(), desc) )
+    } else {
+      real_props.push(prop)
     }
   } ;
 
   match atoms {
 
-    None => Ok( Res::Check(sys, props) ),
+    None => Ok( Res::Check(sys, real_props) ),
 
     Some(atoms) => {
       let mut nu_atoms = Vec::with_capacity(atoms.len()) ;
@@ -564,7 +567,7 @@ pub fn check_check(
         } ;
         nu_atoms.push( atom.into_var(ctxt.factory()) )
       } ;
-      Ok( Res::CheckAss(sys, props, nu_atoms) )
+      Ok( Res::CheckAss(sys, real_props, nu_atoms) )
     }
   }
 }

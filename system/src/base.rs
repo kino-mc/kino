@@ -10,15 +10,14 @@
 use std::fmt ;
 use std::hash::{ Hash, Hasher } ;
 use std::cmp::{ PartialEq, Eq } ;
-use std::sync::Arc ;
 use std::collections::HashSet ;
 
 use term::{ Sym, Type, Term } ;
 
 /** Set of callables. */
-pub type CallSet = HashSet<Arc<Callable>> ;
+pub type CallSet = HashSet<::Callable> ;
 /** Set of properties. */
-pub type PropSet = HashSet<Arc<Prop>> ;
+pub type PropSet = HashSet<::Prop> ;
 
 /** A signature, a list of types. Used only in `Uf`. */
 #[derive(Debug,Clone)]
@@ -203,13 +202,39 @@ impl Hash for Fun {
   }
 }
 
+/** Wraps an (uninterpreted) function. */
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
+pub enum Callable {
+  /** Wraps an uninterpreted function. */
+  Dec(Uf),
+  /** Wraps a function. */
+  Def(Fun),
+}
+impl Callable {
+  /** The symbol of a function. */
+  pub fn sym(& self) -> & Sym {
+    match * self {
+      Callable::Def(ref f) => f.sym(),
+      Callable::Dec(ref f) => f.sym(),
+    }
+  }
+}
+impl fmt::Display for Callable {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      Callable::Dec(ref f) => write!(fmt, "declaration : {}", f),
+      Callable::Def(ref f) => write!(fmt, "definition  : {}", f),
+    }
+  }
+}
+
 /** A property. */
 #[derive(Debug,Clone)]
 pub struct Prop {
   /** Identifier of the property. */
   sym: Sym,
   /** System the property is over. */
-  sys: Arc<Sys>,
+  sys: ::Sys,
   /** Body of the property. */
   body: Term,
   /** Calls in the property. */
@@ -218,7 +243,7 @@ pub struct Prop {
 impl Prop {
   /** Creates a new property. */
   #[inline(always)]
-  pub fn mk(sym: Sym, sys: Arc<Sys>, body: Term, calls: CallSet) -> Self {
+  pub fn mk(sym: Sym, sys: ::Sys, body: Term, calls: CallSet) -> Self {
     Prop { sym: sym, sys: sys, body: body, calls: calls }
   }
   /** Identifier of a property. */
@@ -226,7 +251,7 @@ impl Prop {
   pub fn sym(& self) -> & Sym { & self.sym }
   /** System a property ranges over. */
   #[inline(always)]
-  pub fn sys(& self) -> & Arc<Sys> { & self.sys }
+  pub fn sys(& self) -> & ::Sys { & self.sys }
   /** Body of a property. */
   #[inline(always)]
   pub fn body(& self) -> & Term { & self.body }
@@ -267,7 +292,7 @@ pub struct Sys {
   /** Identifier of the transition relation of the system. */
   trans: Term,
   /** Calls of the system. */
-  subsys: Vec<(Arc<Sys>, Vec<Term>)>,
+  subsys: Vec<(::Sys, Vec<Term>)>,
   /** Callables used by this system **recursively**. */
   calls: CallSet,
 }
@@ -277,7 +302,7 @@ impl Sys {
   pub fn mk(
     sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
     init: Term, trans: Term,
-    subsys: Vec<(Arc<Sys>, Vec<Term>)>,
+    subsys: Vec<(::Sys, Vec<Term>)>,
     calls: CallSet,
   ) -> Self {
     Sys {
@@ -303,7 +328,7 @@ impl Sys {
   pub fn trans(& self) -> & Term { & self.trans }
   /** Sub-systems of a system. */
   #[inline(always)]
-  pub fn subsys(& self) -> & [ (Arc<Sys>, Vec<Term>) ] { & self.subsys }
+  pub fn subsys(& self) -> & [ (::Sys, Vec<Term>) ] { & self.subsys }
   /** Calls of a system. */
   #[inline(always)]
   pub fn calls(& self) -> & CallSet { & self.calls }
@@ -342,28 +367,5 @@ impl fmt::Display for Sys {
   }
 }
 
-/** Wraps an (uninterpreted) function. */
-#[derive(Debug,Clone,PartialEq,Eq,Hash)]
-pub enum Callable {
-  /** Wraps an uninterpreted function. */
-  Dec(Uf),
-  /** Wraps a function. */
-  Def(Fun),
-}
-impl Callable {
-  /** The symbol of a function. */
-  pub fn sym(& self) -> & Sym {
-    match * self {
-      Callable::Def(ref f) => f.sym(),
-      Callable::Dec(ref f) => f.sym(),
-    }
-  }
-}
-impl fmt::Display for Callable {
-  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
-    match * self {
-      Callable::Dec(ref f) => write!(fmt, "declaration : {}", f),
-      Callable::Def(ref f) => write!(fmt, "definition  : {}", f),
-    }
-  }
-}
+
+
