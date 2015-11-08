@@ -11,7 +11,7 @@
 extern crate ansi_term as ansi ;
 extern crate term ;
 extern crate system as sys ;
-extern crate msg ;
+extern crate event ;
 extern crate bmc ;
 
 use std::collections::HashMap ;
@@ -26,7 +26,7 @@ use term::{ Sym, Term } ;
 use sys::{ Prop, Sys } ;
 use sys::ctxt::* ;
 
-use msg::Technique ;
+use event::Technique ;
 
 static header: & 'static str = "|===| " ;
 static trailer: & 'static str = "|===|" ;
@@ -88,8 +88,8 @@ fn launch(
   log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
 ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
   use ::std::sync::mpsc::TryRecvError::* ;
-  use msg::{ MsgUp, Event } ;
-  use msg::MsgUp::* ;
+  use event::{ MsgUp, Event } ;
+  use event::MsgUp::* ;
   log.title("Running") ;
   log.space() ;
 
@@ -113,7 +113,7 @@ fn launch(
   loop {
     match receiver.try_recv() {
       Ok( Bla(from, bla) ) => log.log(from, bla),
-      Ok(_) => log.print("received msg"),
+      Ok(_) => log.print("received event"),
       Err(Disconnected) => {
         log.error() ;
         log.error_line("disconnected") ;

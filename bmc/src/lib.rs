@@ -1,10 +1,10 @@
 extern crate term ;
-extern crate msg ;
+extern crate event ;
 extern crate system ;
 
 use term::smt::* ;
 
-use msg::Event ;
+use event::Event ;
 
 use system::{ CallSet, Callable, Sys, Prop } ;
 

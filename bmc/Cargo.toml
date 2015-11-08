@@ -5,5 +5,5 @@ authors = ["Adrien Champion <adrien.champion@mail.com>"]
 
 [dependencies]
 term = { path = "../term" }
-msg = { path = "../msg" }
+event = { path = "../event" }
 system = { path = "../system" }

@@ -5,7 +5,7 @@ authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
 ansi_term = "0.7.0"
-term = { path = "../term" }
-msg = { path = "../msg" }
-bmc = { path = "../bmc" }
-system = { path = "../system" }
+term = { path = "term" }
+event = { path = "event" }
+system = { path = "system" }
+bmc = { path = "bmc" }
