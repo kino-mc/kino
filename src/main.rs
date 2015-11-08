@@ -40,7 +40,6 @@ pub mod subs {
 use std::collections::HashMap ;
 use std::sync::mpsc ;
 use std::thread ;
-use std::thread::sleep_ms ;
 
 use ansi::{ ANSIString, Style, Colour } ;
 
@@ -110,7 +109,6 @@ impl Log {
 fn launch(
   log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
 ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
-  use ::std::sync::mpsc::TryRecvError::* ;
   use event::{ MsgUp, Event } ;
   use event::MsgUp::* ;
   log.title("Running") ;
@@ -134,17 +132,15 @@ fn launch(
   log.space() ;
 
   loop {
-    match receiver.try_recv() {
+    match receiver.recv() {
       Ok( Bla(from, bla) ) => log.log(from, bla),
       Ok(_) => log.print("received event"),
-      Err(Disconnected) => {
+      Err(e) => {
         log.error() ;
-        log.error_line("disconnected") ;
+        log.error_line( & format!("{}", e) ) ;
         break
       },
-      Err(Empty) => (),
     }
-    sleep_ms(57)
   }
 
   log.space() ;

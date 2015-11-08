@@ -33,6 +33,7 @@ thread-safe and can be cloned.
 
 #[macro_use]
 extern crate nom ;
+extern crate rsmt2 ;
 extern crate term ;
 
 use std::sync::Arc ;
@@ -73,3 +74,97 @@ pub type Callable = Arc<base::Callable> ;
 pub type Prop = Arc<base::Prop> ;
 /** A transition system. */
 pub type Sys = Arc<base::Sys> ;
+
+pub mod smt {
+  pub use rsmt2::{ Solver, UnitSmtRes } ;
+  use term::{ Type, Factory, Offset, Offset2, State } ;
+
+  /** Defines the init and trans predicates of a system. */
+  fn define(
+    sys: & ::Sys, solver: & mut Solver<Factory>, o: & Offset2
+  ) -> UnitSmtRes {
+    let init = sys.init() ;
+    let mut init_args = Vec::with_capacity(init.1.len()) ;
+    for &(ref v, ref typ) in init.1.iter() {
+      init_args.push( ( (v, o), * typ ) ) ;
+    } ;
+    try!(
+      solver.define_fun(
+        init.0.get(),
+        & init_args,
+        & Type::Bool,
+        & (& init.2, o)
+      )
+    ) ;
+    let trans = sys.trans() ;
+    let mut trans_args = Vec::with_capacity(trans.1.len()) ;
+    for &(ref v, ref typ) in trans.1.iter() {
+      trans_args.push( ( (v, o), * typ ) ) ;
+    } ;
+    solver.define_fun(
+      trans.0.get(),
+      & trans_args,
+      & Type::Bool,
+      & (& trans.2, o)
+    )
+  }
+
+  pub trait Unroller {
+    /** Declares/defines UFs, functions, and system init/trans predicates. */
+    fn defclare_funs(& self, & mut Solver<Factory>) -> UnitSmtRes ;
+    /** Declares state variables at some offset. */
+    fn declare_svars(
+      & self, & mut Solver<Factory>, & Factory, & Offset
+    ) -> UnitSmtRes ;
+  }
+  impl Unroller for ::Sys {
+    fn defclare_funs(& self, solver: & mut Solver<Factory>) -> UnitSmtRes {
+      use ::real::Callable::* ;
+      let offset = Offset2::init() ;
+
+      // Declaring UFs and defining functions.
+      for fun in self.calls() {
+        match * * fun {
+          Dec(ref fun) => {
+            try!(
+              solver.declare_fun( fun.sym().get(), fun.sig(), fun.typ() )
+            ) ;
+          },
+          Def(ref fun) => {
+            let mut args = Vec::with_capacity(fun.args().len()) ;
+            for & (ref sym, ref typ) in fun.args() {
+              args.push( ( (* sym.get()).clone(), * typ) )
+            } ;
+            try!(
+              solver.define_fun(
+                fun.sym().get(),
+                & args,
+                fun.typ(),
+                & (fun.body(), & offset)
+              )
+            )
+          },
+        }
+      } ;
+
+      // Defining sub systems.
+      for & (ref sub, _) in self.subsys() {
+        try!( define(sub, solver, & offset) )
+      } ;
+
+      // Define current system.
+      define(self, solver, & offset)
+    }
+
+    fn declare_svars(
+      & self, solver: & mut Solver<Factory>, factory: & Factory, o: & Offset
+    ) -> UnitSmtRes {
+      for & (ref var, ref typ) in self.init().1.iter() {
+        try!(
+          solver.declare_fun(& (var, o), & vec![], typ)
+        )
+      } ;
+      Ok(())
+    }
+  }
+}

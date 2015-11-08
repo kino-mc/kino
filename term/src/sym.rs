@@ -16,7 +16,7 @@ use base::{ SymPrintStyle, SymWritable, HConsed, HConsign } ;
 
 
 /** Underlying representation of function symbols. */
-#[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
+#[derive(Clone,Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub struct RealSym {
   /** The `String` representing the function symbol. */
   sym: String
@@ -34,16 +34,25 @@ impl fmt::Display for RealSym {
 /** Hash consed function symbol. */
 pub type Sym = HConsed<RealSym> ;
 
-impl SymWritable for Sym {
+impl SymWritable for RealSym {
   #[inline(always)]
   fn write(
     & self, writer: & mut io::Write, style: SymPrintStyle
   ) -> io::Result<()> {
     use base::SymPrintStyle::* ;
     match style {
-      Internal => write!(writer, " {}", self.get().sym),
-      External => write!(writer, "{}", self.get().sym),
+      Internal => write!(writer, " {}", self.sym),
+      External => write!(writer, "{}", self.sym),
     }
+  }
+}
+
+impl SymWritable for Sym {
+  #[inline(always)]
+  fn write(
+    & self, writer: & mut io::Write, style: SymPrintStyle
+  ) -> io::Result<()> {
+    self.get().write(writer, style)
   }
 }
 

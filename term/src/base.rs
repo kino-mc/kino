@@ -58,7 +58,7 @@ pub trait SymWritable {
 pub trait SVarWriter<Sym: SymWritable> {
   /** Writes a state variable given a state. */
   #[inline(always)]
-  fn write(
+  fn sv_write(
     & self, & mut io::Write, & Sym, & State, SymPrintStyle
   ) -> io::Result<()> ;
 }
@@ -129,10 +129,18 @@ impl Offset2 {
       next: self.next.nxt(),
     }
   }
+  /** The offset of the current state. */
+  pub fn curr(& self) -> & Offset {
+    & self.curr
+  }
+  /** The offset of the next state. */
+  pub fn next(& self) -> & Offset {
+    & self.next
+  }
 }
 
 impl<Sym: SymWritable> SVarWriter<Sym> for Offset2 {
-  fn write(
+  fn sv_write(
     & self, writer: & mut io::Write,
     v: & Sym, st: & State, style: SymPrintStyle
   ) -> io::Result<()> {
@@ -146,8 +154,23 @@ impl<Sym: SymWritable> SVarWriter<Sym> for Offset2 {
   }
 }
 
+impl<Sym: SymWritable> SVarWriter<Sym> for Offset {
+  fn sv_write(
+    & self, writer: & mut io::Write,
+    v: & Sym, st: & State, style: SymPrintStyle
+  ) -> io::Result<()> {
+    try!( write!(writer, "|@") ) ;
+    match * st {
+      State::Curr => try!( self.write(writer) ),
+      State::Next => panic!( "SVarWriter on Offset called on next svar" ),
+    } ;
+    try!( v.write(writer, style) ) ;
+    write!(writer, "|")
+  }
+}
+
 impl<Sym: SymWritable> SVarWriter<Sym> for () {
-  fn write(
+  fn sv_write(
     & self, writer: & mut io::Write,
     v: & Sym, st: & State, style: SymPrintStyle
   ) -> io::Result<()> {

@@ -352,7 +352,8 @@ pub fn check_sys(
   sub_syss: Vec<(Sym, Vec<TermAndDep>)>
 ) -> Result<(), Error> {
   use term::State::* ;
-  use std::iter::FromIterator ;
+  use term::{ Operator, SymMaker, VarMaker, OpMaker, AppMaker, UnTermOps } ;
+  use std::iter::{ FromIterator, Extend } ;
 
   let desc = super::sys_desc ;
   check_sym!(ctxt, sym, desc) ;
@@ -519,8 +520,68 @@ pub fn check_sys(
     tmp_locals.into_iter().map( |(sym, typ, term, _)| (sym, typ, term) )
   ) ;
 
+  let mut init_state = Vec::with_capacity(state.len()) ;
+  let mut trans_state = Vec::with_capacity(2 * state.len()) ;
+  let mut tmp_state = Vec::with_capacity(state.len()) ;
+  {
+    let f = ctxt.factory().var_consign() ;
+    for & (ref sym, ref typ) in state.args() {
+      let var = f.svar(sym.clone(), Curr) ;
+      init_state.push( (var.clone(), * typ) ) ;
+      trans_state.push( (var, * typ) ) ;
+      let nxt = f.svar(sym.clone(), Next) ;
+      tmp_state.push( (nxt, * typ) ) ;
+    }
+  }
+  trans_state.extend(tmp_state) ;
+
+  let init_sym = ctxt.factory().sym(
+    format!("init[{}]", sym.get().sym())
+  ) ;
+  let trans_sym = ctxt.factory().sym(
+    format!("trans[{}]", sym.get().sym())
+  ) ;
+
+  let mut init_conjs = Vec::with_capacity(subsys.len() + 1) ;
+  init_conjs.push(init) ;
+  let mut trans_conjs = Vec::with_capacity(subsys.len() + 1) ;
+  trans_conjs.push(trans) ;
+  for & (ref sub, ref params) in subsys.iter() {
+    init_conjs.push(
+      ctxt.factory().app(sub.init().0.clone(), params.clone())
+    ) ;
+    let mut trans_params = params.clone() ;
+    for term in params {
+      trans_params.push( ctxt.factory().bump(term).unwrap() )
+    } ;
+    trans_conjs.push(
+      ctxt.factory().app(sub.trans().0.clone(), trans_params)
+    )
+  } ;
+
+  let init = ctxt.factory().op(Operator::And, init_conjs) ;
+  let trans = ctxt.factory().op(Operator::And, trans_conjs) ;
+
+  let mut init_params = Vec::with_capacity(init_state.len()) ;
+  for & (ref var, _) in init_state.iter() {
+    init_params.push(ctxt.factory().mk_var(var.clone()))
+  } ;
+  let mut trans_params = Vec::with_capacity(trans_state.len()) ;
+  for & (ref var, _) in trans_state.iter() {
+    trans_params.push(ctxt.factory().mk_var(var.clone()))
+  } ;
+  let (init_term, trans_term) = (
+    ctxt.factory().app(init_sym.clone(), init_params),
+    ctxt.factory().app(trans_sym.clone(), trans_params),
+  ) ;
+
   ctxt.add_sys(
-    Sys::mk(sym, state, locals, init, trans, subsys, calls)
+    Sys::mk(
+      sym, state, locals,
+      (init_sym, init_state, init, init_term),
+      (trans_sym, trans_state, trans, trans_term),
+      subsys, calls,
+    )
   ) ;
 
   Ok(())

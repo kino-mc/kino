@@ -69,6 +69,8 @@ Parsing STS and parsing answers in SMT Lib is different.
 * `num::rational` crash if denominator is zero. Can happen in parser. Parsing
 only non-zero denominator will push the problem to function symbol application. Need proper handling.
 * document [`write` module][write module]
+* provide `mk_and`, `mk_or` *etc.*
+* provide local fresh symbol constructor
 
 
 [state]: enum.State.html (State enum type)
@@ -132,7 +134,10 @@ pub mod write {
 pub mod smt {
   use ::std::process::Command ;
 
-  use ::rsmt2::{ Sort2Smt, Sym2Smt, Expr2Smt } ;
+  pub use ::rsmt2::{
+    Sort2Smt, Sym2Smt, Expr2Smt,
+    SortInfo2Smt, SymInfo2Smt, ExprInfo2Smt,
+  } ;
 
   /** Wraps an SMT solver. */
   pub type Solver = ::rsmt2::Solver<::Factory> ;
@@ -147,7 +152,31 @@ pub mod smt {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write
     ) -> ::std::io::Result<()> {
-      write!(writer, "{}", self)
+      use base::SymWritable ;
+      use base::SymPrintStyle ;
+      try!( write!(writer, "|") ) ;
+      try!( self.write(writer, SymPrintStyle::Internal) ) ;
+      write!(writer, "|")
+    }
+  }
+
+  impl SymInfo2Smt<::Offset> for ::Var {
+    fn sym_info_to_smt2(
+      & self, info: & ::Offset, writer: & mut ::std::io::Write
+    ) -> ::std::io::Result<()> {
+      use base::StateWritable ;
+      use base::SymPrintStyle ;
+      self.write(writer, info, SymPrintStyle::Internal)
+    }
+  }
+
+  impl SymInfo2Smt<::Offset2> for ::Var {
+    fn sym_info_to_smt2(
+      & self, info: & ::Offset2, writer: & mut ::std::io::Write
+    ) -> ::std::io::Result<()> {
+      use base::StateWritable ;
+      use base::SymPrintStyle ;
+      self.write(writer, info, SymPrintStyle::Internal)
     }
   }
 
@@ -160,15 +189,12 @@ pub mod smt {
     }
   }
 
-  /** An unrolled term, printable in a solver. */
-  pub struct Unroll(::Term, ::Offset2) ;
-  impl Expr2Smt for Unroll {
-    fn expr_to_smt2(
-      & self, writer: & mut ::std::io::Write
+  impl ExprInfo2Smt<::Offset2> for ::Term {
+    fn expr_info_to_smt2(
+      & self, offset: & ::Offset2, writer: & mut ::std::io::Write
     ) -> ::std::io::Result<()> {
       use base::PrintSmt2 ;
-      let Unroll(ref term, ref offset) = * self ;
-      term.to_smt2(writer, offset)
+      self.to_smt2(writer, offset)
     }
   }
 }

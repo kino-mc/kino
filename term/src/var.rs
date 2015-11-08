@@ -26,6 +26,19 @@ pub enum RealVar {
   /** Stateful variable. */
   SVar(Sym, State),
 }
+impl RealVar {
+  /** Bumps a variable in the current state to the next state. */
+  #[inline(always)]
+  pub fn bump(& self) -> Result<Self,bool> {
+    match * self {
+      RealVar::SVar(ref sym, State::Curr) => Ok(
+        RealVar::SVar( sym.clone(), State::Next )
+      ),
+      RealVar::SVar(_,_) => Err(true),
+      _ => Err(false),
+    }
+  }
+}
 
 impl fmt::Display for RealVar {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -56,7 +69,7 @@ impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for RealVar {
         write!(writer, "|")
       },
       RealVar::SVar(ref sym, ref st) =>
-        sv_writer.write(writer, sym, st, style),
+        sv_writer.sv_write(writer, sym, st, style),
     }
   }
 }

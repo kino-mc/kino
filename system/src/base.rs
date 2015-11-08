@@ -12,7 +12,7 @@ use std::hash::{ Hash, Hasher } ;
 use std::cmp::{ PartialEq, Eq } ;
 use std::collections::HashSet ;
 
-use term::{ Sym, Type, Term } ;
+use term::{ Sym, Var, Type, Term } ;
 
 /** Set of callables. */
 pub type CallSet = HashSet<::Callable> ;
@@ -288,9 +288,9 @@ pub struct Sys {
   /** Local variables of the system. */
   locals: Vec<(Sym, Type, Term)>,
   /** Identifier of the init predicate of the system. */
-  init: Term,
+  init: (Sym, Vec<(Var, Type)>, Term, Term),
   /** Identifier of the transition relation of the system. */
-  trans: Term,
+  trans: (Sym, Vec<(Var, Type)>, Term, Term),
   /** Calls of the system. */
   subsys: Vec<(::Sys, Vec<Term>)>,
   /** Callables used by this system **recursively**. */
@@ -301,7 +301,8 @@ impl Sys {
   #[inline(always)]
   pub fn mk(
     sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
-    init: Term, trans: Term,
+    init: (Sym, Vec<(Var, Type)>, Term, Term),
+    trans: (Sym, Vec<(Var, Type)>, Term, Term),
     subsys: Vec<(::Sys, Vec<Term>)>,
     calls: CallSet,
   ) -> Self {
@@ -322,10 +323,20 @@ impl Sys {
   pub fn locals(& self) -> & [ (Sym, Type, Term) ] { & self.locals }
   /** Init predicate of a system. */
   #[inline(always)]
-  pub fn init(& self) -> & Term { & self.init }
+  pub fn init(& self) -> & (Sym, Vec<(Var, Type)>, Term, Term) {
+    & self.init
+  }
+  /** Init term. */
+  #[inline(always)]
+  pub fn init_term(& self) -> & Term { & self.init.3 }
   /** Transition relation of a system. */
   #[inline(always)]
-  pub fn trans(& self) -> & Term { & self.trans }
+  pub fn trans(& self) -> & (Sym, Vec<(Var, Type)>, Term, Term) {
+    & self.trans
+  }
+  /** Trans term. */
+  #[inline(always)]
+  pub fn trans_term(& self) -> & Term { & self.trans.3 }
   /** Sub-systems of a system. */
   #[inline(always)]
   pub fn subsys(& self) -> & [ (::Sys, Vec<Term>) ] { & self.subsys }
@@ -337,7 +348,7 @@ impl Sys {
   pub fn lines(& self) -> String {
     let mut s = format!(
       "{} ({})\n  init:  {}\n  trans: {}",
-      self.sym, self.state, self.init, self.trans
+      self.sym, self.state, self.init.2, self.trans.2
     ) ;
     if ! self.subsys.is_empty() {
       s = format!("{}\n  sub-systems:", s) ;
@@ -362,7 +373,7 @@ impl fmt::Display for Sys {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     write!(
       fmt, "{} ({}) {{ {} -> {} }}",
-      self.sym, self.state, self.init, self.trans
+      self.sym, self.state, self.init.2, self.trans.2
     )
   }
 }
