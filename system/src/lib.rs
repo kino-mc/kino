@@ -65,7 +65,7 @@ pub type Sig = Arc<base::Sig> ;
 pub type Args = Arc<base::Args> ;
 /** An uninterpreted function. */
 pub type Uf = Arc<base::Uf> ;
-/** A function (actually as a macro in SMT-LIB). */
+/** A function (actually a macro in SMT-LIB). */
 pub type Fun = Arc<base::Fun> ;
 /** Wraps an (uninterpreted) function. */
 pub type Callable = Arc<base::Callable> ;
