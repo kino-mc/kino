@@ -39,7 +39,7 @@ pub fn run(
     Err(e) => event.log( & format!("error:\n  {:?}", e) ),
     Ok(mut solver) => {
 
-      event.log("declaring functions") ;
+      event.log("declaring functions, init and trans") ;
       try_error!(
         sys.defclare_funs(& mut solver), event
       ) ;
