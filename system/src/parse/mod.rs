@@ -182,8 +182,8 @@ pub struct Context {
   // transs: HashMap<Sym, Arc<Trans>>,
   /** Systems. */
   syss: HashMap<Sym, ::Sys>,
-  /** Maps system identifiers to their invariants. */
-  invs: HashMap<Sym, HashSet<Prop>>,
+  // /** Maps system identifiers to their invariants. */
+  // invs: HashMap<Sym, HashSet<Prop>>,
 }
 impl Context {
   /** Creates an empty context.
@@ -203,7 +203,7 @@ impl Context {
       // inits: HashMap::with_capacity(23),
       // transs: HashMap::with_capacity(23),
       syss: HashMap::with_capacity(23),
-      invs: HashMap::with_capacity(127),
+      // invs: HashMap::with_capacity(127),
     }
   }
 

@@ -9,5 +9,6 @@ nom = "0.5.0"
 rsmt2 = { git = "https://bitbucket.org/AdrienChampion/rsmt2.git" }
 term = { path = "term" }
 event = { path = "event" }
+unroll = { path = "unroll" }
 system = { path = "system" }
 bmc = { path = "bmc" }

@@ -134,16 +134,18 @@ pub mod write {
 pub mod smt {
   use ::std::process::Command ;
 
-  pub use ::rsmt2::{ Sort2Smt, Sym2Smt, Expr2Smt } ;
+  pub use ::rsmt2::{
+    SolverConf, Logic, SolverStyle, UnexSmtRes,
+    Expr2Smt, ParseSmt2, Sort2Smt, Sym2Smt,
+    ConfItem, IoRes, IoResBool, IoResUnit,
+    SmtParseResult, SmtRes, UnitSmtRes,
+    async, sync
+  } ;
 
   /** Wraps an SMT solver. */
   pub type Solver = ::rsmt2::Solver<::Factory> ;
   #[inline(always)]
   pub fn z3_cmd() -> Command { Command::new("z3") } 
-  pub use ::rsmt2::{ SolverConf } ;
-
-  pub use ::rsmt2::sync ;
-  pub use ::rsmt2::async ;
 
   impl Sym2Smt<::Offset> for ::Sym {
     fn sym_to_smt2(
