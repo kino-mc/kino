@@ -312,13 +312,24 @@ impl PropManager {
   }
   pub fn no_check(& mut self, props: & Vec<Sym>) {
     for prop in props.iter() {
-      let was_there = self.no_check.insert(prop.clone()) ;
-      if was_there {
+      let was_not_there = self.no_check.insert(prop.clone()) ;
+      if ! was_not_there {
         panic!("[manager.no_check] no_check on property already not checked")
       }
     }
   }
+  pub fn check_is_empty(& self) -> bool {
+    self.no_check.len() == self.props.len()
+  }
   pub fn reset_no_check(& mut self) {
     self.no_check.clear()
+  }
+  /** Returns the properties that are not inhibited. */
+  pub fn get_checked(& self) -> Vec<Sym> {
+    let mut vec = Vec::with_capacity(self.props.len() - self.no_check.len()) ;
+    for (ref sym, _) in self.props.iter() {
+      if ! self.no_check.contains(sym) { vec.push((* sym).clone()) }
+    } ;
+    vec
   }
 }

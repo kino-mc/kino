@@ -22,6 +22,7 @@ extern crate term ;
 extern crate system as sys ;
 extern crate event ;
 extern crate bmc ;
+extern crate kind ;
 
 /** Provides access to the documentation of the sub projects and main
 libraries. */
@@ -109,7 +110,7 @@ impl Log {
       prefix, self.bold.paint(t.to_str()), lines.next().unwrap()
     ) ;
     for line in lines {
-      println!("{}    {}", prefix, line)
+      println!("{}   {}", prefix, line)
     } ;
     self.space()
   }
@@ -120,7 +121,7 @@ impl Log {
       prefix, self.success_style.paint("kino"), lines.next().unwrap()
     ) ;
     for line in lines {
-      println!("{}    {}", prefix, line)
+      println!("{}   {}", prefix, line)
     } ;
     self.space()
   }
@@ -137,8 +138,7 @@ pub struct KidManager {
 }
 impl KidManager {
   /** Constructs a kid manager. */
-  pub fn mk(log: & Log) -> Self {
-    log.master_log("creating upward channel".to_string()) ;
+  pub fn mk() -> Self {
     let (sender, receiver) = mpsc::channel() ;
     KidManager { r: receiver, s: sender, senders: HashMap::new() }
   }
@@ -148,7 +148,7 @@ impl KidManager {
     t: T, sys: Sys, props: Vec<Prop>, f: & term::Factory
   ) {
     log.master_log(
-      format!("creating downward channel for {}", t.id().to_str())
+      format!("spawning {}", t.id().to_str())
     ) ;
     let (s,r) = mpsc::channel() ;
     let id = t.id().clone() ;
@@ -166,6 +166,20 @@ impl KidManager {
       },
     }
   }
+
+  /** Broadcasts a message to the kids. */
+  #[inline(always)]
+  pub fn broadcast(& self, msg: MsgDown) {
+    for (_, sender) in self.senders.iter() {
+      match sender.send(msg.clone()) {
+        Ok(()) => (),
+        // Should do something here.
+        // This happens when the techniques already exited.
+        Err(_) => (),
+      }
+    }
+  }
+
   /** Receive a message from the kids. */
   #[inline(always)]
   pub fn recv(& self) -> Result<MsgUp, mpsc::RecvError> {
@@ -191,11 +205,16 @@ fn launch(
   log.title("Running") ;
   log.space() ;
 
-  let mut manager = KidManager::mk(log) ;
+  let mut manager = KidManager::mk() ;
 
-  manager.launch(log, bmc::Bmc, sys.clone(), props.clone(), c.factory()) ;
+  manager.launch(
+    log, bmc::Bmc, sys.clone(), props.clone(), c.factory()
+  ) ;
+  manager.launch(
+    log, kind::KInd, sys.clone(), props.clone(), c.factory()
+  ) ;
 
-  log.master_log("entering receive loop".to_string()) ;
+  // log.master_log("entering receive loop".to_string()) ;
   log.title("") ;
   log.space() ;
 
@@ -203,17 +222,37 @@ fn launch(
     if manager.kids_done() { break } ;
 
     match manager.recv() {
+
       Ok( Bla(from, bla) ) => log.log(from, bla),
+
       Ok( Error(from, bla) ) => {
         log.error_from(from) ;
         for line in bla.lines() {
           log.error_line(line)
-        }
+        } ;
+        log.space()
       },
+
       Ok( Disproved(props, from, info) ) => {
         if props.len() > 1 {
           let mut s = format!(
             "falsified {} properties {}", props.len(), info
+          ) ;
+          for prop in props.iter() {
+            s = format!("{}\n{}", s, prop)
+          } ;
+          log.log(from, s)
+        } else {
+          assert!(props.len() == 1) ;
+          log.log(from, format!("falsified {} {}", props[0], info))
+        } ;
+        manager.broadcast( MsgDown::Forget(props) )
+      },
+
+      Ok( Proved(props, from, info) ) => {
+        if props.len() > 1 {
+          let mut s = format!(
+            "proved {} properties {}", props.len(), info
           ) ;
           for prop in props.iter() {
             s = format!("{}\n  {}", s, prop)
@@ -221,16 +260,43 @@ fn launch(
           log.log(from, s)
         } else {
           assert!(props.len() == 1) ;
-          log.log(from, format!("falsified {} {}", props[0], info))
-        }
+          log.log(from, format!("proved {} {}", props[0], info))
+        } ;
+        let mut vec = Vec::with_capacity(props.len()) ;
+        for prop in props.iter() {
+          match c.get_prop(prop) {
+            None => panic!("[kino.proved] unknown property {}", prop),
+            Some(ref prop) => vec.push(prop.body().clone()),
+          }
+        } ;
+        manager.broadcast( MsgDown::Forget(props) ) ;
+        manager.broadcast( MsgDown::Invariants(sys.sym().clone(), vec) )
       },
-      Ok( Done(t, info) ) => {
-        log.master_log(
-          format!("{} is done {}", log.bold.paint(t.to_str()), info)
+
+      Ok( KTrue(props, _, o) ) => {
+        // if props.len() > 1 {
+        //   let mut s = format!("true up to {}:", o) ;
+        //   for prop in props.iter() {
+        //     s = format!("{}\n{}", s, prop)
+        //   } ;
+        //   log.log(from, s) ;
+        // } else {
+        //   assert!(props.len() == 1) ;
+        //   log.log(from, format!("{} is true up to {}", props[0], o))
+        // } ;
+        manager.broadcast( MsgDown::KTrue(props,o) )
+      },
+
+      Ok( Done(from, info) ) => {
+        log.log(
+          from,
+          format!("done {}", info)
         ) ;
-        manager.forget(& t)
+        manager.forget(& from)
       },
+
       Ok( _ ) => log.master_log("received a message".to_string()),
+
       Err(e) => {
         log.error() ;
         for line in (format!("{:?}", e)).lines() {

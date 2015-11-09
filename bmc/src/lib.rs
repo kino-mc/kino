@@ -16,7 +16,7 @@ use term::Offset2 ;
 use term::smt::* ;
 use term::smt::sync::* ;
 
-use event::Event ;
+use event::{ Event, MsgDown, Info } ;
 
 use system::{ Sys, Prop } ;
 
@@ -28,6 +28,7 @@ macro_rules! try_error {
       Ok(v) => v,
       Err(e) => {
         $event.error( & format!("{:?}", e) ) ;
+        $event.done(Info::Error) ;
         return ()
       },
     }
@@ -40,7 +41,7 @@ impl event::CanRun for Bmc {
   fn id(& self) -> event::Technique { event::Technique::Bmc }
 
   fn run(
-    & self, sys: Sys, props: Vec<Prop>, event: Event
+    & self, sys: Sys, props: Vec<Prop>, mut event: Event
   ) {
     // event.log(
     //   & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
@@ -77,6 +78,27 @@ impl event::CanRun for Bmc {
 
         loop {
 
+          match event.recv() {
+            None => return (),
+            Some(msgs) => for msg in msgs {
+              match msg {
+                MsgDown::Forget(ps) => try_error!(
+                  props.forget(& mut solver, & ps),
+                  event
+                ),
+                MsgDown::Invariants(_,_) => event.log(
+                  "received invariants, skipping"
+                ),
+                _ => event.error("unknown message")
+              }
+            },
+          } ;
+
+          if props.none_left() {
+            event.done_at(k.curr()) ;
+            break
+          }
+
           let one_prop_false = props.one_false() ;
 
           let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
@@ -95,14 +117,14 @@ impl event::CanRun for Bmc {
           let mut actlits = props.actlits() ;
           actlits.push(lit) ;
 
-          event.log(
-            & format!(
-              "checking {} {} @{}",
-              props.len(),
-              if props.len() == 1 { "property" } else { "properties" },
-              k.curr()
-            )
-          ) ;
+          // event.log(
+          //   & format!(
+          //     "checking {} {} @{}",
+          //     props.len(),
+          //     if props.len() == 1 { "property" } else { "properties" },
+          //     k.curr()
+          //   )
+          // ) ;
 
           match solver.check_sat_assuming( & actlits, k.curr() ) {
             Ok(true) => {
@@ -128,8 +150,7 @@ impl event::CanRun for Bmc {
               }
             },
             Ok(false) => {
-              // event.log("unsat")
-              ()
+              event.k_true(props.get_checked(), k.curr())
             },
             Err(e) => {
               event.error(

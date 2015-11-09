@@ -11,4 +11,5 @@ term = { path = "term" }
 event = { path = "event" }
 unroll = { path = "unroll" }
 system = { path = "system" }
+kind = { path = "kind" }
 bmc = { path = "bmc" }

@@ -12,7 +12,7 @@ extern crate system as sys ;
 
 use std::fmt ;
 // use std::sync::{ RwLock } ;
-use std::sync::mpsc::{ Sender, Receiver } ;
+use std::sync::mpsc::{ Sender, Receiver, TryRecvError } ;
 use std::collections::HashMap ;
 
 use term::{
@@ -26,9 +26,11 @@ use sys::{ Prop, Sys } ;
 // pub type Cex = HashMap<(Var, Offset), Cst> ;
 
 /** Message from kino to the techniques. */
+#[derive(Debug,Clone)]
 pub enum MsgDown {
   Invariants(Sym, Vec<Term>),
-  Forget(Sym),
+  Forget(Vec<Sym>),
+  KTrue(Vec<Sym>, Offset),
 }
 
 pub trait CanRun {
@@ -42,7 +44,7 @@ pub enum Technique {
   /** Bounded model checking. */
   Bmc,
   /** Induction. */
-  Ind,
+  KInd,
 }
 impl Technique {
   /** A string representation of a technique. */
@@ -50,19 +52,21 @@ impl Technique {
     use Technique::* ;
     match * self {
       Bmc => "bmc",
-      Ind => "ind",
+      KInd => "k-ind",
     }
   }
 }
 
 /** Info a technique can communicate. */
 pub enum Info {
-  At(Offset)
+  At(Offset),
+  Error,
 }
 impl fmt::Display for Info {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     match * self {
-      Info::At(ref o) => write!(fmt, "at {}", o)
+      Info::At(ref o) => write!(fmt, "at {}", o),
+      Info::Error => write!(fmt, "error"),
     }
   }
 }
@@ -79,6 +83,8 @@ pub enum MsgUp {
   Bla(Technique, String),
   /** Error message. */
   Error(Technique, String),
+  /** KTrue. */
+  KTrue(Vec<Sym>, Technique, Offset),
   /** Some properties were proved. */
   Proved(Vec<Sym>, Technique, Info),
   /** Some properties were falsified. */
@@ -129,6 +135,10 @@ impl Event {
       MsgUp::Proved(props, self.t, info)
     ).unwrap()
   }
+  /** Sends a proved message upwards. */
+  pub fn proved_at(& self, props: Vec<Sym>, o: & Offset) {
+    self.proved(props, Info::At(o.clone()))
+  }
   /** Sends a falsification message upwards. */
   pub fn disproved(& self, props: Vec<Sym>, info: Info) {
     self.s.send(
@@ -138,6 +148,12 @@ impl Event {
   /** Sends a falsification message upwards. */
   pub fn disproved_at(& self, props: Vec<Sym>, o: & Offset) {
     self.disproved(props, Info::At(o.clone()))
+  }
+  /** Sends some k-true properties. */
+  pub fn k_true(& self, props: Vec<Sym>, o: & Offset) {
+    self.s.send(
+      MsgUp::KTrue(props, self.t, o.clone())
+    ).unwrap()
   }
   /** Sends a log message upwards. */
   pub fn log(& self, s: & str) {
@@ -157,11 +173,28 @@ impl Event {
   }
   /** Returns the offset a property is k_true for. */
   #[inline(always)]
-  pub fn k_true(& self, p: & Sym) -> & Option<Offset> {
+  pub fn get_k_true(& self, p: & Sym) -> & Option<Offset> {
     match self.k_true.get(p) {
       Some(res) => res,
       None => panic!("[event.k_true] unknown property"),
     }
+  }
+  /** Receive messages from the master. */
+  pub fn recv(& mut self) -> Option<Vec<MsgDown>> {
+    let mut vec = vec![] ;
+    loop {
+      match self.r.try_recv() {
+        Ok( MsgDown::KTrue(props, o) ) => {
+          for prop in props {
+            self.k_true.insert(prop, Some(o)) ; ()
+          }
+        },
+        Ok( msg ) => vec.push(msg),
+        Err( TryRecvError::Empty ) => break,
+        Err( TryRecvError::Disconnected ) => return None,
+      }
+    } ;
+    Some(vec)
   }
 }
 

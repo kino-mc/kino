@@ -1,0 +1,11 @@
+[package]
+name = "kind"
+version = "0.1.0"
+authors = ["Adrien Champion <adrien.champion@email.com>"]
+
+[dependencies]
+term = { path = "../term" }
+event = { path = "../event" }
+system = { path = "../system" }
+unroll = { path = "../unroll" }
+
