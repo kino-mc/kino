@@ -149,11 +149,14 @@ pub fn cst_parser<
 >(
   bytes: & 'a [u8], f: & F
 ) -> IResult<'a, & 'a [u8], Cst> {
-  alt!(
+  preceded!(
     bytes,
-    map!( int_parser, |i| f.constant(i) ) |
-    map!( rat_parser, |r| f.constant(r) ) |
-    map!( bool_parser, |b| f.constant(b) )
+    opt!(space_comment),
+    alt!(
+      map!( int_parser, |i| f.constant(i) ) |
+      map!( rat_parser, |r| f.constant(r) ) |
+      map!( bool_parser, |b| f.constant(b) )
+    )
   )
 }
 

@@ -91,6 +91,12 @@ impl Log {
   fn error(& self) {
     println!("{}{}", self.error_style.paint(prefix), self.error)
   }
+  fn error_from(& self, t: Technique) {
+    println!(
+      "{}{} in {}",
+      self.error_style.paint(prefix), self.error, self.bold.paint(t.to_str())
+    )
+  }
   fn error_line(& self, s: & str) {
     println!("{}  {}", self.error_style.paint(prefix), s)
   }
@@ -98,16 +104,24 @@ impl Log {
     println!("{}{}", prefix, s)
   }
   fn log(& self, t: Technique, bla: String) {
-    println!("{}{}:", prefix, self.bold.paint(t.to_str())) ;
-    for line in bla.lines() {
-      println!("{}  {}", prefix, line)
+    let mut lines = bla.lines() ;
+    println!(
+      "{}{}: {}",
+      prefix, self.bold.paint(t.to_str()), lines.next().unwrap()
+    ) ;
+    for line in lines {
+      println!("{}    {}", prefix, line)
     } ;
     self.space()
   }
   fn master_log(& self, bla: String) {
-    println!("{}{}:", prefix, self.success_style.paint("kino")) ;
-    for line in bla.lines() {
-      println!("{}  {}", prefix, line)
+    let mut lines = bla.lines() ;
+    println!(
+      "{}{}: {}",
+      prefix, self.success_style.paint("kino"), lines.next().unwrap()
+    ) ;
+    for line in lines {
+      println!("{}    {}", prefix, line)
     } ;
     self.space()
   }
@@ -130,7 +144,7 @@ fn launch(
   thread::spawn(
     move || bmc::run(
       sys, props.clone(), Event::mk(
-        sender, Technique::Bmc, factory
+        sender, Technique::Bmc, factory, & props
       )
     )
   ) ;
@@ -142,9 +156,32 @@ fn launch(
   loop {
     match receiver.recv() {
       Ok( Bla(from, bla) ) => log.log(from, bla),
-      Ok(_) => log.master_log("received event".to_string()),
+      Ok( Error(from, bla) ) => {
+        log.error_from(from) ;
+        for line in bla.lines() {
+          log.error_line(line)
+        }
+      },
+      Ok( Disproved(props, from, info) ) => {
+        if props.len() > 1 {
+          let mut s = format!(
+            "falsified {} properties {}", props.len(), info
+          ) ;
+          for prop in props.iter() {
+            s = format!("{}\n  {}", s, prop)
+          } ;
+          log.log(from, s)
+        } else {
+          assert!(props.len() == 1) ;
+          log.log(from, format!("falsified {} {}", props[0], info))
+        }
+      },
+      Ok( Done(t, info) ) => log.master_log(
+        format!("{} is done {}", log.bold.paint(t.to_str()), info)
+      ),
+      Ok( _ ) => log.master_log("received a message".to_string()),
       Err(_) => {
-        log.master_log("channel is closed, exiting".to_string()) ;
+        // log.master_log("all techniques are done, exiting".to_string()) ;
         break
       },
     }

@@ -10,7 +10,7 @@
 extern crate term ;
 extern crate system ;
 
-use std::collections::HashMap ;
+use std::collections::{ HashSet, HashMap } ;
 
 use term::* ;
 use term::smt::* ;
@@ -189,6 +189,7 @@ pub struct PropManager {
   factory: Factory,
   props: HashMap<Sym, (Prop, Var, Term)>,
   offset: Offset2,
+  no_check: HashSet<Sym>,
 }
 impl PropManager {
   pub fn mk(
@@ -216,23 +217,31 @@ impl PropManager {
       let was_there = map.insert( prop.sym().clone(), (prop, fresh, term) ) ;
       assert!(was_there.is_none())
     } ;
+    let no_check = HashSet::with_capacity(map.len()) ;
     Ok(
-      PropManager { factory: factory, props: map, offset: offset }
+      PropManager {
+        factory: factory, props: map, offset: offset, no_check: no_check
+      }
     )
   }
+  pub fn len(& self) -> usize { self.props.len() }
+  pub fn none_left(& self) -> bool { self.props.is_empty() }
   pub fn forget(
-    & mut self, solver: & mut Solver, prop: Sym
+    & mut self, solver: & mut Solver, props: & [Sym]
   ) -> UnitSmtRes {
-    match self.props.remove(& prop) {
-      Some( (_, actlit, _) ) => solver.assert(
-        & self.factory.op(
-          Operator::Not, vec![ self.factory.mk_var(actlit) ]
-        ), & self.offset
-      ),
-      None => panic!(
-        "[prop manager] asked to forget a property I did not know"
-      ),
-    }
+    for prop in props {
+      match self.props.remove(& prop) {
+        Some( (_, actlit, _) ) => try!(
+          solver.assert(
+            & self.factory.op(
+              Operator::Not, vec![ self.factory.mk_var(actlit) ]
+            ), & self.offset
+          )
+        ),
+        None => (),
+      }
+    } ;
+    Ok(())
   }
   pub fn activate(
     & self, solver: & mut Solver, at: & Offset2
@@ -244,8 +253,10 @@ impl PropManager {
   }
   pub fn one_false(& self) -> Term {
     let mut props = Vec::with_capacity(self.props.len()) ;
-    for (_, & (ref prop, _, _)) in self.props.iter() {
-      props.push( prop.body().clone() )
+    for (ref sym, & (ref prop, _, _)) in self.props.iter() {
+      if ! self.no_check.contains(sym) {
+        props.push( prop.body().clone() )
+      }
     } ;
     self.factory.op(
       Operator::Not,
@@ -259,9 +270,55 @@ impl PropManager {
   }
   pub fn actlits(& self) -> Vec<Var> {
     let mut vec = Vec::with_capacity(self.props.len()) ;
-    for (_, & (_, ref act, _)) in self.props.iter() {
-      vec.push(act.clone())
+    for (ref sym, & (_, ref act, _)) in self.props.iter() {
+      if ! self.no_check.contains(sym) {
+        vec.push(act.clone())
+      }
     } ;
     vec
+  }
+  pub fn get_false(
+    & self, solver: & mut Solver, o: & Offset2
+  ) -> SmtRes<Vec<Sym>> {
+    use term::smt::sync::SyncedExprPrint ;
+    let mut terms = Vec::with_capacity(self.props.len()) ;
+    let mut back_map = HashMap::with_capacity(self.props.len()) ;
+    for (ref sym, & (ref prop, _, _)) in self.props.iter() {
+      if ! self.no_check.contains(sym) {
+        terms.push(prop.body().clone()) ;
+        match back_map.insert(prop.body().clone(), prop.sym().clone()) {
+          None => (),
+          Some(_) => unreachable!(),
+        }
+      }
+    } ;
+    match solver.get_values(& terms, o) {
+      Ok(vec) => {
+        let mut syms = Vec::with_capacity(7) ;
+        for ((t, _), v) in vec {
+          match * v.get() {
+            term::real::Cst::Bool(true) => (),
+            term::real::Cst::Bool(false) => match back_map.remove(& t) {
+              Some(sym) => syms.push(sym),
+              None => unreachable!(),
+            },
+            _ => panic!("[unroller.get_values] unexpected prop value {}", v)
+          }
+        } ;
+        Ok(syms)
+      },
+      Err(e) => Err(e),
+    }
+  }
+  pub fn no_check(& mut self, props: & Vec<Sym>) {
+    for prop in props.iter() {
+      let was_there = self.no_check.insert(prop.clone()) ;
+      if was_there {
+        panic!("[manager.no_check] no_check on property already not checked")
+      }
+    }
+  }
+  pub fn reset_no_check(& mut self) {
+    self.no_check.clear()
   }
 }

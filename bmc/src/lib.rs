@@ -12,8 +12,6 @@ extern crate event ;
 extern crate system ;
 extern crate unroll ;
 
-use std::thread::sleep_ms ;
-
 use term::Offset2 ;
 use term::smt::* ;
 use term::smt::sync::* ;
@@ -29,8 +27,8 @@ macro_rules! try_error {
     match $e {
       Ok(v) => v,
       Err(e) => {
-        $event.log( & format!("error: {:?}", e) ) ;
-        panic!("error in bmc")
+        $event.error( & format!("{:?}", e) ) ;
+        return ()
       },
     }
   )
@@ -39,11 +37,11 @@ macro_rules! try_error {
 pub fn run(
   sys: Sys, props: Vec<Prop>, event: Event
 ) {
-  event.log(
-    & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
-  ) ;
+  // event.log(
+  //   & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
+  // ) ;
 
-  event.log("creating solver") ;
+  // event.log("creating solver") ;
 
   let conf = SolverConf::z3().print_success() ;
   let factory = event.factory().clone() ;
@@ -52,21 +50,21 @@ pub fn run(
   let mut k = Offset2::init() ;
 
   match Solver::mk(z3_cmd(), conf, factory.clone()) {
-    Err(e) => event.log( & format!("error:\n  {:?}", e) ),
+    Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
     Ok(mut solver) => {
 
-      event.log("declaring functions, init and trans") ;
+      // event.log("declaring functions, init and trans") ;
       try_error!(
         sys.defclare_funs(& mut solver), event
       ) ;
 
-      event.log("declare svar@0 and assert init@0") ;
+      // event.log("declare svar@0 and assert init@0") ;
       try_error!(
         sys.assert_init(& mut solver, & k), event
       ) ;
 
-      event.log("creating manager, declaring actlits") ;
-      let props = try_error!(
+      // event.log("creating manager, declaring actlits") ;
+      let mut props = try_error!(
         PropManager::mk(factory.clone(), props, & mut solver),
         event
       ) ;
@@ -77,45 +75,69 @@ pub fn run(
         let one_prop_false = props.one_false() ;
 
         let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
-        event.log(
-          & format!(
-            "defining actlit {}\nto imply {} at {}",
-            lit, one_prop_false, k.curr()
-          )
-        ) ;
+        // event.log(
+        //   & format!(
+        //     "defining actlit {}\nto imply {} at {}",
+        //     lit, one_prop_false, k.curr()
+        //   )
+        // ) ;
         let check = actlit.mk_impl(& lit, one_prop_false) ;
 
-        try_error!(
-          solver.assert(& check, & k), event
-        ) ;
+        try_error!(solver.assert(& check, & k), event) ;
 
-        event.log(
-          & format!("check-sat assuming {}", lit)
-        ) ;
+        // event.log(& format!("check-sat assuming {}", lit)) ;
 
         let mut actlits = props.actlits() ;
         actlits.push(lit) ;
 
+        event.log(
+          & format!(
+            "checking {} {} @{}",
+            props.len(),
+            if props.len() == 1 { "property" } else { "properties" },
+            k.curr()
+          )
+        ) ;
+
         match solver.check_sat_assuming( & actlits, k.curr() ) {
           Ok(true) => {
-            event.log("sat")
+            // event.log("sat, getting falsified properties") ;
+            match props.get_false(& mut solver, & k) {
+              Ok(falsified) => {
+                // let mut s = "falsified:".to_string() ;
+                // for sym in falsified.iter() {
+                //   s = format!("{}\n  {}", s, sym)
+                // } ;
+                // event.log(& s) ;
+                try_error!( props.forget(& mut solver, & falsified), event ) ;
+                event.disproved_at(falsified, k.curr())
+              },
+              Err(e) => {
+                event.error( & format!("could not get falsifieds\n{:?}", e) ) ;
+                break
+              },
+            }
           },
           Ok(false) => {
-            event.log("unsat")
+            // event.log("unsat")
+            ()
           },
-          Err(e) => event.log( & format!("{:?}", e) ),
+          Err(e) => {
+            event.error( & format!("could not perform check-sat\n{:?}", e) ) ;
+            break
+          },
         } ;
 
-        event.log( & format!("unrolling to {}", k.next()) ) ;
+        if props.none_left() {
+          event.done_at(k.curr()) ;
+          break
+        }
+
         try_error!( sys.unroll(& mut solver, & k), event ) ;
 
-        k = k.nxt() ;
+        k = k.nxt()
 
-        sleep_ms(500) ;
-
-        ()
-
-      }
+      } ;
     },
   }
 }

@@ -202,6 +202,15 @@ pub enum Smt2Offset {
   /** Term has two offsets: state variables are current and next. */
   Two(Offset, Offset),
 }
+impl fmt::Display for Smt2Offset {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      Smt2Offset::No => write!(fmt, "()"),
+      Smt2Offset::One(o) => write!(fmt, "({})", o),
+      Smt2Offset::Two(o1,o2) => write!(fmt, "({},{})", o1, o2),
+    }
+  }
+}
 impl Smt2Offset {
   /** Returns `No` offset if parameter is `None`, and `One` offset
   otherwise. */
