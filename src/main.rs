@@ -1,5 +1,4 @@
 #![allow(non_upper_case_globals)]
-#![warn(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -48,13 +47,13 @@ use term::{ Sym, Term } ;
 use sys::{ Prop, Sys } ;
 use sys::ctxt::* ;
 
-use event::Technique ;
+use event::{ MsgUp, MsgDown, CanRun, Technique, Event } ;
 
 static header: & 'static str = "|=====| " ;
 static trailer: & 'static str = "|=====|" ;
 static prefix: & 'static str = "| " ;
 
-struct Log {
+pub struct Log {
   pub bold: Style,
   pub success_style: Colour,
   pub success: ANSIString<'static>,
@@ -127,34 +126,83 @@ impl Log {
   }
 }
 
+/** Wrapper around master and kids receive and send channels. */
+pub struct KidManager {
+  /** Receives messages from kids. */
+  r: mpsc::Receiver<MsgUp>,
+  /** Sends messages to master. */
+  s: mpsc::Sender<MsgUp>,
+  /** Senders to running techniques. */
+  senders: HashMap<Technique, mpsc::Sender<MsgDown>>,
+}
+impl KidManager {
+  /** Constructs a kid manager. */
+  pub fn mk(log: & Log) -> Self {
+    log.master_log("creating upward channel".to_string()) ;
+    let (sender, receiver) = mpsc::channel() ;
+    KidManager { r: receiver, s: sender, senders: HashMap::new() }
+  }
+  /** Launches a technique. */
+  pub fn launch<T: CanRun + Send + 'static>(
+    & mut self, log: & Log,
+    t: T, sys: Sys, props: Vec<Prop>, f: & term::Factory
+  ) {
+    log.master_log(
+      format!("creating downward channel for {}", t.id().to_str())
+    ) ;
+    let (s,r) = mpsc::channel() ;
+    let id = t.id().clone() ;
+    let event = Event::mk(
+      self.s.clone(), r, t.id().clone(), f.clone(), & props
+    ) ;
+    thread::spawn( move || t.run(sys, props, event) ) ;
+    match self.senders.insert(id, s) {
+      None => (),
+      Some(_) => {
+        log.error() ;
+        log.error_line(
+          & format!("technique {} is already running", id.to_str())
+        )
+      },
+    }
+  }
+  /** Receive a message from the kids. */
+  #[inline(always)]
+  pub fn recv(& self) -> Result<MsgUp, mpsc::RecvError> {
+    self.r.recv()
+  }
+  /** Forget a kid. */
+  #[inline(always)]
+  pub fn forget(& mut self, t: & Technique) {
+    match self.senders.remove(t) {
+      Some(_) => (),
+      None => panic!("[kid_manager.forget] did not know {}", t.to_str()),
+    }
+  }
+  /** True iff there's no more kids known by the manager. */
+  #[inline(always)]
+  pub fn kids_done(& self) -> bool { self.senders.is_empty() }
+}
+
 fn launch(
   log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
 ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
-  use event::{ MsgUp, Event } ;
   use event::MsgUp::* ;
   log.title("Running") ;
   log.space() ;
 
-  log.master_log("creating channel".to_string()) ;
-  let (sender, receiver) = mpsc::channel::<MsgUp>() ;
+  let mut manager = KidManager::mk(log) ;
 
-  // Launch BMC.
-  log.master_log("spawning bmc".to_string()) ;
-  let factory = c.factory().clone() ;
-  thread::spawn(
-    move || bmc::run(
-      sys, props.clone(), Event::mk(
-        sender, Technique::Bmc, factory, & props
-      )
-    )
-  ) ;
+  manager.launch(log, bmc::Bmc, sys.clone(), props.clone(), c.factory()) ;
 
   log.master_log("entering receive loop".to_string()) ;
   log.title("") ;
   log.space() ;
 
   loop {
-    match receiver.recv() {
+    if manager.kids_done() { break } ;
+
+    match manager.recv() {
       Ok( Bla(from, bla) ) => log.log(from, bla),
       Ok( Error(from, bla) ) => {
         log.error_from(from) ;
@@ -176,12 +224,18 @@ fn launch(
           log.log(from, format!("falsified {} {}", props[0], info))
         }
       },
-      Ok( Done(t, info) ) => log.master_log(
-        format!("{} is done {}", log.bold.paint(t.to_str()), info)
-      ),
+      Ok( Done(t, info) ) => {
+        log.master_log(
+          format!("{} is done {}", log.bold.paint(t.to_str()), info)
+        ) ;
+        manager.forget(& t)
+      },
       Ok( _ ) => log.master_log("received a message".to_string()),
-      Err(_) => {
-        // log.master_log("all techniques are done, exiting".to_string()) ;
+      Err(e) => {
+        log.error() ;
+        for line in (format!("{:?}", e)).lines() {
+          log.error_line(line)
+        } ;
         break
       },
     }

@@ -12,14 +12,14 @@ extern crate system as sys ;
 
 use std::fmt ;
 // use std::sync::{ RwLock } ;
-use std::sync::mpsc::Sender ;
+use std::sync::mpsc::{ Sender, Receiver } ;
 use std::collections::HashMap ;
 
 use term::{
   Offset, Term, Sym, Factory
 } ;
 
-use sys::Prop ;
+use sys::{ Prop, Sys } ;
 
 // pub type InvariantSet = RwLock<HashMap<Sym, Term>> ;
 
@@ -31,8 +31,13 @@ pub enum MsgDown {
   Forget(Sym),
 }
 
+pub trait CanRun {
+  fn id(& self) -> Technique ;
+  fn run(& self, sys: Sys, props: Vec<Prop>, event: Event) ;
+}
+
 /** Enumerates the techniques. */
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Technique {
   /** Bounded model checking. */
   Bmc,
@@ -82,8 +87,10 @@ pub enum MsgUp {
 
 /** Used by the techniques to communicate with kino. */
 pub struct Event {
-  /** Sender to kino, */
-  r: Sender<MsgUp>,
+  /** Sender to kino. */
+  s: Sender<MsgUp>,
+  /** Receiver from kino. */
+  r: Receiver<MsgDown>,
   /** Identifier of the technique. */
   t: Technique,
   /** Term factory. */
@@ -94,7 +101,8 @@ pub struct Event {
 impl Event {
   /** Creates a new `Event`. */
   pub fn mk(
-    r: Sender<MsgUp>, t: Technique, f: Factory, props: & [Prop]
+    s: Sender<MsgUp>, r: Receiver<MsgDown>,
+    t: Technique, f: Factory, props: & [Prop]
   ) -> Self {
     let mut k_true = HashMap::with_capacity(props.len()) ;
     for prop in props {
@@ -103,11 +111,11 @@ impl Event {
         Some(_) => unreachable!(),
       }
     } ;
-    Event { r: r, t: t, f: f, k_true: k_true }
+    Event { s: s, r: r, t: t, f: f, k_true: k_true }
   }
   /** Sends a done message upwards. */
   pub fn done(& self, info: Info) {
-    self.r.send(
+    self.s.send(
       MsgUp::Done(self.t, info)
     ).unwrap()
   }
@@ -117,13 +125,13 @@ impl Event {
   }
   /** Sends a proved message upwards. */
   pub fn proved(& self, props: Vec<Sym>, info: Info) {
-    self.r.send(
+    self.s.send(
       MsgUp::Proved(props, self.t, info)
     ).unwrap()
   }
   /** Sends a falsification message upwards. */
   pub fn disproved(& self, props: Vec<Sym>, info: Info) {
-    self.r.send(
+    self.s.send(
       MsgUp::Disproved(props, self.t, info)
     ).unwrap()
   }
@@ -133,13 +141,13 @@ impl Event {
   }
   /** Sends a log message upwards. */
   pub fn log(& self, s: & str) {
-    self.r.send(
+    self.s.send(
       MsgUp::Bla(self.t, s.to_string())
     ).unwrap()
   }
   /** Sends a log message upwards. */
   pub fn error(& self, s: & str) {
-    self.r.send(
+    self.s.send(
       MsgUp::Error(self.t, s.to_string())
     ).unwrap()
   }
