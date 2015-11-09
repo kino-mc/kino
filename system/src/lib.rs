@@ -84,28 +84,30 @@ pub mod smt {
     sys: & ::Sys, solver: & mut Solver<Factory>, o: & Offset2
   ) -> UnitSmtRes {
     let init = sys.init() ;
-    let mut init_args = Vec::with_capacity(init.1.len()) ;
-    for &(ref v, ref typ) in init.1.iter() {
-      init_args.push( ( (v, o), * typ ) ) ;
-    } ;
+    // let mut init_args = Vec::with_capacity(init.1.len()) ;
+    // for &(ref v, ref typ) in init.1.iter() {
+    //   init_args.push( ( (v, o), * typ ) ) ;
+    // } ;
     try!(
       solver.define_fun(
-        init.0.get(),
-        & init_args,
+        & init.0,
+        & init.1,
         & Type::Bool,
-        & (& init.2, o)
+        & init.2,
+        o
       )
     ) ;
     let trans = sys.trans() ;
-    let mut trans_args = Vec::with_capacity(trans.1.len()) ;
-    for &(ref v, ref typ) in trans.1.iter() {
-      trans_args.push( ( (v, o), * typ ) ) ;
-    } ;
+    // let mut trans_args = Vec::with_capacity(trans.1.len()) ;
+    // for &(ref v, ref typ) in trans.1.iter() {
+    //   trans_args.push( ( (v, o), * typ ) ) ;
+    // } ;
     solver.define_fun(
-      trans.0.get(),
-      & trans_args,
+      & trans.0,
+      & trans.1,
       & Type::Bool,
-      & (& trans.2, o)
+      & trans.2,
+      o
     )
   }
 
@@ -113,13 +115,12 @@ pub mod smt {
     /** Declares/defines UFs, functions, and system init/trans predicates. */
     fn defclare_funs(& self, & mut Solver<Factory>) -> UnitSmtRes ;
     /** Declares state variables at some offset. */
-    fn declare_svars(
-      & self, & mut Solver<Factory>, & Factory, & Offset
-    ) -> UnitSmtRes ;
+    fn declare_svars(& self, & mut Solver<Factory>, & Offset) -> UnitSmtRes ;
   }
   impl Unroller for ::Sys {
     fn defclare_funs(& self, solver: & mut Solver<Factory>) -> UnitSmtRes {
       use ::real::Callable::* ;
+      // Will not really be used.
       let offset = Offset2::init() ;
 
       // Declaring UFs and defining functions.
@@ -127,20 +128,21 @@ pub mod smt {
         match * * fun {
           Dec(ref fun) => {
             try!(
-              solver.declare_fun( fun.sym().get(), fun.sig(), fun.typ() )
+              solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
             ) ;
           },
           Def(ref fun) => {
-            let mut args = Vec::with_capacity(fun.args().len()) ;
-            for & (ref sym, ref typ) in fun.args() {
-              args.push( ( (* sym.get()).clone(), * typ) )
-            } ;
+            // let mut args = Vec::with_capacity(fun.args().len()) ;
+            // for & (ref sym, ref typ) in fun.args() {
+            //   args.push( ( (* sym.get()).clone(), * typ) )
+            // } ;
             try!(
               solver.define_fun(
-                fun.sym().get(),
-                & args,
+                fun.sym(),
+                fun.args(),
                 fun.typ(),
-                & (fun.body(), & offset)
+                fun.body(),
+                & offset
               )
             )
           },
@@ -157,11 +159,11 @@ pub mod smt {
     }
 
     fn declare_svars(
-      & self, solver: & mut Solver<Factory>, factory: & Factory, o: & Offset
+      & self, solver: & mut Solver<Factory>, o: & Offset
     ) -> UnitSmtRes {
       for & (ref var, ref typ) in self.init().1.iter() {
         try!(
-          solver.declare_fun(& (var, o), & vec![], typ)
+          solver.declare_fun(var, & vec![], typ, o)
         )
       } ;
       Ok(())

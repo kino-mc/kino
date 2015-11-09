@@ -46,12 +46,12 @@ pub fn run(
 
       event.log("declaring state@0") ;
       try_error!(
-        sys.declare_svars(& mut solver, & factory, k.curr()), event
+        sys.declare_svars(& mut solver, k.curr()), event
       ) ;
 
       event.log( "asserting init@0" ) ;
       try_error!(
-        solver.assert( & (sys.init_term(), & k) ), event
+        solver.assert(sys.init_term(), & k), event
       ) ;
 
       let cpt = 0 ;
@@ -77,9 +77,10 @@ pub fn run(
 
         try_error!(
           solver.declare_fun(
-            & (& actlit, k.curr()),
+            & actlit,
             & Vec::<Type>::new(),
-            & Type::Bool
+            & Type::Bool,
+            k.curr(),
           ), event
         ) ;
 
@@ -91,14 +92,14 @@ pub fn run(
         ) ;
 
         try_error!(
-          solver.assert(& (& e, & k)), event
+          solver.assert(& e, & k), event
         ) ;
 
         event.log(
           & format!("check-sat assuming {}", actlit)
         ) ;
 
-        match solver.check_sat_assuming( & vec![(& actlit, k.curr())] ) {
+        match solver.check_sat_assuming( & [actlit], k.curr() ) {
           Ok(true) => event.log("sat"),
           Ok(false) => event.log("unsat"),
           Err(e) => event.log( & format!("{:?}", e) ),

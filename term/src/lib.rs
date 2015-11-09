@@ -134,10 +134,7 @@ pub mod write {
 pub mod smt {
   use ::std::process::Command ;
 
-  pub use ::rsmt2::{
-    Sort2Smt, Sym2Smt, Expr2Smt,
-    SortInfo2Smt, SymInfo2Smt, ExprInfo2Smt,
-  } ;
+  pub use ::rsmt2::{ Sort2Smt, Sym2Smt, Expr2Smt } ;
 
   /** Wraps an SMT solver. */
   pub type Solver = ::rsmt2::Solver<::Factory> ;
@@ -148,9 +145,9 @@ pub mod smt {
   pub use ::rsmt2::sync ;
   pub use ::rsmt2::async ;
 
-  impl Sym2Smt for ::real::Sym {
+  impl Sym2Smt<::Offset> for ::Sym {
     fn sym_to_smt2(
-      & self, writer: & mut ::std::io::Write
+      & self, writer: & mut ::std::io::Write, _: & ::Offset
     ) -> ::std::io::Result<()> {
       use base::SymWritable ;
       use base::SymPrintStyle ;
@@ -160,9 +157,21 @@ pub mod smt {
     }
   }
 
-  impl SymInfo2Smt<::Offset> for ::Var {
-    fn sym_info_to_smt2(
-      & self, info: & ::Offset, writer: & mut ::std::io::Write
+  impl Sym2Smt<::Offset2> for ::Sym {
+    fn sym_to_smt2(
+      & self, writer: & mut ::std::io::Write, _: & ::Offset2
+    ) -> ::std::io::Result<()> {
+      use base::SymWritable ;
+      use base::SymPrintStyle ;
+      try!( write!(writer, "|") ) ;
+      try!( self.write(writer, SymPrintStyle::Internal) ) ;
+      write!(writer, "|")
+    }
+  }
+
+  impl Sym2Smt<::Offset> for ::Var {
+    fn sym_to_smt2(
+      & self, writer: & mut ::std::io::Write, info: & ::Offset
     ) -> ::std::io::Result<()> {
       use base::StateWritable ;
       use base::SymPrintStyle ;
@@ -170,13 +179,22 @@ pub mod smt {
     }
   }
 
-  impl SymInfo2Smt<::Offset2> for ::Var {
-    fn sym_info_to_smt2(
-      & self, info: & ::Offset2, writer: & mut ::std::io::Write
+  impl Sym2Smt<::Offset2> for ::Var {
+    fn sym_to_smt2(
+      & self, writer: & mut ::std::io::Write, info: & ::Offset2
     ) -> ::std::io::Result<()> {
       use base::StateWritable ;
       use base::SymPrintStyle ;
       self.write(writer, info, SymPrintStyle::Internal)
+    }
+  }
+
+  impl Expr2Smt<::Offset2> for ::Term {
+    fn expr_to_smt2(
+      & self, writer: & mut ::std::io::Write, offset: & ::Offset2
+    ) -> ::std::io::Result<()> {
+      use base::PrintSmt2 ;
+      self.to_smt2(writer, offset)
     }
   }
 
@@ -186,15 +204,6 @@ pub mod smt {
     ) -> ::std::io::Result<()> {
       use base::Writable ;
       self.write(writer)
-    }
-  }
-
-  impl ExprInfo2Smt<::Offset2> for ::Term {
-    fn expr_info_to_smt2(
-      & self, offset: & ::Offset2, writer: & mut ::std::io::Write
-    ) -> ::std::io::Result<()> {
-      use base::PrintSmt2 ;
-      self.to_smt2(writer, offset)
     }
   }
 }
