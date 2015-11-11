@@ -1,4 +1,5 @@
 #![allow(non_upper_case_globals)]
+#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -54,12 +55,13 @@ static header: & 'static str = "|=====| " ;
 static trailer: & 'static str = "|=====|" ;
 static prefix: & 'static str = "| " ;
 
+/** Provides logging helper functions. */
 pub struct Log {
-  pub bold: Style,
-  pub success_style: Colour,
-  pub success: ANSIString<'static>,
-  pub error_style: Style,
-  pub error: ANSIString<'static>,
+  bold: Style,
+  success_style: Colour,
+  success: ANSIString<'static>,
+  error_style: Style,
+  error: ANSIString<'static>,
 }
 impl Log {
   fn mk() -> Self {

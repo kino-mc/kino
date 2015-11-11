@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -6,6 +7,10 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+/*! Bounded model-checking.
+
+*/
 
 extern crate term ;
 extern crate event ;
@@ -35,6 +40,7 @@ macro_rules! try_error {
   )
 }
 
+/** Bounded model-checking. */
 pub struct Bmc ;
 unsafe impl Send for Bmc {}
 impl event::CanRun for Bmc {
@@ -150,7 +156,7 @@ impl event::CanRun for Bmc {
               }
             },
             Ok(false) => {
-              event.k_true(props.get_checked(), k.curr())
+              event.k_true(props.not_inhibited(), k.curr())
             },
             Err(e) => {
               event.error(

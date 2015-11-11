@@ -274,7 +274,9 @@ impl Smt2Offset {
 /** Redefinition of the thread-safe hash consign type. */
 pub type HConsign<T> = Arc<Mutex<HashConsign<T>>> ;
 
+/** Can create itself from nothing. */
 pub trait Mkable {
+  /** Creates a new `Self` from unit. */
   fn mk() -> Self ;
 }
 

@@ -350,7 +350,7 @@ impl BindMaker<Term> for TermConsign {
   }
 }
 
-
+/** A trait aggregating variable, constant, and term making traits. */
 pub trait Factory :
   VarMaker<Sym, Term> +
   CstMaker<Cst> +

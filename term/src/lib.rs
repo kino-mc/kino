@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -144,8 +145,13 @@ pub mod smt {
 
   /** Wraps an SMT solver. */
   pub type Solver = ::rsmt2::Solver<::Factory> ;
+
   #[inline(always)]
+  /** The default z3 command. */
   pub fn z3_cmd() -> Command { Command::new("z3") } 
+  #[inline(always)]
+  /** The default cvc4 command. */
+  pub fn cvc4_cmd() -> Command { Command::new("cvc4") } 
 
   impl Sym2Smt<::Offset> for ::Sym {
     fn sym_to_smt2(

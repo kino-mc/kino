@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -6,6 +7,10 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+/*! K-induction.
+
+*/
 
 extern crate term ;
 extern crate event ;
@@ -37,6 +42,7 @@ macro_rules! try_error {
   )
 }
 
+/** K-induction. */
 pub struct KInd ;
 unsafe impl Send for KInd {}
 impl event::CanRun for KInd {
@@ -86,7 +92,7 @@ impl event::CanRun for KInd {
 
         'out: loop {
 
-          props.reset_no_check() ;
+          props.reset_inhibited() ;
 
           match event.recv() {
             None => return (),
@@ -149,7 +155,7 @@ impl event::CanRun for KInd {
                     //   s = format!("{}\n  {}", s, sym)
                     // } ;
                     // event.log(& s) ;
-                    props.no_check(& falsified) ;
+                    props.inhibit(& falsified) ;
                   },
                   Err(e) => {
                     event.error(
@@ -160,7 +166,7 @@ impl event::CanRun for KInd {
                 }
               },
               Ok(false) => {
-                let unfalsifiable = props.get_checked() ;
+                let unfalsifiable = props.not_inhibited() ;
                 // Wait until we get something.
                 loop {
                   let mut invariant = true ;
@@ -213,7 +219,7 @@ impl event::CanRun for KInd {
               },
             } ;
 
-            if props.check_is_empty() { break }
+            if props.all_inhibited() { break }
           } ;
 
           if props.none_left() {

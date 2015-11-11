@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -6,6 +7,8 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+/*! Messages, structures for receiving and sending messages. */
 
 extern crate term ;
 extern crate system as sys ;
@@ -28,17 +31,24 @@ use sys::{ Prop, Sys } ;
 /** Message from kino to the techniques. */
 #[derive(Debug,Clone)]
 pub enum MsgDown {
+  /** Contains invariants for a system. */
   Invariants(Sym, Vec<Term>),
+  /** Some properties have been proved or disproved. */
   Forget(Vec<Sym>),
+  /** Some properties were found k-true. */
   KTrue(Vec<Sym>, Offset),
 }
 
+/** Trait the techniques should implement so that kino can call them in a
+generic way. */
 pub trait CanRun {
+  /** The identifier of the technique. */
   fn id(& self) -> Technique ;
+  /** Runs the technique. */
   fn run(& self, sys: Sys, props: Vec<Prop>, event: Event) ;
 }
 
-/** Enumerates the techniques. */
+/** Enumeration of the techniques. */
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Technique {
   /** Bounded model checking. */
@@ -59,7 +69,10 @@ impl Technique {
 
 /** Info a technique can communicate. */
 pub enum Info {
+  /** Typical techniques unroll the system, this communicates the number of
+  unrollings. */
   At(Offset),
+  /** An error occurred. */
   Error,
 }
 impl fmt::Display for Info {

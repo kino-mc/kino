@@ -22,6 +22,7 @@ pub struct RealSym {
   sym: String
 }
 impl RealSym {
+  /** The verbatim string representation of the symbol. */
   pub fn sym(& self) -> & str { & self.sym }
 }
 

@@ -107,6 +107,7 @@ pub enum Res {
   CheckAss(::Sys, Vec<::Prop>, Vec<Term>)
 }
 impl Res {
+  /** A multi-line representation of the result of a parsing attempty */
   pub fn lines(& self) -> String {
     match * self {
       Res::Exit => "exit".to_string(),
@@ -393,10 +394,16 @@ impl Context {
 }
 
 
+/** Trait use to allow adding functions, properties and systems to a context.
 
+The point is that this trait should not be public outside of the library, so
+that it cannot be corrupted. */
 pub trait CanAdd {
+  /** Adds a function. */
   fn add_callable(& mut self, Callable) ;
+  /** Adds a property. */
   fn add_prop(& mut self, Prop) ;
+  /** Adds a system. */
   fn add_sys(& mut self, Sys) ;
 }
 

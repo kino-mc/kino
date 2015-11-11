@@ -54,6 +54,7 @@ impl fmt::Display for TermAndDep {
   }
 }
 impl TermAndDep {
+  /** Creates a term with dependencies from a variable. */
   pub fn var(factory: & Factory, var: Var) -> Self {
     let term = factory.mk_var(var.clone()) ;
     let mut vars = HashSet::new() ;
@@ -67,6 +68,7 @@ impl TermAndDep {
       qf: true,
     }
   }
+  /** Creates a term with dependencies from a constant. */
   pub fn cst(factory: & Factory, cst: Cst) -> Self {
     use term::CstMaker ;
     let mut types = HashSet::new() ;
@@ -82,6 +84,7 @@ impl TermAndDep {
     }
   }
 
+  /** Merges some terms with dependencies. */
   #[inline(always)]
   fn merge(kids: Vec<TermAndDep>) -> (
     Vec<Term>,
@@ -114,6 +117,7 @@ impl TermAndDep {
     ( subs, apps, vars, types, kids_with_vars, linear, qf )
   }
 
+  /** Parses an operator. */
   pub fn op(factory: & Factory, op: Operator, kids: Vec<TermAndDep>) -> Self {
     use term::Operator::* ;
     use term::OpMaker ;
@@ -135,6 +139,7 @@ impl TermAndDep {
     }
   }
 
+  /** Parses an application. */
   pub fn app(factory: & Factory, sym: Sym, kids: Vec<TermAndDep>) -> Self {
     use term::AppMaker ;
     let (
@@ -153,6 +158,7 @@ impl TermAndDep {
     }
   }
 
+  /** Parses a quantifier. */
   fn quantifier(
     factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep, univ: bool
   ) -> Self {
@@ -187,18 +193,21 @@ impl TermAndDep {
     }
   }
 
+  /** Parses a universal quantifier. */
   pub fn forall(
     factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep
   ) -> Self {
     Self::quantifier(factory, bindings, kid, true)
   }
 
+  /** Parses an existential quantifier. */
   pub fn exists(
     factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep
   ) -> Self {
     Self::quantifier(factory, bindings, kid, true)
   }
 
+  /** Parses a let binding. */
   pub fn let_b(
     factory: & Factory, bindings: Vec<(Sym, TermAndDep)>, kid: TermAndDep
   ) -> Self {

@@ -1,4 +1,5 @@
 #![allow(non_upper_case_globals)]
+#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
