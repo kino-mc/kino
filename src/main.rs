@@ -134,7 +134,7 @@ impl KidManager {
   pub fn launch<T: CanRun + Send + 'static>(
     & mut self, log: & Log,
     t: T, sys: Sys, props: Vec<Prop>, f: & term::Factory
-  ) {
+  ) -> Result<(), ()> {
     log.master_log(
       format!("spawning {}", t.id().to_str())
     ) ;
@@ -143,14 +143,27 @@ impl KidManager {
     let event = Event::mk(
       self.s.clone(), r, t.id().clone(), f.clone(), & props
     ) ;
-    thread::spawn( move || t.run(sys, props, event) ) ;
+    match thread::Builder::new().name(id.thread_name()).spawn(
+      move || t.run(sys, props, event)
+    ) {
+      Ok(_) => (),
+      Err(e) => {
+        log.error() ;
+        log.error_line(
+          & format!("could not spawn process {}:", id.desc())
+        ) ;
+        log.error_line( & format!("{}", e) ) ;
+        return Err(())
+      },
+    } ;
     match self.senders.insert(id, s) {
-      None => (),
+      None => Ok(()),
       Some(_) => {
         log.error() ;
         log.error_line(
           & format!("technique {} is already running", id.to_str())
-        )
+        ) ;
+        Err(())
       },
     }
   }
@@ -195,11 +208,11 @@ fn launch(
 
   let mut manager = KidManager::mk() ;
 
-  manager.launch(
-    log, bmc::Bmc, sys.clone(), props.clone(), c.factory()
+  try!(
+    manager.launch(log, bmc::Bmc, sys.clone(), props.clone(), c.factory())
   ) ;
-  manager.launch(
-    log, kind::KInd, sys.clone(), props.clone(), c.factory()
+  try!(
+    manager.launch(log, kind::KInd, sys.clone(), props.clone(), c.factory())
   ) ;
 
   // log.master_log("entering receive loop".to_string()) ;

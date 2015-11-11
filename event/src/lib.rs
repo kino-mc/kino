@@ -57,12 +57,31 @@ pub enum Technique {
   KInd,
 }
 impl Technique {
-  /** A string representation of a technique. */
+  /** A short string representation of a technique. */
+  #[inline(always)]
   pub fn to_str(& self) -> & str {
     use Technique::* ;
     match * self {
       Bmc => "bmc",
       KInd => "k-ind",
+    }
+  }
+  /** A description of a technique. */
+  #[inline(always)]
+  pub fn desc(& self) -> & str {
+    use Technique::* ;
+    match * self {
+      Bmc => "bounded model checking",
+      KInd => "k-induction",
+    }
+  }
+  /** Thread name for techniques. */
+  #[inline(always)]
+  pub fn thread_name(& self) -> String {
+    use Technique::* ;
+    match * self {
+      Bmc => "kino_bmc".to_string(),
+      KInd => "kino_k-induction".to_string(),
     }
   }
 }
