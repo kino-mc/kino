@@ -34,7 +34,6 @@ thread-safe and can be cloned.
 
 #[macro_use]
 extern crate nom ;
-extern crate rsmt2 ;
 extern crate term ;
 
 use std::sync::Arc ;

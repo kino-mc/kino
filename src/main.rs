@@ -18,25 +18,11 @@ write stuff here
 
 extern crate ansi_term as ansi ;
 extern crate nom ;
-extern crate rsmt2 ;
 extern crate term ;
 extern crate system as sys ;
 extern crate event ;
 extern crate bmc ;
 extern crate kind ;
-
-/** Provides access to the documentation of the sub projects and main
-libraries. */
-pub mod subs {
-  /** `rsmt2` library documentation. */
-  pub use ::rsmt2 as smt ;
-  /** `term` sub-project documentation. */
-  pub use ::term ;
-  /** `system` sub-project documentation. */
-  pub use ::sys ;
-  /** `event` sub-project documentation. */
-  pub use ::event ;
-}
 
 use std::collections::HashMap ;
 use std::sync::mpsc ;

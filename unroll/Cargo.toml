@@ -5,6 +5,5 @@ authors = ["Adrien Champion <adrien.champion@mail.com>"]
 
 [dependencies]
 nom = "0.5.0"
-rsmt2 = { git = "https://bitbucket.org/AdrienChampion/rsmt2.git" }
 term = { path = "../term" }
 system = { path = "../system" }

@@ -85,7 +85,7 @@ only non-zero denominator will push the problem to function symbol application. 
 [write module]: write/index.html (write module)
 */
 
-extern crate num ;
+extern crate num as numeric ;
 #[macro_use]
 extern crate nom ;
 extern crate hashconsing as hcons ;
@@ -129,6 +129,11 @@ pub mod real {
 Exposed for extensibility. */
 pub mod write {
   pub use base::{ Writable, SVarWriter, StateWritable } ;
+}
+
+/** Re-export of the `num` library. */
+pub mod num {
+  pub use ::numeric::* ;
 }
 
 /** SMT solver. */
