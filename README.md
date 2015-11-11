@@ -1,11 +1,13 @@
 Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for transition systems.
 
-Features implemented:
+# Techniques
 
-- Bounded Model Checking (BMC)
-- K-induction
+implemented:
 
-Future features
+- Bounded Model Checking (`bmc`)
+- K-induction (`kind`)
+
+future:
 
 - invariant generation
     - [instantiation-based][graph based invgen]
