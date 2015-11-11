@@ -4,8 +4,8 @@ Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for tra
 
 implemented:
 
-- Bounded Model Checking (BMC)
-- K-induction
+- Bounded Model Checking (`bmc`)
+- K-induction (`kind`)
 
 future:
 
