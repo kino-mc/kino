@@ -15,16 +15,20 @@
   ;; Local definitions.
   ()
   ;; Init.
-  (ite (state in) (= (state out) 1) (= (state out) 0))
+  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
   ;; Trans.
-  (ite (next in) (= (next out) (+ (state out) 1)) (= (next out) (state out)))
+  (ite
+    (_ next in)
+    (= (_ next out) (+ (_ state out) 1))
+    (= (_ next out) (_ state out))
+  )
   ;; Composition.
   ()
 )
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (>= (state out) 0)
+  (>= (_ state out) 0)
 )
 
 (define-fun act () Bool true)

@@ -248,9 +248,14 @@ impl TermAndDep {
 }
 
 named!{ state<State>,
-  alt!(
-    map!( tag!("state"), |_| State::Curr ) |
-    map!( tag!("next"), |_| State::Next  )
+  chain!(
+    char!('_') ~
+    space_comment ~
+    state: alt!(
+      map!( tag!("state"), |_| State::Curr ) |
+      map!( tag!("next"), |_| State::Next  )
+    ),
+    || state
   )
 }
 

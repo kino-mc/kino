@@ -1,13 +1,17 @@
 (define-system sys_a 
   ( (in Bool) (out Int) )
   ()
-  (ite (state in) (= (state out) 1) (= (state out) 0))
-  (ite (next in) (= (next out) (+ (state out) 1)) (= (next out) (state out)))
+  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
+  (ite
+    (_ next in)
+    (= (_ next out)
+    (+ (_ state out) 1)) (= (_ next out) (_ state out))
+  )
   ()
 )
 
 (define-prop out_positive sys_a
-  (>= (state out) 0)
+  (>= (_ state out) 0)
 )
 
 ( verify sys_a
