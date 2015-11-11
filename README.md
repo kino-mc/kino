@@ -4,9 +4,9 @@ Features:
 
 - [x] Bounded Model Checking (BMC)
 - [x] K-induction
-- [ ] invariant generation
-  - [ ] instantiation-based [ref][graph based invgen]
-  - [ ] machine-learning-based [ref][ice invgen] [ref][c2i invgen]
+- [ ] > invariant generation
+      >     - [ ] instantiation-based [ref][graph based invgen]
+      >     - [ ] machine-learning-based [ref][ice invgen] [ref][c2i invgen]
 
 # License
 
