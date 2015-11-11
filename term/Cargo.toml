@@ -7,4 +7,4 @@ authors = ["Adrien Champion <adrien.champion@email.com>"]
 num = "*"
 nom = "0.5.0"
 hashconsing = { git = "https://bitbucket.org/AdrienChampion/hashconsing.git" }
-rsmt2 = { git = "https://bitbucket.org/AdrienChampion/rsmt2.git", rev="620af95" }
+rsmt2 = { git = "https://bitbucket.org/AdrienChampion/rsmt2.git", rev="80b2877" }

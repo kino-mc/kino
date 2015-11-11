@@ -69,7 +69,8 @@ pub trait Unroller {
     & self, solver: & mut Solver, o: & Offset2
   ) -> UnitSmtRes ;
   /** Unrolls the transition relation once. **Declares** state variables in
-  the next offset. */
+  the next offset if the offset is not reversed, in the current offset
+  otherwise (for backward unrolling). */
   #[inline(always)]
   fn unroll(
     & self, solver: & mut Solver, o: & Offset2
@@ -138,8 +139,9 @@ impl Unroller for system::Sys {
   fn unroll(
     & self, solver: & mut Solver, o: & Offset2
   ) -> UnitSmtRes {
+    let off = if o.is_rev() { o.curr() } else { o.next() } ;
     try!(
-      self.declare_svars(solver, o.next())
+      self.declare_svars(solver, off)
     ) ;
     solver.assert(self.trans_term(), o)
   }

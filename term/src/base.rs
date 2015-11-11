@@ -17,8 +17,11 @@ use std::sync::{ Arc, Mutex } ;
 pub use hcons::* ;
 
 #[derive(Clone,Copy)]
+/** Decides how symbols are printed. */
 pub enum SymPrintStyle {
+  /** Internal print style adds a ' ' before the symbol is printed. */
   Internal,
+  /** External is printing the symbol as it is. */
   External,
 }
 
@@ -85,6 +88,7 @@ impl Offset {
       ).unwrap()
     }
   }
+
   /** `usize` to Offset conversion. */
   pub fn of_int(int: usize) -> Self {
     Offset {
@@ -98,6 +102,17 @@ impl Offset {
   pub fn nxt(& self) -> Self {
     Offset {
       offset: self.offset + 1u16
+    }
+  }
+
+  /** Returns the offset preceeding this one if it's not 0. */
+  pub fn pre(& self) -> Option<Self> {
+    if self.offset == 0u16 { None } else {
+      Some(
+        Offset {
+          offset: self.offset - 1u16
+        }
+      )
     }
   }
 }
@@ -117,7 +132,9 @@ impl Writable for Offset {
 /** Two-state offset. */
 #[derive(Clone,Debug)]
 pub struct Offset2 {
+  /** Current offset. */
   curr: Offset,
+  /** Next offset. */
   next: Offset,
 }
 
@@ -129,22 +146,53 @@ impl Offset2 {
       next: Offset::of_int(1),
     }
   }
+
+  /** Reverses current and next. For backward unrolling. */
+  pub fn rev(& self) -> Self {
+    Offset2 { curr: self.next, next: self.curr }
+  }
+
+  /** Returns true iff the offset is reversed. */
+  #[inline(always)]
+  pub fn is_rev(& self) -> bool { self.next < self.curr }
+
+  /** Compares two offsets. Used for parsing so that terms unrolled backwards
+  are parsed the right way. For instance, `(and |@1 x| |@2 y|)` is parsed as
+  `(and (next x) (curr y))` with Smt2Offset `Two(2,1)`. */
+  #[inline]
+  pub fn cmp(& self, lhs: & Offset, rhs: & Offset) -> ::std::cmp::Ordering {
+    let cmp = lhs.cmp(rhs) ;
+    if self.curr < self.next { cmp } else { cmp.reverse() }
+  }
+
   /** Returns the two state offset following `self`. */
+  #[inline(always)]
   pub fn nxt(& self) -> Self {
-    Offset2{
+    Offset2 {
       curr: self.curr.nxt(),
       next: self.next.nxt(),
     }
   }
+
   /** The offset of the current state. */
+  #[inline(always)]
   pub fn curr(& self) -> & Offset {
     & self.curr
   }
+
   /** The offset of the next state. */
+  #[inline(always)]
   pub fn next(& self) -> & Offset {
     & self.next
   }
 }
+
+impl fmt::Display for Offset2 {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "({},{})", self.curr(), self.next())
+  }
+}
+
 
 impl<Sym: SymWritable> SVarWriter<Sym> for Offset2 {
   fn sv_write(
@@ -221,6 +269,7 @@ impl Smt2Offset {
       Some(o) => One(o),
     }
   }
+
   /** Returns true iff `self` is `One(o)` and `rhs` is `Two(_, o)`. */
   pub fn is_next_of(& self, rhs: & Smt2Offset) -> bool {
     use base::Smt2Offset::* ;
@@ -229,15 +278,18 @@ impl Smt2Offset {
       _ => false
     }
   }
+
   /** Merges two offsets if possible.
 
-  Two offsets if
+  Two offsets are mergeable if
 
   * one is `No`,
   * both are equal,
-  * both are `One`s,
+  * both are `One`s (they will be ordered using `off.cmp(_,_)`),
   * one is `Two(lo,hi)` and the other is either `One(lo)` or `One(hi)`. */
-  pub fn merge(& self, rhs: & Smt2Offset) -> Option<Smt2Offset> {
+  pub fn merge(
+    & self, rhs: & Smt2Offset, off: & Offset2
+  ) -> Option<Smt2Offset> {
     use std::cmp::{ Ordering, Ord } ;
     use base::Smt2Offset::* ;
     if self == rhs {
@@ -247,7 +299,7 @@ impl Smt2Offset {
         (& No, _) => rhs.clone(),
         (_, & No) => self.clone(),
 
-        (& One(ref lft), & One(ref rgt)) => match lft.cmp(rgt) {
+        (& One(ref lft), & One(ref rgt)) => match off.cmp(lft, rgt) {
           Ordering::Less => Smt2Offset::Two(*lft,*rgt),
           Ordering::Equal => rhs.clone(),
           Ordering::Greater => Smt2Offset::Two(*rgt,*lft),
@@ -263,7 +315,7 @@ impl Smt2Offset {
         (& Two(_, _), & Two(_, _)) => return None,
 
         /* Only one recursive call is possible. */
-        (& One(_), & Two(_,_)) => return rhs.merge(self),
+        (& One(_), & Two(_,_)) => return rhs.merge(self, off),
       } ;
       Some(res)
     }

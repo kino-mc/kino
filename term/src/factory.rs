@@ -13,7 +13,7 @@ use nom::IResult ;
 
 use rsmt2::ParseSmt2 ;
 
-use base::{ Mkable, State, Offset, Smt2Offset } ;
+use base::{ Mkable, State, Offset, Offset2, Smt2Offset } ;
 use typ::{ Type, Bool, Int, Rat } ;
 use sym::{ SymConsign, Sym, SymMaker } ;
 use cst::{ Cst, CstConsign } ;
@@ -240,6 +240,7 @@ impl ParseSmt2 for Factory {
   type Value = Cst ;
   type Expr = (Term, Smt2Offset) ;
   type Proof = () ;
+  type I = Offset2 ;
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], (Var, Option<Offset>)> {
@@ -263,9 +264,9 @@ impl ParseSmt2 for Factory {
     parser::cst_parser(bytes, & self.cst)
   }
   fn parse_expr<'a>(
-    & self, bytes: & 'a [u8]
+    & self, bytes: & 'a [u8], off: & Offset2
   ) -> IResult<'a, & 'a [u8], (Term, Smt2Offset)> {
-    parser::smt2::term_parser(bytes, self)
+    parser::smt2::term_parser(bytes, self, off)
   }
   fn parse_proof<'a>(
     & self, _: & 'a [u8]

@@ -10,6 +10,7 @@
 
 /*! K-induction.
 
+Unrolls backwards.
 */
 
 extern crate term ;
@@ -61,8 +62,9 @@ impl event::CanRun for KInd {
     let factory = event.factory().clone() ;
     let mut actlit = Actlit::mk(factory.clone()) ;
 
-    let mut k = Offset2::init() ;
-    let mut k_nxt = k.nxt() ;
+    // Reversed to unroll backwards.
+    let check_offset = Offset2::init().rev() ;
+    let mut k = check_offset.nxt() ;
 
     match Solver::mk(z3_cmd(), conf, factory.clone()) {
       Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
@@ -79,20 +81,25 @@ impl event::CanRun for KInd {
           sys.defclare_funs(& mut solver), event
         ) ;
 
-        // event.log("declare svar@0") ;
+        // event.log("declare svar@0 and 1") ;
         try_error!(
-          sys.declare_svars(& mut solver, k.curr()), event
+          sys.declare_svars(& mut solver, check_offset.next()), event
         ) ;
-        // event.log("activating properties @0") ;
         try_error!(
-          props.activate(& mut solver, & k), event
+          sys.declare_svars(& mut solver, check_offset.curr()), event
         ) ;
-
-        try_error!( sys.unroll(& mut solver, & k), event ) ;
 
         'out: loop {
 
           props.reset_inhibited() ;
+
+          // event.log( & format!("unroll {}", k) ) ;
+          try_error!( sys.unroll(& mut solver, & k), event ) ;
+
+          // event.log( & format!("activate {}", k) ) ;
+          try_error!(
+            props.activate(& mut solver, & k), event
+          ) ;
 
           match event.recv() {
             None => return (),
@@ -111,7 +118,7 @@ impl event::CanRun for KInd {
           } ;
 
           if props.none_left() {
-            event.done_at(k.curr()) ;
+            event.done_at(& k.next()) ;
             break
           }
 
@@ -128,7 +135,7 @@ impl event::CanRun for KInd {
             // ) ;
             let check = actlit.mk_impl(& lit, one_prop_false) ;
 
-            try_error!(solver.assert(& check, & k_nxt), event) ;
+            try_error!(solver.assert(& check, & check_offset), event) ;
 
             // event.log(& format!("check-sat assuming {}", lit)) ;
 
@@ -145,10 +152,10 @@ impl event::CanRun for KInd {
             //   )
             // ) ;
 
-            match solver.check_sat_assuming( & actlits, k_nxt.curr() ) {
+            match solver.check_sat_assuming( & actlits, check_offset.curr() ) {
               Ok(true) => {
                 // event.log("sat, getting falsified properties") ;
-                match props.get_false(& mut solver, & k_nxt) {
+                match props.get_false(& mut solver, & check_offset) {
                   Ok(falsified) => {
                     // let mut s = "falsified:".to_string() ;
                     // for sym in falsified.iter() {
@@ -170,10 +177,11 @@ impl event::CanRun for KInd {
                 // Wait until we get something.
                 loop {
                   let mut invariant = true ;
+                  let at_least = k.next().pre().unwrap() ;
                   for prop in unfalsifiable.iter() {
                     match * event.get_k_true(prop) {
                       Some(ref o) => {
-                        if o < k.curr() {
+                        if o < & at_least {
                           invariant = false ;
                           break
                         }
@@ -186,7 +194,7 @@ impl event::CanRun for KInd {
                       props.forget(& mut solver, & unfalsifiable),
                       event
                     ) ;
-                    event.proved_at(unfalsifiable, k.curr()) ; 
+                    event.proved_at(unfalsifiable, k.next()) ; 
                     break 'split
                   } else {
                     match event.recv() {
@@ -223,18 +231,11 @@ impl event::CanRun for KInd {
           } ;
 
           if props.none_left() {
-            event.done_at(k.curr()) ;
+            event.done_at(k.next()) ;
             break
           }
 
           k = k.nxt() ;
-          k_nxt = k.nxt() ;
-
-          try_error!( sys.unroll(& mut solver, & k), event ) ;
-
-          try_error!(
-            props.activate(& mut solver, & k), event
-          ) ;
 
         } ;
       },

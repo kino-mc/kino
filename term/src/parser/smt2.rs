@@ -14,7 +14,7 @@ use std::fmt::Debug ;
 
 use nom::{ multispace, IResult } ;
 
-use base::{ State, Offset, Smt2Offset } ;
+use base::{ State, Offset, Offset2, Smt2Offset } ;
 use typ::Type ;
 use sym::Sym ;
 use term::{ Term, Operator } ;
@@ -72,7 +72,7 @@ impl HasTermInfo<(Sym, Term), Sym> for (Sym, (Term, Smt2Offset)) {
 fn check_offsets<
   Out: TermApply + Debug, Temp: Mergeable<Out>, T: HasTermInfo<Out, Temp>
 >(
-  f: & Factory, mut terms: Vec<T>
+  f: & Factory, mut terms: Vec<T>, cmp: & Offset2
 ) -> (Vec<Out>, Smt2Offset) {
   use base::Smt2Offset::* ;
   use std::iter::FromIterator ;
@@ -81,7 +81,7 @@ fn check_offsets<
   loop {
     if let Some( t ) = terms.pop() {
       let ( (term, info), something ) = t.term_info() ;
-      match off.merge(& info) {
+      match off.merge(& info, cmp) {
         Some(nu_info) => {
           if info.is_next_of(& nu_info) {
             off = nu_info ;
@@ -167,12 +167,13 @@ fn mk_exists(
 fn mk_let(
   f: & Factory,
   bindings: Vec<(Sym, (Term, Smt2Offset))>,
-  (term, off): (Term, Smt2Offset)
+  (term, off): (Term, Smt2Offset),
+  cmp: & Offset2,
 ) -> (Term, Smt2Offset) {
   use term::BindMaker ;
   use std::iter::FromIterator ;
-  let (bindings, off_b) = check_offsets(f, bindings) ;
-  match off.merge(& off_b) {
+  let (bindings, off_b) = check_offsets(f, bindings, cmp) ;
+  match off.merge(& off_b, cmp) {
     Some(nu_off) => {
       let (bindings, term) = {
         if off.is_next_of(& nu_off) {
@@ -278,7 +279,7 @@ fn var_parser<'a>(
 }
 
 fn op_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
   chain!(
     bytes,
@@ -288,9 +289,9 @@ fn op_parser<'a>(
     multispace ~
     args: map!(
       separated_list!(
-        multispace, apply!(term_parser, f)
+        multispace, apply!(term_parser, f, off)
       ),
-      |args| check_offsets(f, args)
+      |args| check_offsets(f, args, off)
     ) ~
     opt!(multispace) ~
     char!(')'),
@@ -301,7 +302,7 @@ fn op_parser<'a>(
 
 
 fn quantified_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
   use sym::SymMaker ;
   chain!(
@@ -335,7 +336,7 @@ fn quantified_parser<'a>(
     opt!(multispace) ~
     char!(')') ~
     opt!(multispace) ~
-    term: apply!(term_parser, f) ~
+    term: apply!(term_parser, f, off) ~
     opt!(multispace) ~
     char!(')'),
     || match quantifier {
@@ -348,7 +349,7 @@ fn quantified_parser<'a>(
 
 
 fn let_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
   use sym::SymMaker ;
   chain!(
@@ -374,7 +375,7 @@ fn let_parser<'a>(
             }
           ) ~
           multispace ~
-          term: apply!(term_parser, f) ~
+          term: apply!(term_parser, f, off) ~
           opt!(multispace),
           || (sym, term)
         ),
@@ -384,16 +385,16 @@ fn let_parser<'a>(
     opt!(multispace) ~
     char!(')') ~
     opt!(multispace) ~
-    term: apply!(term_parser, f) ~
+    term: apply!(term_parser, f, off) ~
     opt!(multispace) ~
     char!(')'),
-    || mk_let(f, bindings, term)
+    || mk_let(f, bindings, term, off)
   )
 }
 
 
 fn app_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
   chain!(
     bytes,
@@ -403,9 +404,9 @@ fn app_parser<'a>(
     multispace ~
     args: map!(
       separated_list!(
-        multispace, apply!(term_parser, f)
+        multispace, apply!(term_parser, f, off)
       ),
-      |args| check_offsets(f, args)
+      |args| check_offsets(f, args, off)
     ) ~
     opt!(multispace) ~
     char!(')'),
@@ -414,16 +415,16 @@ fn app_parser<'a>(
 }
 
 pub fn term_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
   alt!(
     bytes,
     apply!(cst_parser, f) |
     apply!(var_parser, f) |
-    apply!(op_parser, f) |
-    apply!(quantified_parser, f) |
-    apply!(let_parser, f) |
-    apply!(app_parser, f)
+    apply!(op_parser, f, off) |
+    apply!(quantified_parser, f, off) |
+    apply!(let_parser, f, off) |
+    apply!(app_parser, f, off)
   )
 }
 
