@@ -19,7 +19,7 @@ use std::sync::mpsc::{ Sender, Receiver, TryRecvError } ;
 use std::collections::HashMap ;
 
 use term::{
-  Offset, Term, Sym, Factory
+  Offset, Term, Sym, Factory, Model
 } ;
 
 use sys::{ Prop, Sys } ;
@@ -120,7 +120,7 @@ pub enum MsgUp {
   /** Some properties were proved. */
   Proved(Vec<Sym>, Technique, Info),
   /** Some properties were falsified. */
-  Disproved(Vec<Sym>, Technique, Info),
+  Disproved(Model, Vec<Sym>, Technique, Info),
 }
 
 /** Used by the techniques to communicate with kino. */
@@ -172,14 +172,14 @@ impl Event {
     self.proved(props, Info::At(o.clone()))
   }
   /** Sends a falsification message upwards. */
-  pub fn disproved(& self, props: Vec<Sym>, info: Info) {
+  pub fn disproved(& self, model: Model, props: Vec<Sym>, info: Info) {
     self.s.send(
-      MsgUp::Disproved(props, self.t, info)
+      MsgUp::Disproved(model, props, self.t, info)
     ).unwrap()
   }
   /** Sends a falsification message upwards. */
-  pub fn disproved_at(& self, props: Vec<Sym>, o: & Offset) {
-    self.disproved(props, Info::At(o.clone()))
+  pub fn disproved_at(& self, model: Model, props: Vec<Sym>, o: & Offset) {
+    self.disproved(model, props, Info::At(o.clone()))
   }
   /** Sends some k-true properties. */
   pub fn k_true(& self, props: Vec<Sym>, o: & Offset) {

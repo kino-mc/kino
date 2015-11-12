@@ -142,10 +142,22 @@ impl event::CanRun for Bmc {
                   //   s = format!("{}\n  {}", s, sym)
                   // } ;
                   // event.log(& s) ;
-                  try_error!(
-                    props.forget(& mut solver, & falsified), event
-                  ) ;
-                  event.disproved_at(falsified, k.curr())
+
+                  match solver.get_model() {
+                    Ok(model) => {
+                      try_error!(
+                        props.forget(& mut solver, & falsified), event
+                      ) ;
+                      event.disproved_at(model, falsified, k.curr())
+                    },
+                    Err(e) => {
+                      event.error(
+                        & format!("could not get model:\n{:?}", e)
+                      ) ;
+                      event.done(Info::Error) ;
+                      break
+                    },
+                  } ;
                 },
                 Err(e) => {
                   event.error(

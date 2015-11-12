@@ -38,6 +38,15 @@ impl RealVar {
       _ => Err(false),
     }
   }
+
+  /** The symbol stored in a variable. */
+  #[inline(always)]
+  pub fn sym(& self) -> & Sym {
+    match * self {
+      RealVar::Var(ref sym) => sym,
+      RealVar::SVar(ref sym, _) => sym,
+    }
+  }
 }
 
 impl fmt::Display for RealVar {

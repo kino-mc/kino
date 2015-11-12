@@ -30,7 +30,7 @@ use std::sync::Arc ;
 use std::thread::sleep_ms ;
 use std::collections::{ HashSet, HashMap } ;
 
-use term::{ Term, Sym, Factory } ;
+use term::{ Offset, Cst, Sym, Term, Factory, Model } ;
 
 use base::* ;
 mod parsers ;
@@ -140,6 +140,126 @@ impl Res {
         s
       },
     }
+  }
+}
+
+/** A counterexample for a system. */
+pub struct Cex {
+  sys: ::Sys,
+  no_state: HashMap<Sym, Cst>,
+  trace: HashMap<Offset, HashMap<Sym, Cst>>
+}
+impl Cex {
+  /** Length of a cex. Number of states minus one. */
+  pub fn len(& self) -> usize {
+    assert!(self.trace.len() > 0) ;
+    self.trace.len() - 1
+  }
+  /** Formats a counterexample. */
+  pub fn format(& self) -> String {
+    use std::cmp::max ;
+    // First, we format all constants as strings and compute the maximal width
+    // necessary for each symbol. We also compute the maximum length of the
+    // offsets as a string.
+    let mut cst_lens = HashMap::new() ;
+    let args = self.sys.state().args() ;
+    for & (ref sym, _) in args {
+      cst_lens.insert(
+        sym.clone(), format!("{}", sym.get().sym()).len()
+      ) ;
+    } ;
+    let mut offset_len = self.sys.sym().sym().len() ;
+    for (ref off, ref map) in self.trace.iter() {
+      // Max offset length.
+      offset_len = max(
+        format!("{}",off).len(), offset_len
+      ) ;
+      for (ref sym, ref cst) in map.iter() {
+        let len = format!("{}", cst).len() ;
+        let len = match cst_lens.get(sym) {
+          None => unreachable!(),
+          Some(l) => max(* l, len),
+        } ;
+        cst_lens.insert((* sym).clone(), len) ;
+        ()
+      }
+    }
+    // Computing maximal non-stateful symbol max length.
+    let mut no_state_len = 0 ;
+    for (ref sym, _) in self.no_state.iter() {
+      no_state_len = max(no_state_len, format!("{}", sym).len())
+    } ;
+
+    // Begin formatting.
+    let mut s = String::new() ;
+
+    // No-state values.
+    if ! self.no_state.is_empty() {
+      s = format!("declare-funs:") ;
+      for (ref sym, ref cst) in self.no_state.iter() {
+        s = format!("{}\n  {2:^1$} = {3}", s, no_state_len, sym, cst)
+      } ;
+      s = format!("{}\ntrace\n", s)
+    }
+
+    // State values.
+    let mut offset = Offset::zero() ;
+    let name = self.sys.sym().sym() ;
+    s = format!("{}  {}", s, name) ;
+    let mut sep = String::new() ;
+    for _ in (0..(offset_len - name.len())) {
+      s.push(' ')
+    } ;
+    for _ in (0..offset_len) {
+      sep.push('-')
+    } ;
+    for & (ref sym, _) in args {
+      s = format!("{} | ", s) ;
+      sep = format!("{}-|-", sep) ;
+      let fmt = format!("{}", sym.get().sym()) ;
+      s = format!("{}{}", s, fmt) ;
+      let width = cst_lens.get(sym).unwrap() ;
+      if width > & fmt.len() {
+        for _ in (0..(width - fmt.len())) {
+          s.push(' ')
+        } ;
+      }
+      for _ in (0..(* width)) {
+        sep.push('-')
+      } ;
+    } ;
+    s = format!("{}\n  {}", s, sep) ;
+    loop {
+      match self.trace.get(& offset) {
+        Some(map) => {
+          s = format!("{}\n  ", s) ;
+          let fmt = format!("{}", offset) ;
+          if offset_len > fmt.len() {
+            for _ in (0..(offset_len - fmt.len())) {
+              s.push(' ')
+            } ;
+          }
+          s = format!("{}{}", s, fmt) ;
+          for & (ref sym, _) in args.iter() {
+            s = format!("{} | ", s) ;
+            let width = cst_lens.get(sym).unwrap() ;
+            let fmt = match map.get(sym) {
+              Some(ref cst) => format!("{}", cst),
+              None => "-".to_string(),
+            } ;
+            if width > & fmt.len() {
+              for _ in (0..(width - fmt.len())) {
+                s.push(' ')
+              } ;
+            }
+            s = format!("{}{}", s, fmt)
+          }
+        },
+        None => break,
+      } ;
+      offset = offset.nxt()
+    } ;
+    s
   }
 }
 
@@ -377,6 +497,48 @@ impl Context {
     }
   }
 
+  /** Returns a counterexample for a system from a model.
+
+  Assumes the offset **do not have reverse semantics**. That is, the model does
+  not come from a backward unrolling. */
+  pub fn cex_of(& self, model: & Model, sys: & ::Sys) -> Cex {
+    let sys = sys.clone() ;
+    let mut no_state = HashMap::new() ;
+    let mut trace = HashMap::<Offset, HashMap<Sym, Cst>>::new() ;
+    {
+      let state = sys.state() ;
+      for & ( ref pair, ref cst ) in model.iter() {
+        let (ref var, ref off_opt) = * pair ;
+        match * off_opt {
+          None => match self.sym_unused(var.get().sym()) {
+            Some(_) => {
+              no_state.insert(var.get().sym().clone(), cst.clone()) ; ()
+            },
+            None => (),
+          },
+          Some(ref off) => if state.contains(var.get().sym()) {
+            let map = match trace.get_mut(off) {
+              Some(ref mut map) => {
+                map.insert(var.get().sym().clone(), cst.clone()) ;
+                continue
+              },
+              None => {
+                let mut map = HashMap::with_capacity(state.len()) ;
+                map.insert(var.get().sym().clone(), cst.clone()) ;
+                map
+              },
+            } ;
+            trace.insert(off.clone(), map) ; ()
+          } else {
+            panic!(
+              "state var {} is not in the state of system {}", var, sys.sym()
+            )
+          },
+        }
+      }
+    }
+    Cex { sys: sys, no_state: no_state, trace: trace }
+  }
 
 
   // fn build_sys(ctxt: & self, sym: Sym) -> super::sys::Sys {

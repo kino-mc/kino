@@ -216,37 +216,40 @@ named!{ offset<Offset>,
 }
 
 named!{ pub id_parser< (String, Smt2Offset) >,
-  alt!(
-    // Simple symbol.
-    chain!(
-      opt!(offset) ~
-      head: simple_symbol_head ~
-      tail: opt!(
-        map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
-      ),
-      || {
-        let sym = format!("{}{}", head, tail.unwrap_or("")) ;
-        panic!("simple symbol {}", sym)
-      }
-      // (
-      //   format!("{}{}", head, str::from_utf8(tail).unwrap()),
-      //   Smt2Offset::of_opt(offset)
-      // )
-    ) |
-    // Quoted symbol.
-    delimited!(
-      char!('|'),
+  preceded!(
+    opt!(multispace),
+    alt!(
+      // Simple symbol.
       chain!(
-        offset: opt!(offset) ~
-        char!(' ') ~
-        sym: map!(
-          is_not!("|\\"), str::from_utf8
+        opt!(offset) ~
+        head: simple_symbol_head ~
+        tail: opt!(
+          map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
         ),
-        || (
-          sym.unwrap().to_string(), Smt2Offset::of_opt(offset)
-        )
-      ),
-      char!('|')
+        || {
+          let sym = format!("{}{}", head, tail.unwrap_or("")) ;
+          panic!("simple symbol {}", sym)
+        }
+        // (
+        //   format!("{}{}", head, str::from_utf8(tail).unwrap()),
+        //   Smt2Offset::of_opt(offset)
+        // )
+      ) |
+      // Quoted symbol.
+      delimited!(
+        char!('|'),
+        chain!(
+          offset: opt!(offset) ~
+          char!(' ') ~
+          sym: map!(
+            is_not!("|\\"), str::from_utf8
+          ),
+          || (
+            sym.unwrap().to_string(), Smt2Offset::of_opt(offset)
+          )
+        ),
+        char!('|')
+      )
     )
   )
 }

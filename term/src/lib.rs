@@ -116,6 +116,9 @@ pub use parser::sts2::TermAndDep ;
 mod factory ;
 pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 
+/** A model is a vector of variables with optional offset and values. */
+pub type Model = Vec<( (Var, Option<Offset>), Cst )> ;
+
 /** Real, underlying representation of symbols, constants and terms. */
 pub mod real {
   pub use sym::RealSym as Sym ;

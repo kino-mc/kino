@@ -78,6 +78,9 @@ pub trait StateWritable<S: SymWritable, Svw: SVarWriter<S>> {
 pub struct Offset { offset: u16 }
 
 impl Offset {
+  /** The zero offset. */
+  pub fn zero() -> Self { Offset { offset: 0u16 } }
+
   /** Bytes to Offset conversion. */
   pub fn of_bytes(bytes: & [u8]) -> Self {
     // -> Result<Offset, std::num::ParseIntError> {

@@ -66,6 +66,13 @@ impl Args {
   /** Number of paramaters. */
   #[inline(always)]
   pub fn len(& self) -> usize { self.args.len() }
+  /** Returns true iff a symbol is a list of arguments. */
+  pub fn contains(& self, sym: & Sym) -> bool {
+    for & (ref arg, _) in self.args() {
+      if sym == arg { return true }
+    } ;
+    false
+  }
 }
 impl fmt::Display for Args {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {

@@ -60,6 +60,8 @@ pub mod ctxt {
 
 pub use base::{ CallSet, PropSet } ;
 
+pub use parse::Cex ;
+
 /** A signature, a list of types. Used only in `Uf`. */
 pub type Sig = Arc<base::Sig> ;
 /** A list of typed formal parameters. */

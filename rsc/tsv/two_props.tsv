@@ -5,6 +5,7 @@
 ;;  ) -> (
 ;;    if in then pre out + 1 else pre out
 ;;  ) ;
+;;  --%PROPERTY out >= 0  ;
 ;;  --%PROPERTY out <= 10 ;
 ;; tel
 
@@ -27,12 +28,15 @@
 )
 
 ;; Defines a property over a state.
-(define-prop out_positive sys_a
+(define-prop out_le_10 sys_a
   (<= (_ state out) 10)
+)
+(define-prop out_pos sys_a
+  (>= (_ state out) 0)
 )
 
 (define-fun act () Bool true)
 
 ;; Check.
-( verify-assuming sys_a (out_positive) (act) )
+( verify sys_a (out_pos out_le_10) )
 

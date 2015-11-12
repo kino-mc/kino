@@ -32,10 +32,10 @@ use ansi::{ ANSIString, Style, Colour } ;
 
 use term::{ Sym, Term } ;
 
-use sys::{ Prop, Sys } ;
+use sys::{ Prop, Sys, Cex } ;
 use sys::ctxt::* ;
 
-use event::{ MsgUp, MsgDown, CanRun, Technique, Event } ;
+use event::{ MsgUp, MsgDown, CanRun, Technique, Event, Info } ;
 
 static header: & 'static str = "|=====| " ;
 static trailer: & 'static str = "|=====|" ;
@@ -86,7 +86,7 @@ impl Log {
     )
   }
   fn error_line(& self, s: & str) {
-    println!("{}  {}", self.error_style.paint(prefix), s)
+    println!("{}{}", self.error_style.paint(prefix), s)
   }
   fn print(& self, s: & str) {
     println!("{}{}", prefix, s)
@@ -98,7 +98,7 @@ impl Log {
       prefix, self.bold.paint(t.to_str()), lines.next().unwrap()
     ) ;
     for line in lines {
-      println!("{}   {}", prefix, line)
+      println!("{}{}", prefix, line)
     } ;
     self.space()
   }
@@ -106,10 +106,40 @@ impl Log {
     let mut lines = bla.lines() ;
     println!(
       "{}{}: {}",
-      prefix, self.success_style.paint("kino"), lines.next().unwrap()
+      prefix, self.bold.paint("kino"), lines.next().unwrap()
     ) ;
     for line in lines {
-      println!("{}   {}", prefix, line)
+      println!("{}{}", prefix, line)
+    } ;
+    self.space()
+  }
+  fn log_proved(
+    & self, t: Technique, props: & [Sym], info: & Info
+  ) {
+    let pref = self.success_style.paint(prefix) ;
+    println!(
+      "{}{} proved {} propertie(s) {}:",
+      pref, self.bold.paint(t.to_str()), props.len(), info
+    ) ;
+    for prop in props.iter() {
+      println!("{}  {}", pref, self.success_style.paint(prop.sym())) ;
+    } ;
+    self.space()
+  }
+  fn log_cex(
+    & self, t: Technique, cex: & Cex, props: & [Sym]
+  ) {
+    let pref = self.error_style.paint(prefix) ;
+    println!(
+      "{}{} falsified {} propertie(s) at {}:",
+      pref, self.bold.paint(t.to_str()), props.len(), cex.len()
+    ) ;
+    for prop in props.iter() {
+      println!("{}  {}", pref, self.error_style.paint(prop.sym())) ;
+    } ;
+    println!("{}{}:", pref, self.bold.paint("counterexample")) ;
+    for line in cex.format().lines() {
+      println!("{}  {}", pref, line)
     } ;
     self.space()
   }
@@ -135,9 +165,6 @@ impl KidManager {
     & mut self, log: & Log,
     t: T, sys: Sys, props: Vec<Prop>, f: & term::Factory
   ) -> Result<(), ()> {
-    log.master_log(
-      format!("spawning {}", t.id().to_str())
-    ) ;
     let (s,r) = mpsc::channel() ;
     let id = t.id().clone() ;
     let event = Event::mk(
@@ -203,7 +230,7 @@ fn launch(
   log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
 ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
   use event::MsgUp::* ;
-  log.title("Running") ;
+  log.title( & format!("Running on {}", sys.sym().sym()) ) ;
   log.space() ;
 
   let mut manager = KidManager::mk() ;
@@ -216,8 +243,8 @@ fn launch(
   ) ;
 
   // log.master_log("entering receive loop".to_string()) ;
-  log.title("") ;
-  log.space() ;
+  // log.title("") ;
+  // log.space() ;
 
   loop {
     if manager.kids_done() { break } ;
@@ -234,35 +261,14 @@ fn launch(
         log.space()
       },
 
-      Ok( Disproved(props, from, info) ) => {
-        if props.len() > 1 {
-          let mut s = format!(
-            "falsified {} properties {}", props.len(), info
-          ) ;
-          for prop in props.iter() {
-            s = format!("{}\n{}", s, prop)
-          } ;
-          log.log(from, s)
-        } else {
-          assert!(props.len() == 1) ;
-          log.log(from, format!("falsified {} {}", props[0], info))
-        } ;
+      Ok( Disproved(model, props, from, _) ) => {
+        let cex = c.cex_of(& model, & sys) ;
+        log.log_cex(from, & cex, & props) ;
         manager.broadcast( MsgDown::Forget(props) )
       },
 
       Ok( Proved(props, from, info) ) => {
-        if props.len() > 1 {
-          let mut s = format!(
-            "proved {} properties {}", props.len(), info
-          ) ;
-          for prop in props.iter() {
-            s = format!("{}\n  {}", s, prop)
-          } ;
-          log.log(from, s)
-        } else {
-          assert!(props.len() == 1) ;
-          log.log(from, format!("proved {} {}", props[0], info))
-        } ;
+        log.log_proved(from, & props, & info) ;
         let mut vec = Vec::with_capacity(props.len()) ;
         for prop in props.iter() {
           match c.get_prop(prop) {
@@ -288,11 +294,12 @@ fn launch(
         manager.broadcast( MsgDown::KTrue(props,o) )
       },
 
+      Ok( Done(from, Info::At(_)) ) => {
+        manager.forget(& from)
+      },
+
       Ok( Done(from, info) ) => {
-        log.log(
-          from,
-          format!("done {}", info)
-        ) ;
+        log.log(from, format!("done {}", info)) ;
         manager.forget(& from)
       },
 
