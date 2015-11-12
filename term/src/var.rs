@@ -54,10 +54,10 @@ impl fmt::Display for RealVar {
     match * self {
       RealVar::Var(ref s) => write!(fmt, "|{}|", s.get().sym()),
       RealVar::SVar(ref s, State::Curr) => write!(
-        fmt, "(state |{}|)", s.get().sym()
+        fmt, "(_ state |{}|)", s.get().sym()
       ),
       RealVar::SVar(ref s, State::Next) => write!(
-        fmt, "(next |{}|)", s.get().sym()
+        fmt, "(_ next |{}|)", s.get().sym()
       ),
     }
   }

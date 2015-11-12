@@ -233,8 +233,8 @@ impl<Sym: SymWritable> SVarWriter<Sym> for () {
     v: & Sym, st: & State, style: SymPrintStyle
   ) -> io::Result<()> {
     match * st {
-      State::Curr => try!( write!(writer, "(state |") ),
-      State::Next => try!( write!(writer, "(next |") ),
+      State::Curr => try!( write!(writer, "(_ state |") ),
+      State::Next => try!( write!(writer, "(_ next |") ),
     } ;
     try!( v.write(writer, style) ) ;
     write!(writer, "|)")

@@ -147,8 +147,8 @@ fn fun_def_parser<'a>(
   )
 }
 
-/** Parses a property definition. */
-fn prop_parser<'a>(
+/** Parses a one-state property definition. */
+fn prop_1_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
@@ -164,7 +164,7 @@ fn prop_parser<'a>(
     body: apply!(term_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || check_prop(c, sym, state, body)
+    || check_prop_1(c, sym, state, body)
   )
 }
 
@@ -265,7 +265,7 @@ pub fn item_parser<'a>(
     alt!(
       apply!(fun_dec_parser, c) |
       apply!(fun_def_parser, c) |
-      apply!(prop_parser, c) |
+      apply!(prop_1_parser, c) |
       apply!(sys_parser, c)
     )
   )

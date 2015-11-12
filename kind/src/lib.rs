@@ -64,7 +64,7 @@ impl event::CanRun for KInd {
 
     // Reversed to unroll backwards.
     let check_offset = Offset2::init().rev() ;
-    let mut k = check_offset.nxt() ;
+    let mut k = check_offset.clone() ;
 
     match Solver::mk(z3_cmd(), conf, factory.clone()) {
       Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
@@ -81,24 +81,22 @@ impl event::CanRun for KInd {
           sys.defclare_funs(& mut solver), event
         ) ;
 
-        // event.log("declare svar@0 and 1") ;
+        // event.log("declare svar@0") ;
         try_error!(
           sys.declare_svars(& mut solver, check_offset.next()), event
+          // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~~~^^^^
         ) ;
-        try_error!(
-          sys.declare_svars(& mut solver, check_offset.curr()), event
-        ) ;
+
+        // event.log( & format!("unroll {}", k) ) ;
+        try_error!( sys.unroll(& mut solver, & k), event ) ;
 
         'out: loop {
 
           props.reset_inhibited() ;
 
-          // event.log( & format!("unroll {}", k) ) ;
-          try_error!( sys.unroll(& mut solver, & k), event ) ;
-
-          // event.log( & format!("activate {}", k) ) ;
+          // event.log( & format!("activating state at {}", k) ) ;
           try_error!(
-            props.activate(& mut solver, & k), event
+            props.activate_state(& mut solver, & k), event
           ) ;
 
           match event.recv() {
@@ -118,19 +116,19 @@ impl event::CanRun for KInd {
           } ;
 
           if props.none_left() {
-            event.done_at(& k.next()) ;
+            event.done_at(& k.curr()) ;
             break
           }
 
           'split: loop {
 
-            let one_prop_false = props.one_false() ;
+            let one_prop_false = props.one_false_next() ;
 
             let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
             // event.log(
             //   & format!(
             //     "defining actlit {}\nto imply {} at {}",
-            //     lit, one_prop_false, k.curr()
+            //     lit, one_prop_false, check_offset
             //   )
             // ) ;
             let check = actlit.mk_impl(& lit, one_prop_false) ;
@@ -145,17 +143,16 @@ impl event::CanRun for KInd {
 
             // event.log(
             //   & format!(
-            //     "checking {} {} @{}",
-            //     prop_count,
-            //     if prop_count == 1 { "property" } else { "properties" },
-            //     k.curr()
+            //     "checking {} properties @{}",
+            //     props.len(),
+            //     check_offset.next()
             //   )
             // ) ;
 
-            match solver.check_sat_assuming( & actlits, check_offset.curr() ) {
+            match solver.check_sat_assuming( & actlits, check_offset.next() ) {
               Ok(true) => {
                 // event.log("sat, getting falsified properties") ;
-                match props.get_false(& mut solver, & check_offset) {
+                match props.get_false_next(& mut solver, & check_offset) {
                   Ok(falsified) => {
                     // let mut s = "falsified:".to_string() ;
                     // for sym in falsified.iter() {
@@ -173,11 +170,12 @@ impl event::CanRun for KInd {
                 }
               },
               Ok(false) => {
+                // event.log("unsat") ;
                 let unfalsifiable = props.not_inhibited() ;
                 // Wait until we get something.
                 loop {
                   let mut invariant = true ;
-                  let at_least = k.next().pre().unwrap() ;
+                  let at_least = k.curr().pre().unwrap() ;
                   for prop in unfalsifiable.iter() {
                     match * event.get_k_true(prop) {
                       Some(ref o) => {
@@ -190,6 +188,7 @@ impl event::CanRun for KInd {
                     }
                   } ;
                   if invariant {
+                    // event.log("forgetting") ;
                     try_error!(
                       props.forget(& mut solver, & unfalsifiable),
                       event
@@ -197,6 +196,7 @@ impl event::CanRun for KInd {
                     event.proved_at(unfalsifiable, k.next()) ; 
                     break 'split
                   } else {
+                    // event.log("recv") ;
                     match event.recv() {
                       None => return (),
                       Some(msgs) => for msg in msgs {
@@ -236,6 +236,16 @@ impl event::CanRun for KInd {
           }
 
           k = k.nxt() ;
+
+          // event.log( & format!("unroll {}", k) ) ;
+          try_error!( sys.unroll(& mut solver, & k), event ) ;
+
+          // event.log( & format!("activate next at {}", k) ) ;
+          try_error!(
+            props.activate_next(& mut solver, & k), event
+          ) ;
+
+          ()
 
         } ;
       },

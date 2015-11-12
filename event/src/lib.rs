@@ -19,12 +19,12 @@ use std::sync::mpsc::{ Sender, Receiver, TryRecvError } ;
 use std::collections::HashMap ;
 
 use term::{
-  Offset, Term, Sym, Factory, Model
+  Offset, Sym, Factory, Model, STerm
 } ;
 
 use sys::{ Prop, Sys } ;
 
-// pub type InvariantSet = RwLock<HashMap<Sym, Term>> ;
+// pub type InvariantSet = RwLock<HashMap<Sym, STerm>> ;
 
 // pub type Cex = HashMap<(Var, Offset), Cst> ;
 
@@ -32,7 +32,7 @@ use sys::{ Prop, Sys } ;
 #[derive(Debug,Clone)]
 pub enum MsgDown {
   /** Contains invariants for a system. */
-  Invariants(Sym, Vec<Term>),
+  Invariants(Sym, Vec<STerm>),
   /** Some properties have been proved or disproved. */
   Forget(Vec<Sym>),
   /** Some properties were found k-true. */

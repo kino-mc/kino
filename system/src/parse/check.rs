@@ -14,7 +14,7 @@ See `parse::Context` for the description of the checks. */
 use std::fmt ;
 use std::collections::HashSet ;
 
-use term::{ TermAndDep, Type, Sym, Var, Term } ;
+use term::{ TermAndDep, Type, Sym, Var, Term, STerm } ;
 use term::real ;
 
 use base::* ;
@@ -44,6 +44,8 @@ pub enum Error {
   IllNxtSVar(Var, & 'static str, Sym),
   /** Inconsistent property in check. */
   IncProp(::Prop, ::Sys, & 'static str),
+  /** A next was found in a one-state property. */
+  NxtInProp1(Var, Sym, & 'static str),
   /** Illegal next state variable in init. */
   NxtInit(Sym, Sym),
   /** Uknown system call in system definition. */
@@ -100,6 +102,10 @@ impl fmt::Display for Error {
           property {} is over system {} \
           but {} is over system {}\
         ", prop.sym(), prop.sys().sym(), desc, sys.sym()
+      ),
+      NxtInProp1(ref var, ref sym, desc) => write!(
+        fmt, "state variable {} is used as next in {} {}", 
+        var.sym(), desc, sym
       ),
       NxtInit(ref var_sym, ref sym) => write!(
         fmt, "\
@@ -288,9 +294,11 @@ fn check_term_and_dep(
 }
 
 /** Checks that a proposition definition is legal. */
-pub fn check_prop(
+pub fn check_prop_1(
   ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
 ) -> Result<(), Error> {
+  use term::State::Curr ;
+  use term::UnTermOps ;
   let desc = super::prop_desc ;
   check_sym!(ctxt, sym, desc) ;
   let sys = match ctxt.get_sys(& sys) {
@@ -318,16 +326,22 @@ pub fn check_prop(
         Some(fun) => { calls.insert(fun) ; },
       },
       // Stateful var belong to state.
-      // Next and current allowed.
-      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
+      // Next forbidden.
+      real::Var::SVar(ref var_sym, Curr) => if ! svar_in_state(
         var_sym, sys.state()
       ) {
         return Err( UkVar(var.clone(), sym, desc) )
       },
+      real::Var::SVar(_, _) => return Err(
+        NxtInProp1(var.clone(), sym, desc)
+      ),
     }
   } ;
+  // Unwrap cannot fail, we just checked no svar was used as next.
+  let nxt = ctxt.factory().bump(body.term.clone()).unwrap() ;
+  let body = STerm::One(body.term, nxt) ;
   ctxt.add_prop(
-    Prop::mk(sym.clone(), sys.clone(), body.term, calls)
+    Prop::mk(sym.clone(), sys.clone(), body, calls)
   ) ;
   Ok(())
 }

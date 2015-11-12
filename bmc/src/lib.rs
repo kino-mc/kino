@@ -82,7 +82,101 @@ impl event::CanRun for Bmc {
         ) ;
 
 
+        // Check for init is separate since only one-state properties must be
+        // checked.
+
+        props.reset_inhibited() ;
+
+        if props.none_left() {
+          event.done_at(k.curr()) ;
+          return ()
+        }
+
+        let one_prop_false = props.one_false_state() ;
+
+        let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+        // event.log(
+        //   & format!(
+        //     "defining actlit {}\nto imply {} at {}",
+        //     lit, one_prop_false, k
+        //   )
+        // ) ;
+        let check = actlit.mk_impl(& lit, one_prop_false) ;
+
+        try_error!(solver.assert(& check, & k), event) ;
+
+        // event.log(& format!("check-sat assuming {}", lit)) ;
+
+        let mut actlits = props.actlits() ;
+        actlits.push(lit) ;
+
+        // event.log(
+        //   & format!(
+        //     "checking {} properties @{}",
+        //     props.len(),
+        //     k.curr()
+        //   )
+        // ) ;
+
+        match solver.check_sat_assuming( & actlits, k.next() ) {
+          Ok(true) => {
+            // event.log("sat, getting falsified properties") ;
+            match props.get_false_state(& mut solver, & k) {
+              Ok(falsified) => {
+                // let mut s = "falsified:".to_string() ;
+                // for sym in falsified.iter() {
+                //   s = format!("{}\n  {}", s, sym)
+                // } ;
+                // event.log(& s) ;
+
+                match solver.get_model() {
+                  Ok(model) => {
+                    try_error!(
+                      props.forget(& mut solver, & falsified), event
+                    ) ;
+                    event.disproved_at(model, falsified, k.curr())
+                  },
+                  Err(e) => {
+                    event.error(
+                      & format!("could not get model:\n{:?}", e)
+                    ) ;
+                    event.done(Info::Error) ;
+                    return ()
+                  },
+                } ;
+              },
+              Err(e) => {
+                event.error(
+                  & format!("could not get falsifieds\n{:?}", e)
+                ) ;
+                return ()
+              },
+            }
+          },
+          Ok(false) => {
+            event.k_true(props.not_inhibited(), k.curr())
+          },
+          Err(e) => {
+            event.error(
+              & format!("could not perform check-sat\n{:?}", e)
+            ) ;
+            return ()
+          },
+        } ;
+
+        if props.none_left() {
+          event.done_at(k.curr()) ;
+          return ()
+        }
+
+        try_error!( sys.unroll(& mut solver, & k), event ) ;
+
+        k = k.nxt() ;
+
+
         loop {
+
+          props.reset_inhibited() ;
 
           match event.recv() {
             None => return (),
@@ -105,13 +199,16 @@ impl event::CanRun for Bmc {
             break
           }
 
-          let one_prop_false = props.one_false() ;
+          // event.log( & format!("unrolling at {}", k) ) ;
+          try_error!( sys.unroll(& mut solver, & k), event ) ;
+
+          let one_prop_false = props.one_false_next() ;
 
           let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
           // event.log(
           //   & format!(
           //     "defining actlit {}\nto imply {} at {}",
-          //     lit, one_prop_false, k.curr()
+          //     lit, one_prop_false, k
           //   )
           // ) ;
           let check = actlit.mk_impl(& lit, one_prop_false) ;
@@ -125,17 +222,16 @@ impl event::CanRun for Bmc {
 
           // event.log(
           //   & format!(
-          //     "checking {} {} @{}",
+          //     "checking {} properties @{}",
           //     props.len(),
-          //     if props.len() == 1 { "property" } else { "properties" },
           //     k.curr()
           //   )
           // ) ;
 
-          match solver.check_sat_assuming( & actlits, k.curr() ) {
+          match solver.check_sat_assuming( & actlits, k.next() ) {
             Ok(true) => {
               // event.log("sat, getting falsified properties") ;
-              match props.get_false(& mut solver, & k) {
+              match props.get_false_next(& mut solver, & k) {
                 Ok(falsified) => {
                   // let mut s = "falsified:".to_string() ;
                   // for sym in falsified.iter() {
@@ -182,8 +278,6 @@ impl event::CanRun for Bmc {
             event.done_at(k.curr()) ;
             break
           }
-
-          try_error!( sys.unroll(& mut solver, & k), event ) ;
 
           k = k.nxt()
 

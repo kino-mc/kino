@@ -172,6 +172,45 @@ impl fmt::Display for RealTerm {
 /** Hash consed term. */
 pub type Term = HConsed<RealTerm> ;
 
+/** A stateful term. Either one-state or two-state. */
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
+pub enum STerm {
+  /** A one-state term. Stores the state (init) and next (trans) version. That
+  is, the second element is the bump of the first. */
+  One(Term,Term),
+  /** A two-state term. Stores the next (trans) version. Understood as true in
+  the initial state. */
+  Two(Term),
+}
+
+impl STerm {
+  /** The state version of a term. */
+  #[inline(always)]
+  pub fn state(& self) -> Option<& Term> {
+    match * self {
+      STerm::One(ref t, _) => Some(t),
+      STerm::Two(_) => None,
+    }
+  }
+  /** The next version of a term. */
+  #[inline(always)]
+  pub fn next(& self) -> & Term {
+    match * self {
+      STerm::One(_, ref t) => t,
+      STerm::Two(ref t) => t,
+    }
+  }
+}
+
+impl fmt::Display for STerm {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      STerm::One(ref t,_) => write!(fmt, "{}", t),
+      STerm::Two(ref t) => write!(fmt, "{}", t),
+    }
+  }
+}
+
 /** Hash cons table for terms. */
 pub type TermConsign = HConsign<RealTerm> ;
 
@@ -280,7 +319,8 @@ pub trait OpMaker {
   fn op(& self, Operator, Vec<Term>) -> Term ;
 }
 impl OpMaker for TermConsign {
-  fn op(& self, op: Operator, args: Vec<Term>) -> Term {
+  fn op(& self, op: Operator, mut args: Vec<Term>) -> Term {
+    args.shrink_to_fit() ;
     self.lock().unwrap().mk( Op(op, args) )
   }
 }
@@ -299,7 +339,8 @@ impl<
   }
 }
 impl AppMaker<Sym> for TermConsign {
-  fn app(& self, id: Sym, args: Vec<Term>) -> Term {
+  fn app(& self, id: Sym, mut args: Vec<Term>) -> Term {
+    args.shrink_to_fit() ;
     self.lock().unwrap().mk( App(id, args) )
   }
 }
@@ -320,30 +361,36 @@ impl<
   'a, Trm: Clone, T: Sized + BindMaker<Trm>
 > BindMaker<& 'a Trm> for T {
   #[inline(always)]
-  fn forall(& self, bind: Vec<(Sym, Type)>, term: & 'a Trm) -> Term {
+  fn forall(& self, mut bind: Vec<(Sym, Type)>, term: & 'a Trm) -> Term {
+    bind.shrink_to_fit() ;
     self.forall( bind, term.clone() )
   }
   #[inline(always)]
-  fn exists(& self, bind: Vec<(Sym, Type)>, term: & 'a Trm) -> Term {
+  fn exists(& self, mut bind: Vec<(Sym, Type)>, term: & 'a Trm) -> Term {
+    bind.shrink_to_fit() ;
     self.exists( bind, term.clone() )
   }
   #[inline(always)]
-  fn let_b(& self, bind: Vec<(Sym, Term)>, term: & 'a Trm) -> Term {
+  fn let_b(& self, mut bind: Vec<(Sym, Term)>, term: & 'a Trm) -> Term {
+    bind.shrink_to_fit() ;
     self.let_b( bind, term.clone() )
   }
 }
 impl BindMaker<Term> for TermConsign {
-  fn forall(& self, bind: Vec<(Sym, Type)>, term: Term) -> Term {
+  fn forall(& self, mut bind: Vec<(Sym, Type)>, term: Term) -> Term {
+    bind.shrink_to_fit() ;
     if bind.is_empty() { term } else {
       self.lock().unwrap().mk( Forall(bind, term) )
     }
   }
-  fn exists(& self, bind: Vec<(Sym, Type)>, term: Term) -> Term {
+  fn exists(& self, mut bind: Vec<(Sym, Type)>, term: Term) -> Term {
+    bind.shrink_to_fit() ;
     if bind.is_empty() { term } else {
       self.lock().unwrap().mk( Exists(bind, term) )
     }
   }
-  fn let_b(& self, bind: Vec<(Sym, Term)>, term: Term) -> Term {
+  fn let_b(& self, mut bind: Vec<(Sym, Term)>, term: Term) -> Term {
+    bind.shrink_to_fit() ;
     if bind.is_empty() { term } else {
       self.lock().unwrap().mk( Let(bind, term) )
     }
@@ -365,9 +412,12 @@ pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,()> {
     f,
     |factory, t| match * t.get() {
       V(ref var) => match * var.get() {
-        SVar(ref s, State::Curr) => Ok(
-          Some( factory.svar(s.clone(), State::Next) )
-        ),
+        SVar(ref s, State::Curr) => {
+          let nu = factory.svar(s.clone(), State::Next) ;
+          Ok(
+            Some( nu )
+          )
+        },
         SVar(_,_) => Err(()),
         _ => Ok(None),
       },
@@ -399,6 +449,10 @@ mod zip {
 
   /** A zipper step. */
   enum Step {
+    /** We're below an operator application. */
+    Op(
+      Operator, Vec<Term>, Vec<Term>
+    ),
     /** We're below a function symbol application. */
     App(
       Sym, Vec<Term>, Vec<Term>
@@ -437,8 +491,20 @@ mod zip {
       loop {
         let update = match * self.curr.get() {
 
+          RealTerm::Op(ref op, ref terms) => {
+            let mut terms = terms.clone() ;
+            terms.reverse() ;
+            if let Some(term) = terms.pop() {
+              self.path.push( Op(op.clone(), vec![], terms) ) ;
+              Some( term.clone() )
+            } else {
+              panic!("operator applied to nothing: {:?}", op)
+            }
+          },
+
           RealTerm::App(ref sym, ref terms) => {
             let mut terms = terms.clone() ;
+            terms.reverse() ;
             if let Some(term) = terms.pop() {
               self.path.push( App(sym.clone(), vec![], terms) ) ;
               Some( term.clone() )
@@ -478,6 +544,19 @@ mod zip {
     pub fn go_up<F: Factory>(mut self, cons: & F) -> Res {
       loop {
         match self.path.pop() {
+
+          Some( Op(op, mut lft, mut rgt) ) => {
+            lft.push(self.curr) ;
+            if let Some(term) = rgt.pop() {
+              // Not done if `rgt` is not empty.
+              self.curr = term ;
+              self.path.push( Op(op, lft, rgt) ) ;
+              return NYet(self)
+            } else {
+              // Otherwise go up.
+              self.curr = cons.op(op, lft)
+            }
+          },
 
           Some( App(sym, mut lft, mut rgt) ) => {
             lft.push(self.curr) ;

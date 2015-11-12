@@ -12,12 +12,13 @@ use std::hash::{ Hash, Hasher } ;
 use std::cmp::{ PartialEq, Eq } ;
 use std::collections::HashSet ;
 
-use term::{ Sym, Var, Type, Term } ;
+use term::{ Sym, Var, Type, Term, STerm } ;
 
 /** Set of callables. */
 pub type CallSet = HashSet<::Callable> ;
 /** Set of properties. */
 pub type PropSet = HashSet<::Prop> ;
+
 
 /** A signature, a list of types. Used only in `Uf`. */
 #[derive(Debug,Clone)]
@@ -243,14 +244,14 @@ pub struct Prop {
   /** System the property is over. */
   sys: ::Sys,
   /** Body of the property. */
-  body: Term,
+  body: STerm,
   /** Calls in the property. */
   calls: CallSet,
 }
 impl Prop {
   /** Creates a new property. */
   #[inline(always)]
-  pub fn mk(sym: Sym, sys: ::Sys, body: Term, calls: CallSet) -> Self {
+  pub fn mk(sym: Sym, sys: ::Sys, body: STerm, calls: CallSet) -> Self {
     Prop { sym: sym, sys: sys, body: body, calls: calls }
   }
   /** Identifier of a property. */
@@ -261,7 +262,7 @@ impl Prop {
   pub fn sys(& self) -> & ::Sys { & self.sys }
   /** Body of a property. */
   #[inline(always)]
-  pub fn body(& self) -> & Term { & self.body }
+  pub fn body(& self) -> & STerm { & self.body }
   /** Calls of a property. */
   #[inline(always)]
   pub fn calls(& self) -> & CallSet { & self.calls }
