@@ -36,8 +36,9 @@
 ;; node b (act, deact: bool) returns (out: int) ;
 ;; let
 ;;   out = a( act and pre not deact ) ;
+;;   -- unguarded ~~~~~~~~~~~~^^^^^ See `oracle` below.
 ;;   -- Property does not hold.
-;;   --%PROPERTY (act and not deact) => ( out = (0 -> pre out + 1) ) ;
+;;   --%PROPERTY (act and not deact) => ( out = pre out + 1 ) ;
 ;; tel
 
 ;; Will be used as the value of the ungarded pre at init.
@@ -46,63 +47,45 @@
 (define-system sys_b
   (
     ;; Traceable inputs/outputs as quoted idents.
-    (       |input(b,act)| Bool)
-    (     |input(b,deact)| Bool)
-    (|pre(input(b,deact))| Bool)
-    (      |output(b,out)| Int )
-    ( |pre(output(b,out))| Int )
-    (          |prop(b,1)| Int ) ;; For the property.
+    (  |input(b,act)| Bool)
+    (|input(b,deact)| Bool)
+    ( |output(b,out)| Int )
   )
   ;; Local variables.
-  ( )
+  (
+    ( |pre(input(b,deact))| ;; Corresponds to the ungarded `pre deact`.
+      Bool
+      ;; Init.
+      oracle ;; First value is given by an oracle (declare-fun).
+      ;; Trans.
+      (_ state |input(b,deact)|) ) ;; Previous value of `deact`.
+  )
   ;; Init.
-  (and
-    ;; Unguarded pre.
-    (= (_ state |pre(input(b,deact))|) oracle)
-    ;;                                 ^^^^^^~~~ Not a state var.
-    (=
-      (_ state |prop(b,1)|)
-      (=>
-        (and (_ state |input(b,act)|) (not (_ state |input(b,deact)|)))
-        (= (_ state |output(b,out)|) 0)
-      )
-    )
-  )
+  true ;; Body of the node is just a call, no init.
   ;; Trans
-  (and
-    (= (_ next |pre(input(b,deact))|) (_ state |input(b,deact)|))
-    (=
-      (_ next |prop(b,1)|)
-      (=>
-        (and (_ next |input(b,act)|) (not (_ next |input(b,deact)|)))
-        (= (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1))
-      )
-    )
-  )
+  true ;; Body of the node is just a call, no trans.
   ;; Compose with
   (
     (sys_a
-      ;; Actual parameter for the first svar of sys_a.
-      (and (_ state |input(b,act)|) (_ state |pre(input(b,deact))|))
-      ;; Actual paramater for the second svar of sys_a.
+      ;; Actual parameter for the first svar of sys_a (unguarded `pre deact`).
+      |pre(input(b,deact))|
+      ;; Actual paramater for the second svar of sys_a. Output of `b`.
       (_ state |output(b,out)|)
     )
   )
 )
 
-(define-prop |prop(b,1)| sys_b
+;; State relation corresponding to the property.
+(define-rel |prop(b,1)| sys_b
   (=>
-    ( or (not (_ state |input(b,act)|)) (_ state |pre(input(b,deact))|) )
-    (= (_ state |output(b,out)|) (_ state |pre(output(b,out))|))
-  )
-  ;; 'state.' is mandatory to distinguish with "constants" (e.g. `oracle`).
-)
-
-(define-prop |cand(b,1)| sys_b
-  (=>
-    ( and (_ state |input(b,act)|) (not (_ state |input(b,deact)|)) )
-    (= (_ state |output(b,out)|) (+ (_ state |pre(output(b,out))|) 1))
+    ( and (_ next |input(b,act)|) (not (_ next |input(b,deact)|)) )
+    ( = (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1) )
   )
 )
 
+;; (define-prop |prop(b,2)| sys_b
+;;   (>= (_ state |output(b,out)|) 0)
+;; )
+
+;; ( verify sys_b (|prop(b,1)| |prop(b,2)|) )
 ( verify sys_b (|prop(b,1)|) )

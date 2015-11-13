@@ -349,6 +349,53 @@ pub fn check_prop_1(
   Ok(())
 }
 
+/** Checks that a proposition definition is legal. */
+pub fn check_prop_2(
+  ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
+) -> Result<(), Error> {
+  let desc = super::prop_desc ;
+  check_sym!(ctxt, sym, desc) ;
+  let sys = match ctxt.get_sys(& sys) {
+    Some(s) => s.clone(),
+    None => {
+      return Err( UkSys(sys, Some(sym), desc) )
+    },
+  } ;
+
+  let mut calls = HashSet::new() ;
+
+  // All symbols used in applications actually exist.
+  for app_sym in body.apps.iter() {
+    match app_defined(ctxt, app_sym) {
+      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+      Some(fun) => { calls.insert(fun) ; },
+    }
+  } ;
+  // Stateful var belong to state of system, non-stateful var exist.
+  for var in body.vars.iter() {
+    match * var.get() {
+      // Non-stateful var exist.
+      real::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
+        None => return Err( UkVar(var.clone(), sym, desc) ),
+        Some(fun) => { calls.insert(fun) ; },
+      },
+      // Stateful var belong to state.
+      // Next forbidden.
+      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
+        var_sym, sys.state()
+      ) {
+        return Err( UkVar(var.clone(), sym, desc) )
+      },
+    }
+  } ;
+  // Unwrap cannot fail, we just checked no svar was used as next.
+  let body = STerm::Two(body.term) ;
+  ctxt.add_prop(
+    Prop::mk(sym.clone(), sys.clone(), body, calls)
+  ) ;
+  Ok(())
+}
+
 /** Checks that a symbol is in a list of local definitions. */
 fn is_sym_in_locals(
   sym: & Sym, locals: & [(Sym, Type, Term, Term)]

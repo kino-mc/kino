@@ -168,6 +168,27 @@ fn prop_1_parser<'a>(
   )
 }
 
+/** Parses a one-state property definition. */
+fn prop_2_parser<'a>(
+  bytes: & 'a [u8], c: & mut Context
+) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+  chain!(
+    bytes,
+    char!('(') ~
+    opt!(space_comment) ~
+    tag!("define-rel") ~
+    space_comment ~
+    sym: apply!(sym_parser, c.factory()) ~
+    space_comment ~
+    state: apply!(sym_parser, c.factory()) ~
+    opt!(space_comment) ~
+    body: apply!(term_parser, c.factory()) ~
+    opt!(space_comment) ~
+    char!(')'),
+    || check_prop_2(c, sym, state, body)
+  )
+}
+
 fn sub_sys_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], Vec<(Sym, Vec<TermAndDep>)>> {
@@ -268,6 +289,7 @@ pub fn item_parser<'a>(
       apply!(fun_dec_parser, c) |
       apply!(fun_def_parser, c) |
       apply!(prop_1_parser, c) |
+      apply!(prop_2_parser, c) |
       apply!(sys_parser, c)
     )
   )

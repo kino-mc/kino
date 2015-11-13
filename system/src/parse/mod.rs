@@ -199,7 +199,7 @@ impl Cex {
       for (ref sym, ref cst) in self.no_state.iter() {
         s = format!("{}\n  {2:^1$} = {3}", s, no_state_len, sym, cst)
       } ;
-      s = format!("{}\ntrace\n", s)
+      s = format!("{}\ntrace:\n", s)
     }
 
     // State values.

@@ -10,6 +10,11 @@
 
 /*! Bounded model-checking.
 
+# To do
+
+* factor code for check of the initial state and the succeeding ones
+* check that unrolling of the transition relation is sat
+
 */
 
 extern crate term ;
@@ -92,82 +97,83 @@ impl event::CanRun for Bmc {
           return ()
         }
 
-        let one_prop_false = props.one_false_state() ;
+        if let Some(one_prop_false) = props.one_false_state() {
 
-        let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
-        // event.log(
-        //   & format!(
-        //     "defining actlit {}\nto imply {} at {}",
-        //     lit, one_prop_false, k
-        //   )
-        // ) ;
-        let check = actlit.mk_impl(& lit, one_prop_false) ;
+          let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+          // event.log(
+          //   & format!(
+          //     "defining actlit {}\nto imply {} at {}",
+          //     lit, one_prop_false, k
+          //   )
+          // ) ;
+          let check = actlit.mk_impl(& lit, one_prop_false) ;
 
-        try_error!(solver.assert(& check, & k), event) ;
+          try_error!(solver.assert(& check, & k), event) ;
 
-        // event.log(& format!("check-sat assuming {}", lit)) ;
+          // event.log(& format!("check-sat assuming {}", lit)) ;
 
-        let mut actlits = props.actlits() ;
-        actlits.push(lit) ;
+          let mut actlits = props.actlits() ;
+          actlits.push(lit) ;
 
-        // event.log(
-        //   & format!(
-        //     "checking {} properties @{}",
-        //     props.len(),
-        //     k.curr()
-        //   )
-        // ) ;
+          // event.log(
+          //   & format!(
+          //     "checking {} properties @{}",
+          //     props.len(),
+          //     k.curr()
+          //   )
+          // ) ;
 
-        match solver.check_sat_assuming( & actlits, k.next() ) {
-          Ok(true) => {
-            // event.log("sat, getting falsified properties") ;
-            match props.get_false_state(& mut solver, & k) {
-              Ok(falsified) => {
-                // let mut s = "falsified:".to_string() ;
-                // for sym in falsified.iter() {
-                //   s = format!("{}\n  {}", s, sym)
-                // } ;
-                // event.log(& s) ;
+          match solver.check_sat_assuming( & actlits, k.next() ) {
+            Ok(true) => {
+              // event.log("sat, getting falsified properties") ;
+              match props.get_false_state(& mut solver, & k) {
+                Ok(falsified) => {
+                  // let mut s = "falsified:".to_string() ;
+                  // for sym in falsified.iter() {
+                  //   s = format!("{}\n  {}", s, sym)
+                  // } ;
+                  // event.log(& s) ;
 
-                match solver.get_model() {
-                  Ok(model) => {
-                    try_error!(
-                      props.forget(& mut solver, & falsified), event
-                    ) ;
-                    event.disproved_at(model, falsified, k.curr())
-                  },
-                  Err(e) => {
-                    event.error(
-                      & format!("could not get model:\n{:?}", e)
-                    ) ;
-                    event.done(Info::Error) ;
-                    return ()
-                  },
-                } ;
-              },
-              Err(e) => {
-                event.error(
-                  & format!("could not get falsifieds\n{:?}", e)
-                ) ;
-                return ()
-              },
-            }
-          },
-          Ok(false) => {
-            event.k_true(props.not_inhibited(), k.curr())
-          },
-          Err(e) => {
-            event.error(
-              & format!("could not perform check-sat\n{:?}", e)
-            ) ;
+                  match solver.get_model() {
+                    Ok(model) => {
+                      try_error!(
+                        props.forget(& mut solver, & falsified), event
+                      ) ;
+                      event.disproved_at(model, falsified, k.curr())
+                    },
+                    Err(e) => {
+                      event.error(
+                        & format!("could not get model:\n{:?}", e)
+                      ) ;
+                      event.done(Info::Error) ;
+                      return ()
+                    },
+                  } ;
+                },
+                Err(e) => {
+                  event.error(
+                    & format!("could not get falsifieds\n{:?}", e)
+                  ) ;
+                  return ()
+                },
+              }
+            },
+            Ok(false) => {
+              event.k_true(props.not_inhibited(), k.curr())
+            },
+            Err(e) => {
+              event.error(
+                & format!("could not perform check-sat\n{:?}", e)
+              ) ;
+              return ()
+            },
+          } ;
+
+          if props.none_left() {
+            event.done_at(k.curr()) ;
             return ()
-          },
+          }
         } ;
-
-        if props.none_left() {
-          event.done_at(k.curr()) ;
-          return ()
-        }
 
         try_error!( sys.unroll(& mut solver, & k), event ) ;
 
@@ -202,81 +208,82 @@ impl event::CanRun for Bmc {
           // event.log( & format!("unrolling at {}", k) ) ;
           try_error!( sys.unroll(& mut solver, & k), event ) ;
 
-          let one_prop_false = props.one_false_next() ;
+          if let Some(one_prop_false) = props.one_false_next() {
 
-          let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
-          // event.log(
-          //   & format!(
-          //     "defining actlit {}\nto imply {} at {}",
-          //     lit, one_prop_false, k
-          //   )
-          // ) ;
-          let check = actlit.mk_impl(& lit, one_prop_false) ;
+            let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+            // event.log(
+            //   & format!(
+            //     "defining actlit {}\nto imply {} at {}",
+            //     lit, one_prop_false, k
+            //   )
+            // ) ;
+            let check = actlit.mk_impl(& lit, one_prop_false) ;
 
-          try_error!(solver.assert(& check, & k), event) ;
+            try_error!(solver.assert(& check, & k), event) ;
 
-          // event.log(& format!("check-sat assuming {}", lit)) ;
+            // event.log(& format!("check-sat assuming {}", lit)) ;
 
-          let mut actlits = props.actlits() ;
-          actlits.push(lit) ;
+            let mut actlits = props.actlits() ;
+            actlits.push(lit) ;
 
-          // event.log(
-          //   & format!(
-          //     "checking {} properties @{}",
-          //     props.len(),
-          //     k.curr()
-          //   )
-          // ) ;
+            // event.log(
+            //   & format!(
+            //     "checking {} properties @{}",
+            //     props.len(),
+            //     k.curr()
+            //   )
+            // ) ;
 
-          match solver.check_sat_assuming( & actlits, k.next() ) {
-            Ok(true) => {
-              // event.log("sat, getting falsified properties") ;
-              match props.get_false_next(& mut solver, & k) {
-                Ok(falsified) => {
-                  // let mut s = "falsified:".to_string() ;
-                  // for sym in falsified.iter() {
-                  //   s = format!("{}\n  {}", s, sym)
-                  // } ;
-                  // event.log(& s) ;
+            match solver.check_sat_assuming( & actlits, k.next() ) {
+              Ok(true) => {
+                // event.log("sat, getting falsified properties") ;
+                match props.get_false_next(& mut solver, & k) {
+                  Ok(falsified) => {
+                    // let mut s = "falsified:".to_string() ;
+                    // for sym in falsified.iter() {
+                    //   s = format!("{}\n  {}", s, sym)
+                    // } ;
+                    // event.log(& s) ;
 
-                  match solver.get_model() {
-                    Ok(model) => {
-                      try_error!(
-                        props.forget(& mut solver, & falsified), event
-                      ) ;
-                      event.disproved_at(model, falsified, k.curr())
-                    },
-                    Err(e) => {
-                      event.error(
-                        & format!("could not get model:\n{:?}", e)
-                      ) ;
-                      event.done(Info::Error) ;
-                      break
-                    },
-                  } ;
-                },
-                Err(e) => {
-                  event.error(
-                    & format!("could not get falsifieds\n{:?}", e)
-                  ) ;
-                  break
-                },
-              }
-            },
-            Ok(false) => {
-              event.k_true(props.not_inhibited(), k.curr())
-            },
-            Err(e) => {
-              event.error(
-                & format!("could not perform check-sat\n{:?}", e)
-              ) ;
+                    match solver.get_model() {
+                      Ok(model) => {
+                        try_error!(
+                          props.forget(& mut solver, & falsified), event
+                        ) ;
+                        event.disproved_at(model, falsified, k.curr())
+                      },
+                      Err(e) => {
+                        event.error(
+                          & format!("could not get model:\n{:?}", e)
+                        ) ;
+                        event.done(Info::Error) ;
+                        break
+                      },
+                    } ;
+                  },
+                  Err(e) => {
+                    event.error(
+                      & format!("could not get falsifieds\n{:?}", e)
+                    ) ;
+                    break
+                  },
+                }
+              },
+              Ok(false) => {
+                event.k_true(props.not_inhibited(), k.curr())
+              },
+              Err(e) => {
+                event.error(
+                  & format!("could not perform check-sat\n{:?}", e)
+                ) ;
+                break
+              },
+            } ;
+
+            if props.none_left() {
+              event.done_at(k.curr()) ;
               break
-            },
-          } ;
-
-          if props.none_left() {
-            event.done_at(k.curr()) ;
-            break
+            }
           }
 
           k = k.nxt()

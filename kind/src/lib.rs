@@ -122,112 +122,115 @@ impl event::CanRun for KInd {
 
           'split: loop {
 
-            let one_prop_false = props.one_false_next() ;
+              if let Some(one_prop_false) = props.one_false_next() {
 
-            let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
-            // event.log(
-            //   & format!(
-            //     "defining actlit {}\nto imply {} at {}",
-            //     lit, one_prop_false, check_offset
-            //   )
-            // ) ;
-            let check = actlit.mk_impl(& lit, one_prop_false) ;
+              let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+              // event.log(
+              //   & format!(
+              //     "defining actlit {}\nto imply {} at {}",
+              //     lit, one_prop_false, check_offset
+              //   )
+              // ) ;
+              let check = actlit.mk_impl(& lit, one_prop_false) ;
 
-            try_error!(solver.assert(& check, & check_offset), event) ;
+              try_error!(solver.assert(& check, & check_offset), event) ;
 
-            // event.log(& format!("check-sat assuming {}", lit)) ;
+              // event.log(& format!("check-sat assuming {}", lit)) ;
 
-            let mut actlits = props.actlits() ;
-            // let prop_count = actlits.len() ;
-            actlits.push(lit) ;
+              let mut actlits = props.actlits() ;
+              // let prop_count = actlits.len() ;
+              actlits.push(lit) ;
 
-            // event.log(
-            //   & format!(
-            //     "checking {} properties @{}",
-            //     props.len(),
-            //     check_offset.next()
-            //   )
-            // ) ;
+              // event.log(
+              //   & format!(
+              //     "checking {} properties @{}",
+              //     props.len(),
+              //     check_offset.next()
+              //   )
+              // ) ;
 
-            match solver.check_sat_assuming( & actlits, check_offset.next() ) {
-              Ok(true) => {
-                // event.log("sat, getting falsified properties") ;
-                match props.get_false_next(& mut solver, & check_offset) {
-                  Ok(falsified) => {
-                    // let mut s = "falsified:".to_string() ;
-                    // for sym in falsified.iter() {
-                    //   s = format!("{}\n  {}", s, sym)
-                    // } ;
-                    // event.log(& s) ;
-                    props.inhibit(& falsified) ;
-                  },
-                  Err(e) => {
-                    event.error(
-                      & format!("could not get falsifieds\n{:?}", e)
-                    ) ;
-                    break
-                  },
-                }
-              },
-              Ok(false) => {
-                // event.log("unsat") ;
-                let unfalsifiable = props.not_inhibited() ;
-                // Wait until we get something.
-                loop {
-                  let mut invariant = true ;
-                  let at_least = k.curr().pre().unwrap() ;
-                  for prop in unfalsifiable.iter() {
-                    match * event.get_k_true(prop) {
-                      Some(ref o) => {
-                        if o < & at_least {
-                          invariant = false ;
-                          break
-                        }
-                      },
-                      _ => { invariant = false ; break }
-                    }
-                  } ;
-                  if invariant {
-                    // event.log("forgetting") ;
-                    try_error!(
-                      props.forget(& mut solver, & unfalsifiable),
-                      event
-                    ) ;
-                    event.proved_at(unfalsifiable, k.next()) ; 
-                    break 'split
-                  } else {
-                    // event.log("recv") ;
-                    match event.recv() {
-                      None => return (),
-                      Some(msgs) => for msg in msgs {
-                        match msg {
-                          MsgDown::Forget(ps) => {
-                            try_error!(
-                              props.forget(& mut solver, & ps),
-                              event
-                            ) ;
-                            continue 'out
-                          },
-                          MsgDown::Invariants(_,_) => event.log(
-                            "received invariants, skipping"
-                          ),
-                          _ => event.error("unknown message")
-                        }
-                      },
-                    } ;
-                    sleep_ms(10) ;
+              match solver.check_sat_assuming( & actlits, check_offset.next() ) {
+                Ok(true) => {
+                  // event.log("sat, getting falsified properties") ;
+                  match props.get_false_next(& mut solver, & check_offset) {
+                    Ok(falsified) => {
+                      // let mut s = "falsified:".to_string() ;
+                      // for sym in falsified.iter() {
+                      //   s = format!("{}\n  {}", s, sym)
+                      // } ;
+                      // event.log(& s) ;
+                      props.inhibit(& falsified) ;
+                    },
+                    Err(e) => {
+                      event.error(
+                        & format!("could not get falsifieds\n{:?}", e)
+                      ) ;
+                      break
+                    },
                   }
-                }
-              },
-              Err(e) => {
-                event.error(
-                  & format!("could not perform check-sat\n{:?}", e)
-                ) ;
-                break
-              },
-            } ;
+                },
+                Ok(false) => {
+                  // event.log("unsat") ;
+                  let unfalsifiable = props.not_inhibited() ;
+                  // Wait until we get something.
+                  loop {
+                    let mut invariant = true ;
+                    let at_least = k.curr().pre().unwrap() ;
+                    for prop in unfalsifiable.iter() {
+                      match * event.get_k_true(prop) {
+                        Some(ref o) => {
+                          if o < & at_least {
+                            invariant = false ;
+                            break
+                          }
+                        },
+                        _ => { invariant = false ; break }
+                      }
+                    } ;
+                    if invariant {
+                      // event.log("forgetting") ;
+                      try_error!(
+                        props.forget(& mut solver, & unfalsifiable),
+                        event
+                      ) ;
+                      event.proved_at(unfalsifiable, k.next()) ; 
+                      break 'split
+                    } else {
+                      // event.log("recv") ;
+                      match event.recv() {
+                        None => return (),
+                        Some(msgs) => for msg in msgs {
+                          match msg {
+                            MsgDown::Forget(ps) => {
+                              try_error!(
+                                props.forget(& mut solver, & ps),
+                                event
+                              ) ;
+                              continue 'out
+                            },
+                            MsgDown::Invariants(_,_) => event.log(
+                              "received invariants, skipping"
+                            ),
+                            _ => event.error("unknown message")
+                          }
+                        },
+                      } ;
+                      sleep_ms(10) ;
+                    }
+                  }
+                },
+                Err(e) => {
+                  event.error(
+                    & format!("could not perform check-sat\n{:?}", e)
+                  ) ;
+                  break
+                },
+              } ;
 
-            if props.all_inhibited() { break }
+              if props.all_inhibited() { break }
+            } else {
+              break 'split
+            }
           } ;
 
           if props.none_left() {

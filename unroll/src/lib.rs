@@ -337,7 +337,7 @@ impl PropManager {
 
   /** Returns the term corresponding to one of the one state, non-inhibited
   properties being false **in state**. */
-  pub fn one_false_state(& self) -> Term {
+  pub fn one_false_state(& self) -> Option<Term> {
     let mut props = Vec::with_capacity(self.props_1.len()) ;
     for (ref sym, & (ref prop, _, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
@@ -345,21 +345,24 @@ impl PropManager {
         props.push( prop.body().state().unwrap().clone() )
       }
     } ;
-    props.shrink_to_fit() ;
-    self.factory.op(
-      Operator::Not,
-      vec![
+    if props.is_empty() { None } else {
+      Some(
         self.factory.op(
-          Operator::And,
-          props
+          Operator::Not,
+          vec![
+            self.factory.op(
+              Operator::And,
+              props
+            )
+          ]
         )
-      ]
-    )
+      )
+    }
   }
 
   /** Returns the term corresponding to one of the non-inhibited properties
   being false. Uses the next version of one-state. */
-  pub fn one_false_next(& self) -> Term {
+  pub fn one_false_next(& self) -> Option<Term> {
     let mut props = Vec::with_capacity(
       self.props_1.len() + self.props_2.len()
     ) ;
@@ -373,15 +376,19 @@ impl PropManager {
         props.push( prop.body().next().clone() )
       }
     } ;
-    self.factory.op(
-      Operator::Not,
-      vec![
+    if props.is_empty() { None } else {
+      Some(
         self.factory.op(
-          Operator::And,
-          props
+          Operator::Not,
+          vec![
+            self.factory.op(
+              Operator::And,
+              props
+            )
+          ]
         )
-      ]
-    )
+      )
+    }
   }
 
   /** Returns the actlits activating all the non-inhibited properties. */
