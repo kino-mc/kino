@@ -371,15 +371,19 @@ fn main() {
             for line in res.lines().lines() {
               log.print(line)
             } ;
-            log.trail() ;
 
             match res {
               Res::Exit => (),
               Res::Check(sys, props) => {
+                log.trail() ;
                 let _ = launch(& log, & context, sys, props, None) ;
               },
-              Res::CheckAss(sys, props, ass) => {
-                let _ = launch(& log, & context, sys, props, Some(ass)) ;
+              Res::CheckAss(_, _, _) => {
+                log.space() ;
+                log.error() ;
+                log.error_line("verify with assumption is not supported") ;
+                log.space() ;
+                log.trail()
               },
             }
           },

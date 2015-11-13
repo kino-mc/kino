@@ -37,8 +37,10 @@
 ;; let
 ;;   out = a( act and pre not deact ) ;
 ;;   -- unguarded ~~~~~~~~~~~~^^^^^ See `oracle` below.
-;;   -- Property does not hold.
-;;   --%PROPERTY (act and not deact) => ( out = pre out + 1 ) ;
+;;
+;;   -- State relations.
+;;     -- Property does not hold (missing `pre`).
+;;     --%PROPERTY (act and not deact) => ( out = pre out + 1 ) ;
 ;; tel
 
 ;; Will be used as the value of the ungarded pre at init.
@@ -68,7 +70,7 @@
   (
     (sys_a
       ;; Actual parameter for the first svar of sys_a (unguarded `pre deact`).
-      |pre(input(b,deact))|
+      (and (_ state |input(b,act)|) (not |pre(input(b,deact))|))
       ;; Actual paramater for the second svar of sys_a. Output of `b`.
       (_ state |output(b,out)|)
     )
@@ -83,9 +85,4 @@
   )
 )
 
-;; (define-prop |prop(b,2)| sys_b
-;;   (>= (_ state |output(b,out)|) 0)
-;; )
-
-;; ( verify sys_b (|prop(b,1)| |prop(b,2)|) )
-( verify sys_b (|prop(b,1)|) )
+( verify-assuming sys_b (|prop(b,1)|) (oracle) )

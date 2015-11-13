@@ -1,3 +1,13 @@
+;; node a (in: bool) returns (out: int) ;
+;; let
+;;   out = (
+;;    if in then 1 else 0
+;;  ) -> (
+;;    if in then pre out + 1 else pre out
+;;  ) ;
+;;  --%PROPERTY out < 0 ;
+;; tel
+
 (define-system sys_a 
   ( (in Bool) (out Int) )
   ()
@@ -10,11 +20,11 @@
   ()
 )
 
-(define-prop out_positive sys_a
-  (>= (_ state out) 0)
+(define-prop out_neg sys_a
+  (< (_ state out) 0)
 )
 
 ( verify sys_a
-  (out_positive)
+  (out_neg)
 )
 

@@ -31,8 +31,6 @@
   (<= (_ state out) 10)
 )
 
-(define-fun act () Bool true)
-
 ;; Check.
-( verify-assuming sys_a (out_positive) (act) )
+( verify sys_a (out_positive) )
 

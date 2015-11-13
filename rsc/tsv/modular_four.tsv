@@ -1,0 +1,124 @@
+;; node a (in: bool) returns (out: int) ;
+;; let
+;;   out = (
+;;    if in then 1 else 0
+;;  ) -> (
+;;    if in then pre out + 1 else pre out
+;;  ) ;
+;;  --%PROPERTY out >= 0 ;
+;; tel
+
+;; Defines a transition system from some initial and transition predicates.
+(define-system sys_a 
+  ;; State signature.
+  ( (in Bool) (out Int) )
+  ;; Local definitions.
+  ()
+  ;; Init.
+  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
+  ;; Trans.
+  (ite
+    (_ next in)
+    (= (_ next out) (+ (_ state out) 1))
+    (= (_ next out) (_ state out))
+  )
+  ;; Composition.
+  ()
+)
+
+;; Defines a property over a state.
+(define-prop out_positive sys_a
+  (>= (_ state out) 0)
+)
+
+
+
+;; node b (act, deact: bool) returns (out: int) ;
+;; let
+;;   out = a( act and pre not deact ) ;
+;;   -- unguarded ~~~~~~~~~~~~^^^^^ See `oracle` below.
+;;
+;;   -- State relations.
+;;     -- Property does not hold.
+;;     --%PROPERTY (act and not deact) => ( out = pre out + 1 ) ;
+;;     -- Property does hold.
+;;     --%PROPERTY (act and pre not deact) => ( out = pre out + 1 ) ;
+;;
+;;   -- State property.
+;;     --Property holds.
+;;     --%PROPERTY out >= 0 ;
+;;     --Property does not hold.
+;;     --%PROPERTY out < 10 ;
+;; tel
+
+;; Will be used as the value of the ungarded pre at init.
+(declare-fun oracle () Bool)
+
+(define-system sys_b
+  (
+    ;; Traceable inputs/outputs as quoted idents.
+    (  |input(b,act)| Bool)
+    (|input(b,deact)| Bool)
+    ( |output(b,out)| Int )
+  )
+  ;; Local variables.
+  (
+    ( |pre(input(b,deact))| ;; Corresponds to the ungarded `pre deact`.
+      Bool
+      ;; Init.
+      oracle ;; First value is given by an oracle (declare-fun).
+      ;; Trans.
+      (_ state |input(b,deact)|) ) ;; Previous value of `deact`.
+  )
+  ;; Init.
+  true ;; Body of the node is just a call, no init.
+  ;; Trans
+  true ;; Body of the node is just a call, no trans.
+  ;; Compose with
+  (
+    (sys_a
+      ;; Actual parameter for the first svar of sys_a (unguarded `pre deact`).
+      (and (_ state |input(b,act)|) (not |pre(input(b,deact))|))
+      ;; Actual paramater for the second svar of sys_a. Output of `b`.
+      (_ state |output(b,out)|)
+    )
+  )
+)
+
+;; State relation.
+;;     -- Property does not hold.
+;;     --%PROPERTY (act and not deact) => ( out = pre out + 1 ) ;
+(define-rel |prop(b,1)| sys_b
+  (=>
+    ( and (_ next |input(b,act)|) (not (_ next |input(b,deact)|)) )
+    ( = (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1) )
+  )
+)
+
+;; State relation.
+;;     -- Property does hold.
+;;     --%PROPERTY (act and pre not deact) => ( out = pre out + 1 ) ;
+(define-rel |prop(b,2)| sys_b
+  (=>
+    ( and (_ next |input(b,act)|) (not (_ state |input(b,deact)|)) )
+    ( = (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1) )
+  )
+)
+
+;;   -- State property.
+;;     --Property holds.
+;;     --%PROPERTY out >= 0 ;
+(define-prop |prop(b,3)| sys_b
+  (>= (_ state |output(b,out)|) 0)
+)
+
+;;     --Property does not hold.
+;;     --%PROPERTY out < 10 ;
+(define-prop |prop(b,4)| sys_b
+  (< (_ state |output(b,out)|) 10)
+)
+
+;; ( verify sys_b (|prop(b,1)| |prop(b,2)|) )
+( verify sys_b
+  (|prop(b,1)| |prop(b,2)| |prop(b,3)| |prop(b,4)|)
+)
