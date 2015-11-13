@@ -85,4 +85,4 @@
   )
 )
 
-( verify-assuming sys_b (|prop(b,1)|) (oracle) )
+( verify sys_b (|prop(b,1)|) )
