@@ -23,6 +23,7 @@ thread-safe and can be cloned.
 
 * more clever input consumption in [`Context`][context struct]
 * less copy in [`Context`][context struct]
+* more informative parse error (depency checking)
 
 [sym type]: ../term/type.Sym.html (Sym type)
 [term type]: ../term/type.Term.html (Term type)

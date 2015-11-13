@@ -1,4 +1,4 @@
-(declare-fun bla (Int) Bool)
+(define-fun bla ( (in Int) ) Bool (>= in 0))
 (declare-fun var () Bool)
 
 ;; Defines a transition system from some initial and transition predicates.
@@ -6,15 +6,19 @@
   ;; State signature.
   ( (in Bool) (out Int) )
   ;; Local definitions.
-  ( (loc Bool (bla (state out))) )
+  ( (loc Bool true (bla (_ state out))) )
   ;; Init.
   (and
-    (ite (state in) (= (state out) 1) (= (state out) 0))
+    (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
     loc
   )
   ;; Trans.
-  (or
-    (ite (next in) (= (next out) (+ (state out) 1)) (= (next out) (state out)))
+  (and
+    (ite
+      (_ next in)
+      (= (_ next out) (+ (_ state out) 1))
+      (= (_ next out) (_ state out))
+    )
     var
   )
   ;; Composition.
@@ -23,11 +27,12 @@
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (>= (state out) 0)
+  (>= (_ state out) 0)
+)
+(define-prop out_le_10 sys_a
+  (<= (_ state out) 10)
 )
 
-(define-fun act () Bool true)
-
 ;; Check.
-( verify-assuming sys_a (out_positive) (act) )
+( verify sys_a (out_positive out_le_10) )
 

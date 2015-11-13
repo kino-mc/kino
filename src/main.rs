@@ -230,6 +230,7 @@ fn launch(
   log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
 ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
   use event::MsgUp::* ;
+  use std::io::Write ;
   log.title( & format!("Running on {}", sys.sym().sym()) ) ;
   log.space() ;
 
@@ -242,7 +243,16 @@ fn launch(
     manager.launch(log, kind::KInd, sys.clone(), props.clone(), c.factory())
   ) ;
 
-  // log.master_log("entering receive loop".to_string()) ;
+  // let mut bytes = Vec::<u8>::new() ;
+  // sys.init().2.to_smt2(& mut bytes, & Offset2::init()) ;
+  // let init = ::std::str::from_utf8(& bytes).unwrap() ;
+  // let mut bytes = Vec::<u8>::new() ;
+  // sys.trans().2.to_smt2(& mut bytes, & Offset2::init()) ;
+  // let trans = ::std::str::from_utf8(& bytes).unwrap() ;
+  // log.master_log(
+  //   format!("system:\ninit:\n  {}\ntrans:\n  {}", init, trans)
+  // ) ;
+
   // log.title("") ;
   // log.space() ;
 
@@ -262,6 +272,14 @@ fn launch(
       },
 
       Ok( Disproved(model, props, from, _) ) => {
+        // let mut s = "model:".to_string() ;
+        // for & ( (ref var, ref off), ref val ) in model.iter() {
+        //   match * off {
+        //     None => s = format!("{}\n{} -> {}", s, var, val),
+        //     Some(ref o) => s = format!("{}\n{}@{} -> {}", s, var, o, val),
+        //   }
+        // } ;
+        // log.master_log(s) ;
         let cex = c.cex_of(& model, & sys) ;
         log.log_cex(from, & cex, & props) ;
         manager.broadcast( MsgDown::Forget(props) )

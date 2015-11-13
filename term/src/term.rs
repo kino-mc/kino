@@ -248,6 +248,18 @@ impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Term {
               args.reverse() ;
               stack.push( (true, args) )
             },
+            & Let(ref binding, ref term) => {
+              try!( write!(writer, "(let ( ") ) ;
+              for & (ref sym, ref term) in binding {
+                try!( write!(writer, "(|") ) ;
+                try!( sym.write(writer, style) ) ;
+                try!( write!(writer, "| ") ) ;
+                try!( term.write(writer, sv_writer, style) ) ;
+                try!( write!(writer, ") ") ) ;
+              } ;
+              try!( write!(writer, ") ") ) ;
+              stack.push( (true, vec![term.clone()]) )
+            }
             _ => unimpl!(),
           } ;
         } else {

@@ -15,16 +15,20 @@
   ;; Local definitions.
   ()
   ;; Init.
-  (ite (state in) (= (state out) 1) (= (state out) 0))
+  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
   ;; Trans.
-  (ite (next in) (= (next out) (+ (state out) 1)) (= (next out) (state out)))
+  (ite
+    (_ next in)
+    (= (_ next out) (+ (_ state out) 1))
+    (= (_ next out) (_ state out))
+  )
   ;; Composition.
   ()
 )
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (>= (state out) 0)
+  (>= (_ state out) 0)
 )
 
 
@@ -46,6 +50,7 @@
     (     |input(b,deact)| Bool)
     (|pre(input(b,deact))| Bool)
     (      |output(b,out)| Int )
+    ( |pre(output(b,out))| Int )
     (          |prop(b,1)| Int ) ;; For the property.
   )
   ;; Local variables.
@@ -53,24 +58,24 @@
   ;; Init.
   (and
     ;; Unguarded pre.
-    (= (state |pre(input(b,deact))|) oracle)
-    ;;                               ^^^^^^~~~ Not a state var.
+    (= (_ state |pre(input(b,deact))|) oracle)
+    ;;                                 ^^^^^^~~~ Not a state var.
     (=
-      (state |prop(b,1)|)
+      (_ state |prop(b,1)|)
       (=>
-        (and (state |input(b,act)|) (not (state |input(b,deact)|)))
-        (= (state |output(b,out)|) 0)
+        (and (_ state |input(b,act)|) (not (_ state |input(b,deact)|)))
+        (= (_ state |output(b,out)|) 0)
       )
     )
   )
   ;; Trans
   (and
-    (= (next |pre(input(b,deact))|) (state |input(b,deact)|))
+    (= (_ next |pre(input(b,deact))|) (_ state |input(b,deact)|))
     (=
-      (next |prop(b,1)|)
+      (_ next |prop(b,1)|)
       (=>
-        (and (next |input(b,act)|) (not (next |input(b,deact)|)))
-        (= (next |output(b,out)|) (+ (state |output(b,out)|) 1))
+        (and (_ next |input(b,act)|) (not (_ next |input(b,deact)|)))
+        (= (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1))
       )
     )
   )
@@ -78,25 +83,25 @@
   (
     (sys_a
       ;; Actual parameter for the first svar of sys_a.
-      (and (state |input(b,act)|) (state |pre(input(b,deact))|))
+      (and (_ state |input(b,act)|) (_ state |pre(input(b,deact))|))
       ;; Actual paramater for the second svar of sys_a.
-      (state |output(b,out)|)
+      (_ state |output(b,out)|)
     )
   )
 )
 
 (define-prop |prop(b,1)| sys_b
   (=>
-    ( or (not (state |input(b,act)|)) (state |pre(input(b,deact))|) )
-    (= (state |output(b,out)|) (state |pre(output(b,out))|))
+    ( or (not (_ state |input(b,act)|)) (_ state |pre(input(b,deact))|) )
+    (= (_ state |output(b,out)|) (_ state |pre(output(b,out))|))
   )
   ;; 'state.' is mandatory to distinguish with "constants" (e.g. `oracle`).
 )
 
 (define-prop |cand(b,1)| sys_b
   (=>
-    ( and (state |input(b,act)|) (not (state |input(b,deact)|)) )
-    (= (state |output(b,out)|) (+ (state |pre(output(b,out))|) 1))
+    ( and (_ state |input(b,act)|) (not (_ state |input(b,deact)|)) )
+    (= (_ state |output(b,out)|) (+ (_ state |pre(output(b,out))|) 1))
   )
 )
 

@@ -440,7 +440,7 @@ fn app_parser<'a>(
     space_comment ~
     sym: id_parser ~
     space_comment ~
-    args: separated_list!(
+    args: separated_nonempty_list!(
       space_comment, apply!(term_parser, f)
     ) ~
     opt!(space_comment) ~
@@ -463,7 +463,15 @@ pub fn term_parser<'a>(
     apply!(op_parser, f) |
     apply!(quantified_parser, f) |
     apply!(let_parser, f) |
-    apply!(app_parser, f)
+    apply!(app_parser, f) |
+    chain!(
+      char!('(') ~
+      opt!(space_comment) ~
+      t: apply!(term_parser, f) ~
+      opt!(space_comment) ~
+      char!(')'),
+      || t
+    )
   )
 }
 

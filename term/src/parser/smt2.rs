@@ -406,7 +406,7 @@ fn app_parser<'a>(
     id: id_parser ~
     multispace ~
     args: map!(
-      separated_list!(
+      separated_nonempty_list!(
         multispace, apply!(term_parser, f, off)
       ),
       |args| check_offsets(f, args, off)
@@ -427,7 +427,15 @@ pub fn term_parser<'a>(
     apply!(op_parser, f, off) |
     apply!(quantified_parser, f, off) |
     apply!(let_parser, f, off) |
-    apply!(app_parser, f, off)
+    apply!(app_parser, f, off) |
+    chain!(
+      char!('(') ~
+      opt!(multispace) ~
+      t: apply!(term_parser, f, off) ~
+      opt!(multispace) ~
+      char!(')'),
+      || t
+    )
   )
 }
 

@@ -21,6 +21,7 @@ use base::* ;
 use super::{ Context, CanAdd, Atom, Res } ;
 
 use self::Error::* ;
+use self::CheckFailed::* ;
 
 /** Parse error. */
 pub enum Error {
@@ -33,15 +34,15 @@ pub enum Error {
   /** Use of unknown (state) variable. */
   UkVar(Var, Sym, & 'static str),
   /** Use of unknown system identifier in verify or property. */
-  UkSys(Sym, & 'static str, Option<Sym>),
+  UkSys(Sym, Option<Sym>, & 'static str),
   /** Use of unknown prop identifier in verify. */
   UkProp(Sym, Sym, & 'static str),
   /** Unknown atom in check with assumption. */
   UkAtom(Sym, Sym, & 'static str),
   /** Illegal use of state variable. */
-  IllSVar(Var, & 'static str, Sym),
+  IllSVar(Var, Sym, & 'static str),
   /** Illegal use of next state variable. */
-  IllNxtSVar(Var, & 'static str, Sym),
+  IllNxtSVar(Var, Sym, & 'static str),
   /** Inconsistent property in check. */
   IncProp(::Prop, ::Sys, & 'static str),
   /** A next was found in a one-state property. */
@@ -78,7 +79,7 @@ impl fmt::Display for Error {
           fmt, "unknown state variable {} in {} {}", var, desc, sym
         ),
       },
-      UkSys(ref sym, ref desc, ref sym_opt) => {
+      UkSys(ref sym, ref sym_opt, ref desc) => {
         let desc = match * sym_opt {
           None => desc.to_string(),
           Some(ref sym) => format!("{} {}", desc, sym),
@@ -91,19 +92,19 @@ impl fmt::Display for Error {
       UkAtom(ref atom_sym, ref sym, ref desc) => write!(
         fmt, "unknown literal {} in {} over {}", atom_sym, desc, sym
       ),
-      IllSVar(ref var, ref desc, ref sym) => write!(
+      IllSVar(ref var, ref sym, ref desc) => write!(
         fmt, "illegal use of state variable {} in {} {}", var, desc, sym
       ),
-      IllNxtSVar(ref var, ref desc, ref sym) => write!(
+      IllNxtSVar(ref var, ref sym, ref desc) => write!(
         fmt, "illegal use of next state variable {} in {} {}", var, desc, sym
       ),
-      IncProp(ref prop, ref sys, desc) => write!(
+      IncProp(ref prop, ref sys, ref desc) => write!(
         fmt, "\
           property {} is over system {} \
           but {} is over system {}\
         ", prop.sym(), prop.sys().sym(), desc, sys.sym()
       ),
-      NxtInProp1(ref var, ref sym, desc) => write!(
+      NxtInProp1(ref var, ref sym, ref desc) => write!(
         fmt, "state variable {} is used as next in {} {}", 
         var.sym(), desc, sym
       ),
@@ -239,41 +240,43 @@ pub fn check_fun_def(
   Ok(())
 }
 
+enum CheckFailed {
+  HasNext(Var),
+  HasSVar(Var),
+  UnknownVar(Var),
+  UnknownSVar(Var),
+  UnknownCall(Sym),
+}
+
 fn check_term_and_dep(
+  ctxt: & Context,
   term: & TermAndDep,
-  ctxt: & Context, sym: & Sym, state: & Args,
-  locals: & [ (Sym, Type, Term, bool) ],
-  svar_allowed: bool, next_allowed: bool, desc: & 'static str,
+  locals: & [ (Sym, Type, Term, Term) ],
+  state: & Args,
+  svar_allowed: bool,
+  next_allowed: bool,
   calls: & mut HashSet<::Callable>
-) -> Result<(), Error> {
+) -> Result<(), CheckFailed> {
   use term::real::Var::Var as NSVar ;
   use term::real::Var::SVar ;
   use term::State::* ;
 
   for var in term.vars.iter() {
     match * var.get() {
-      NSVar(ref var_sym) => match is_sym_in_locals(var_sym, locals) {
-        // No need to check if state vars are allowed.
-        // There's locals so we're in a system.
-        Some(is_next) => {
-          assert!(svar_allowed) ;
-          if is_next && ! next_allowed {
-            return Err( IllNxtSVar(var.clone(), desc, sym.clone()) )
-          }
-        },
-        None => match var_defined(ctxt, var_sym) {
-          None => return Err( UkVar(var.clone(), sym.clone(), desc) ),
-          Some(fun) => { calls.insert(fun) ; },
-        },
+      NSVar(ref var_sym) => if is_sym_in_locals(var_sym, locals) { () } else {
+        match var_defined(ctxt, var_sym) {
+          None => return Err( UnknownVar(var.clone()) ),
+          Some(fun) => { calls.insert(fun) ; () },
+        }
       },
       SVar(ref var_sym, ref st) => if ! svar_allowed {
-        return Err( IllSVar(var.clone(), desc, sym.clone()) )
+        return Err( HasSVar(var.clone()) )
       } else {
         if Next == * st && ! next_allowed {
-          return Err( IllNxtSVar(var.clone(), desc, sym.clone()) )
+          return Err( HasNext(var.clone()) )
         } else {
           if ! svar_in_state(var_sym, state) {
-            return Err( UkVar(var.clone(), sym.clone(), desc) )
+            return Err( UnknownSVar(var.clone()) )
           }
         }
       },
@@ -282,7 +285,7 @@ fn check_term_and_dep(
 
   for app_sym in term.apps.iter() {
     match app_defined(ctxt, app_sym) {
-      None => return Err( UkCall(app_sym.clone(), sym.clone(), desc) ),
+      None => return Err( UnknownCall(app_sym.clone()) ),
       Some(fun) => {
         // Don't care if it was already there.
         calls.insert(fun) ;
@@ -304,7 +307,7 @@ pub fn check_prop_1(
   let sys = match ctxt.get_sys(& sys) {
     Some(s) => s.clone(),
     None => {
-      return Err( UkSys(sys, desc, Some(sym)) )
+      return Err( UkSys(sys, Some(sym), desc) )
     },
   } ;
 
@@ -346,154 +349,85 @@ pub fn check_prop_1(
   Ok(())
 }
 
-/** Checks that a symbol is in a list of local definitions. Returns a None if
-it's not there, otherwise an option of a bool indicating if the term it is
-bound to mentions next. */
+/** Checks that a symbol is in a list of local definitions. */
 fn is_sym_in_locals(
-  sym: & Sym, locals: & [(Sym, Type, Term, bool)]
-) -> Option<bool> {
-  for &(ref local_sym, _, _, ref has_next) in locals.iter() {
-    if sym == local_sym { return Some(* has_next) }
+  sym: & Sym, locals: & [(Sym, Type, Term, Term)]
+) -> bool {
+  for &(ref local_sym, _, _, _) in locals.iter() {
+    if sym == local_sym { return true }
   } ;
-  None
+  false
+}
+
+macro_rules! sys_try {
+  ($check:expr, $sym:expr, $desc:expr) => (
+    match $check {
+      Ok(()) => (),
+      Err( HasNext(var) ) => return Err( IllNxtSVar(var, $sym, $desc) ),
+      Err( HasSVar(var) ) => return Err( IllSVar(var, $sym, $desc) ),
+      Err( UnknownVar(var) ) => return Err( UkVar(var, $sym, $desc) ),
+      Err( UnknownSVar(var) ) => return Err( UkVar(var, $sym, $desc) ),
+      Err( UnknownCall(s) ) => return Err( UkCall(s, $sym, $desc) ),
+    }
+  )
 }
 
 /** Checks that a system definition is legal. */
 pub fn check_sys(
   ctxt: & mut Context, sym: Sym, state: Args,
-  locals: Vec<(Sym, Type, TermAndDep)>,
+  locals: Vec<(Sym, Type, TermAndDep, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
   sub_syss: Vec<(Sym, Vec<TermAndDep>)>
 ) -> Result<(), Error> {
   use term::State::* ;
-  use term::{ Operator, SymMaker, VarMaker, OpMaker, AppMaker, UnTermOps } ;
-  use std::iter::{ FromIterator, Extend } ;
+  use term::{
+    Operator, SymMaker, VarMaker, OpMaker, AppMaker, UnTermOps, BindMaker
+  } ;
+  use std::iter::Extend ;
 
   let desc = super::sys_desc ;
   check_sym!(ctxt, sym, desc) ;
 
   let mut calls = HashSet::new() ;
 
-  let mut tmp_locals = Vec::with_capacity(locals.len()) ;
+  let mut local_vars = Vec::with_capacity(locals.len()) ;
   // All locals definitions make sense.
-  for (local_sym, typ, def) in locals.into_iter() {
-    let (term, apps, vars) = (def.term, def.apps, def.vars) ;
-    let mut has_next = false ;
-    // Applications mention existing symbols.
-    for app_sym in apps.iter() {
-      match app_defined(ctxt, app_sym) {
-        None => return Err( UkCall(app_sym.clone(), sym, desc) ),
-        Some(fun) => {
-          // Don't care if it was already there.
-          calls.insert(fun) ;
-        },
-      }
-    } ;
-    // Variables exist.
-    for var in vars.iter() {
-      match * var.get() {
-        // Non-stateful var exists.
-        real::Var::Var(ref var_sym) => match is_sym_in_locals(
-          var_sym, & tmp_locals
-        ) {
-          Some(false) => (),
-          Some(true) => has_next = true,
-          None => match var_defined(ctxt, var_sym) {
-            None => return Err( UkVar(var.clone(), sym, desc) ),
-            Some(fun) => { calls.insert(fun) ; },
-          },
-        },
-        // Stateful var exists in state.
-        real::Var::SVar(ref var_sym, ref st) => if ! svar_in_state(
-          var_sym, & state
-        ) {
-          return Err( UkVar(var.clone(), sym, desc) )
-        } else {
-          match * st {
-            Next => has_next = true,
-            _ => (),
-          }
-        },
-      }
-    } ;
-    tmp_locals.push( (local_sym, typ, term, has_next) )
+  for (local_sym, typ, def_init, def_trans) in locals.into_iter() {
+    // Check init def. No next allowed.
+    sys_try!(
+      check_term_and_dep(
+        ctxt, & def_init, & local_vars, & state, true, false, & mut calls
+      ), sym, desc
+    ) ;
+    // Check trans def. Next allowed.
+    sys_try!(
+      check_term_and_dep(
+        ctxt, & def_trans, & local_vars, & state, true, true, & mut calls
+      ), sym, desc
+    ) ;
+    local_vars.push( (local_sym, typ, def_init.term, def_trans.term) )
   } ;
 
-  let (init, init_vars, init_apps) = (init.term, init.vars, init.apps) ;
-  // All symbols used in applications actually exist.
-  for app_sym in init_apps.iter() {
-    match ctxt.get_callable(app_sym) {
-      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
-      Some(f) => {
-        // Don't care if it was already there.
-        calls.insert(f.clone()) ;
-      },
-    }
-  } ;
   // Init:
   // * no next state vars
   // * current state vars exist in state
   // * non-stateful var exist.
-  for var in init_vars.iter() {
-    match * var.get() {
-      // Non-stateful var exist.
-      real::Var::Var(ref var_sym) => match is_sym_in_locals(
-        var_sym, & tmp_locals
-      ) {
-        Some(false) => (),
-        Some(true) => return Err( NxtInit(var_sym.clone(), sym) ),
-        None => match var_defined(ctxt, var_sym) {
-          None => return Err( UkVar(var.clone(), sym, desc) ),
-          Some(fun) => { calls.insert(fun) ; },
-        },
-      },
-      // Next state variables are illegal.
-      real::Var::SVar(ref var_sym, Next) => return Err(
-        NxtInit(var_sym.clone(), sym)
-      ),
-      // Current stateful var belong to state.
-      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
-        var_sym, & state
-      ) {
-        return Err( UkVar(var.clone(), sym, desc) )
-      },
-    }
-  } ;
+  sys_try!(
+    check_term_and_dep(
+      ctxt, & init, & local_vars, & state, true, false, & mut calls
+    ), sym, desc
+  ) ;
+  let init = init.term ;
 
-  let (trans, trans_vars, trans_apps) = (trans.term, trans.vars, trans.apps) ;
-  // All symbols used in applications actually exist.
-  for app_sym in trans_apps.iter() {
-    match ctxt.get_callable(app_sym) {
-      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
-      Some(f) => {
-        // Don't care if it was already there.
-        calls.insert(f.clone()) ;
-      },
-    }
-  } ;
   // Trans:
   // * state vars exist in state
   // * non-stateful var exist.
-  for var in trans_vars.iter() {
-    match * var.get() {
-      // Non-stateful var exist.
-      real::Var::Var(ref var_sym) => match is_sym_in_locals(
-        var_sym, & tmp_locals
-      ) {
-        Some(_) => (),
-        None => match var_defined(ctxt, var_sym) {
-          None => return Err( UkVar(var.clone(), sym, desc) ),
-          Some(fun) => { calls.insert(fun) ; },
-        },
-      },
-      // Stateful var belong to state.
-      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
-        var_sym, & state
-      ) {
-        return Err( UkVar(var.clone(), sym, desc) )
-      },
-    }
-  } ;
+  sys_try!(
+    check_term_and_dep(
+      ctxt, & trans, & local_vars, & state, true, true, & mut calls
+    ), sym, desc
+  ) ;
+  let trans = trans.term ;
 
   let mut subsys = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.
@@ -513,11 +447,10 @@ pub fn check_sys(
 
     let mut nu_params = Vec::with_capacity(params.len()) ;
     for param in params.into_iter() {
-      try!(
+      sys_try!(
         check_term_and_dep(
-          & param, ctxt, & sym, & state, & tmp_locals,
-          true, false, desc, & mut calls
-        )
+          ctxt, & param, & local_vars, & state, true, false, & mut calls
+        ), sym, desc
       ) ;
       nu_params.push(param.term)
     } ;
@@ -529,10 +462,13 @@ pub fn check_sys(
     subsys.push( (sub_sys, nu_params) )
   } ;
 
-  // Actual locals vector.
-  let locals = Vec::from_iter(
-    tmp_locals.into_iter().map( |(sym, typ, term, _)| (sym, typ, term) )
-  ) ;
+  let mut init_binding = Vec::with_capacity(local_vars.len()) ;
+  let mut trans_binding = Vec::with_capacity(local_vars.len()) ;
+
+  for & (ref sym, _, ref i, ref t) in local_vars.iter() {
+    init_binding.push( (sym.clone(), i.clone()) ) ;
+    trans_binding.push( (sym.clone(), t.clone()) )
+  } ;
 
   let mut init_state = Vec::with_capacity(state.len()) ;
   let mut trans_state = Vec::with_capacity(2 * state.len()) ;
@@ -573,8 +509,14 @@ pub fn check_sys(
     )
   } ;
 
-  let init = ctxt.factory().op(Operator::And, init_conjs) ;
-  let trans = ctxt.factory().op(Operator::And, trans_conjs) ;
+  let init = ctxt.factory().let_b(
+    init_binding.clone(),
+    ctxt.factory().op(Operator::And, init_conjs)
+  ) ;
+  let trans = ctxt.factory().let_b(
+    trans_binding,
+    ctxt.factory().op(Operator::And, trans_conjs)
+  ) ;
 
   let mut init_params = Vec::with_capacity(init_state.len()) ;
   for & (ref var, _) in init_state.iter() {
@@ -586,12 +528,12 @@ pub fn check_sys(
   } ;
   let (init_term, trans_term) = (
     ctxt.factory().app(init_sym.clone(), init_params),
-    ctxt.factory().app(trans_sym.clone(), trans_params),
+    ctxt.factory().app(trans_sym.clone(), trans_params)
   ) ;
 
   ctxt.add_sys(
     Sys::mk(
-      sym, state, locals,
+      sym, state, local_vars,
       (init_sym, init_state, init, init_term),
       (trans_sym, trans_state, trans, trans_term),
       subsys, calls,
@@ -612,7 +554,7 @@ pub fn check_check(
   } ;
 
   let sys = match ctxt.get_sys(& sym) {
-    None => return Err( UkSys(sym.clone(), desc, None) ),
+    None => return Err( UkSys(sym.clone(), None, desc) ),
     Some(sys) => (* sys).clone(),
   } ;
 

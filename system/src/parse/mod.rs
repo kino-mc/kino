@@ -510,7 +510,7 @@ impl Context {
       for & ( ref pair, ref cst ) in model.iter() {
         let (ref var, ref off_opt) = * pair ;
         match * off_opt {
-          None => match self.sym_unused(var.get().sym()) {
+          None => match self.sym_unused(var.sym()) {
             Some(_) => {
               no_state.insert(var.get().sym().clone(), cst.clone()) ; ()
             },
@@ -573,6 +573,12 @@ pub trait CanAdd {
 impl CanAdd for Context {
   fn add_callable(& mut self, fun: Callable) {
     let sym = fun.sym().clone() ;
+    match self.all.insert(sym.clone()) {
+      true => (),
+      false => panic!(
+        println!("added callable {} but symbol is already used", sym)
+      ),
+    }
     match self.callables.insert(sym, Arc::new(fun)) {
       None => (),
       Some(e) => {
@@ -584,6 +590,12 @@ impl CanAdd for Context {
   }
   fn add_prop(& mut self, prop: Prop) {
     let sym = prop.sym().clone() ;
+    match self.all.insert(sym.clone()) {
+      true => (),
+      false => panic!(
+        println!("added prop {} but symbol is already used", sym)
+      ),
+    }
     match self.props.insert(sym, Arc::new(prop)) {
       None => (),
       Some(e) => {
@@ -595,6 +607,12 @@ impl CanAdd for Context {
   }
   fn add_sys(& mut self, sys: Sys) {
     let sym = sys.sym().clone() ;
+    match self.all.insert(sym.clone()) {
+      true => (),
+      false => panic!(
+        println!("added system {} but symbol is already used", sym)
+      ),
+    }
     match self.syss.insert(sym, Arc::new(sys)) {
       None => (),
       Some(e) => {
