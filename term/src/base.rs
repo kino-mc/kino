@@ -34,10 +34,10 @@ pub enum State {
   Next,
 }
 
-/** Printable in the STS 2 standard. */
-pub trait PrintSts2 {
-  /** Prints something in STS 2 in a `Write`. */
-  fn to_sts2(& self, & mut io::Write) -> io::Result<()> ;
+/** Printable in the TSV standard. */
+pub trait PrintTsv {
+  /** Prints something in TSV in a `Write`. */
+  fn to_tsv(& self, & mut io::Write) -> io::Result<()> ;
 }
 
 /** Printable in the SMT Lib 2 standard, given an offset. */

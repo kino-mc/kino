@@ -18,8 +18,8 @@
 */
 
 extern crate term ;
-extern crate event ;
 extern crate system ;
+extern crate event ;
 extern crate unroll ;
 
 use term::Offset2 ;

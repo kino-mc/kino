@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Parsers for the `sts` format. */
+/*! Parsers for the `tsv` format. */
 
 use std::str ;
 use std::collections::HashSet ;
@@ -31,7 +31,7 @@ use super::{
   quantifier_parser, Quantifier
 } ;
 
-/** Result of STS parsing. */
+/** Result of TSV parsing. */
 #[derive(Clone,Debug)]
 pub struct TermAndDep {
   /** The term parsed. */
@@ -581,7 +581,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    bla_plus_7.to_sts2(& mut s).unwrap() ;
+    bla_plus_7.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -595,7 +595,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -609,7 +609,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -623,7 +623,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -648,7 +648,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -668,7 +668,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    bla_plus_7.to_sts2(& mut s).unwrap() ;
+    bla_plus_7.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -682,7 +682,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -696,7 +696,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -710,7 +710,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_sts2(& mut s).unwrap() ;
+    nested.to_tsv(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,

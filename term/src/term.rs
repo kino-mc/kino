@@ -13,7 +13,7 @@ use std::io ;
 use std::fmt ;
 
 use base::{
-  StateWritable, Writable, SVarWriter, PrintSmt2, PrintSts2, SymWritable,
+  StateWritable, Writable, SVarWriter, PrintSmt2, PrintTsv, SymWritable,
   Offset2, HConsed, HConsign, State, SymPrintStyle
 } ;
 use typ::Type ;
@@ -277,8 +277,8 @@ impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Term {
   }
 }
 
-impl PrintSts2 for Term {
-  fn to_sts2(
+impl PrintTsv for Term {
+  fn to_tsv(
     & self, writer: & mut io::Write
   ) -> io::Result<()> {
     self.write(writer, & (), SymPrintStyle::External)

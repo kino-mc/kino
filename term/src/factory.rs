@@ -24,7 +24,7 @@ use term::{
   bump
 } ;
 use parser ;
-use parser::sts2::TermAndDep ;
+use parser::tsv::TermAndDep ;
 
 macro_rules! try_parse {
   ($fun:expr, $arg: expr, $res:pat => $b:block) => (
@@ -455,23 +455,23 @@ impl ParseSmt2 for Factory {
 }
 
 
-/** Parsers for STS Systems */
+/** Parsers for TSV Systems */
 pub trait ParseSts2 {
-  /** Type of identifiers when parsing an STS system. */
+  /** Type of identifiers when parsing an TSV system. */
   type Ident ;
   /** Type for the result of expression parsing. */
   type ExprRes ;
-  /** Type of types when parsing an STS system. */
+  /** Type of types when parsing an TSV system. */
   type Type ;
-  /** Parses an identifier in STS format. */
+  /** Parses an identifier in TSV format. */
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], Self::Ident> ;
-  /** Parses an expression in STS format. */
+  /** Parses an expression in TSV format. */
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], Self::ExprRes> ;
-  /** Parses a Type in STS format. */
+  /** Parses a Type in TSV format. */
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], Self::Type> ;
@@ -486,14 +486,14 @@ impl ParseSts2 for Factory {
   ) -> IResult<'a, & 'a [u8], Sym> {
     map!(
       bytes,
-      parser::sts2::id_parser,
+      parser::tsv::id_parser,
       |sym| self.sym(sym)
     )
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], TermAndDep> {
-    parser::sts2::term_parser(bytes, self)
+    parser::tsv::term_parser(bytes, self)
   }
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]

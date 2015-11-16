@@ -14,8 +14,8 @@ Unrolls backwards.
 */
 
 extern crate term ;
-extern crate event ;
 extern crate system ;
+extern crate event ;
 extern crate unroll ;
 
 use std::thread::sleep_ms ;

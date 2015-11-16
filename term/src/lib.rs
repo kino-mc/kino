@@ -14,7 +14,7 @@ Real, underlying structures are in module `real`.
 Function symbols (`Sym`), constants (`Cst`) and terms (`Term`) are hash consed
 for perfect/maximal **and concurrent** sharing.
 
-In the following STS stands for the *SMT Lib Transition System* Standard as
+In the following TSV stands for the *SMT Lib Transition System* Standard as
 defined in `panic!("undefined")`.
 
 ## Handling the state
@@ -42,16 +42,16 @@ be mistaken for a stateful variable `|@42 my_var|`.
 So at SMT level all symbols have the shape
 `"|" ~ opt("@<int>") ~ " " ~ "<id>" ~ "|"`
 
-## STS naming convention
+## TSV naming convention
 
-Printing and parsing in STS works as expected, except that printing always
+Printing and parsing in TSV works as expected, except that printing always
 prints symbols as quoted symbols.
 
 ## Parsing
 
-Parsing STS and parsing answers in SMT Lib is different.
+Parsing TSV and parsing answers in SMT Lib is different.
 
-* STS is standardized and do not have offsets *per se*. Stateful variables
+* TSV is standardized and do not have offsets *per se*. Stateful variables
   are specified with
 
   *  `(state <my_var>)` to refer to `<my_var>` in the current state, and
@@ -70,7 +70,6 @@ Parsing STS and parsing answers in SMT Lib is different.
 * `num::rational` crash if denominator is zero. Can happen in parser. Parsing
 only non-zero denominator will push the problem to function symbol application. Need proper handling.
 * document [`write` module][write module]
-* provide `mk_and`, `mk_or` *etc.*
 * provide local fresh symbol constructor
 * have separate enum for actlits (print as `|@actlit <num>|`)
 
@@ -98,7 +97,7 @@ macro_rules! unimpl {
 
 mod base ;
 pub use base::{
-  State, PrintSmt2, PrintSts2, Offset, Offset2, Smt2Offset
+  State, PrintSmt2, PrintTsv, Offset, Offset2, Smt2Offset
 } ;
 mod typ ;
 pub use typ::{ Type, Bool, Int, Rat } ;
@@ -113,7 +112,7 @@ pub use term::{
   Operator, Term, STerm, CstMaker, BindMaker, AppMaker
 } ;
 mod parser ;
-pub use parser::sts2::TermAndDep ;
+pub use parser::tsv::TermAndDep ;
 mod factory ;
 pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 
@@ -128,7 +127,7 @@ pub mod real {
   pub use term::RealTerm as Term ;
 }
 
-/** Internal traits used for SMT Lib 2 and STS Lib 2 writing.
+/** Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
 
 Exposed for extensibility. */
 pub mod write {
@@ -155,12 +154,12 @@ pub mod smt {
   /** Wraps an SMT solver. */
   pub type Solver = ::rsmt2::Solver<::Factory> ;
 
-  #[inline(always)]
   /** The default z3 command. */
-  pub fn z3_cmd() -> Command { Command::new("z3") } 
   #[inline(always)]
+  pub fn z3_cmd() -> Command { Command::new("z3") }
   /** The default cvc4 command. */
-  pub fn cvc4_cmd() -> Command { Command::new("cvc4") } 
+  #[inline(always)]
+  pub fn cvc4_cmd() -> Command { Command::new("cvc4") }
 
   impl Sym2Smt<::Offset> for ::Sym {
     fn sym_to_smt2(
