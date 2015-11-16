@@ -500,42 +500,41 @@ impl Context {
   Assumes the offset **do not have reverse semantics**. That is, the model does
   not come from a backward unrolling. */
   pub fn cex_of(& self, model: & Model, sys: & ::Sys) -> Cex {
-    let sys = sys.clone() ;
     let mut no_state = HashMap::new() ;
     let mut trace = HashMap::<Offset, HashMap<Sym, Cst>>::new() ;
-    { // Pushing scope to release the borrow on `state` later.
-      let state = sys.state() ;
-      for & ( ref pair, ref cst ) in model.iter() {
-        let (ref var, ref off_opt) = * pair ;
-        match * off_opt {
-          None => match self.sym_unused(var.sym()) {
-            Some(_) => {
-              no_state.insert(var.get().sym().clone(), cst.clone()) ; ()
+    let state = sys.state() ;
+    for & ( ref pair, ref cst ) in model.iter() {
+      let (ref var, ref off_opt) = * pair ;
+      match * off_opt {
+        None => match self.sym_unused(var.sym()) {
+          Some(_) => {
+            no_state.insert(var.get().sym().clone(), cst.clone()) ;
+            ()
+          },
+          None => (),
+        },
+        Some(ref off) => if state.contains(var.get().sym()) {
+          let map = match trace.get_mut(off) {
+            Some(ref mut map) => {
+              map.insert(var.get().sym().clone(), cst.clone()) ;
+              continue
             },
-            None => (),
-          },
-          Some(ref off) => if state.contains(var.get().sym()) {
-            let map = match trace.get_mut(off) {
-              Some(ref mut map) => {
-                map.insert(var.get().sym().clone(), cst.clone()) ;
-                continue
-              },
-              None => {
-                let mut map = HashMap::with_capacity(state.len()) ;
-                map.insert(var.get().sym().clone(), cst.clone()) ;
-                map
-              },
-            } ;
-            trace.insert(off.clone(), map) ; ()
-          } else {
-            panic!(
-              "state var {} is not in the state of system {}", var, sys.sym()
-            )
-          },
-        }
+            None => {
+              let mut map = HashMap::with_capacity(state.len()) ;
+              map.insert(var.get().sym().clone(), cst.clone()) ;
+              map
+            },
+          } ;
+          trace.insert(off.clone(), map) ; ()
+        } else {
+          panic!(
+            "state var {} is not in the state of system {}", var, sys.sym()
+          )
+        },
       }
     }
-    Cex { sys: sys, no_state: no_state, trace: trace }
+
+    Cex { sys: sys.clone(), no_state: no_state, trace: trace }
   }
 
 
