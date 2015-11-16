@@ -163,10 +163,11 @@ impl Cex {
     let args = self.sys.state().args() ;
     for & (ref sym, _) in args {
       cst_lens.insert(
-        sym.clone(), format!("{}", sym.get().sym()).len()
+        sym.clone(), format!("{}", sym).len()
       ) ;
     } ;
-    let mut offset_len = self.sys.sym().sym().len() ;
+    let sys_name = format!("{}", self.sys.sym()) ;
+    let mut offset_len = sys_name.len() ;
     for (ref off, ref map) in self.trace.iter() {
       // Max offset length.
       offset_len = max(
@@ -202,10 +203,9 @@ impl Cex {
 
     // State values.
     let mut offset = Offset::zero() ;
-    let name = self.sys.sym().sym() ;
-    s = format!("{}  {}", s, name) ;
+    s = format!("{}  {}", s, sys_name) ;
     let mut sep = String::new() ;
-    for _ in (0..(offset_len - name.len())) {
+    for _ in (0..(offset_len - sys_name.len())) {
       s.push(' ')
     } ;
     for _ in (0..offset_len) {
@@ -214,7 +214,7 @@ impl Cex {
     for & (ref sym, _) in args {
       s = format!("{} | ", s) ;
       sep = format!("{}-|-", sep) ;
-      let fmt = format!("{}", sym.get().sym()) ;
+      let fmt = format!("{}", sym) ;
       s = format!("{}{}", s, fmt) ;
       let width = cst_lens.get(sym).unwrap() ;
       if width > & fmt.len() {
