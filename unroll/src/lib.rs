@@ -170,7 +170,7 @@ impl Actlit {
     & mut self, solver: & mut Solver
   ) -> SmtRes<::term::Var> {
     use term::{ VarMaker, SymMaker } ;
-    let fresh = self.factory.var_consign().var(
+    let fresh: Var = self.factory.var(
       self.factory.sym(format!("fresh_actlit_{}", self.count))
     ) ;
     self.count = self.count + 1 ;
@@ -191,21 +191,15 @@ impl Actlit {
   pub fn mk_impl(
     & self, actlit: & Var, rhs: Term
   ) -> Term {
-    use term::{ OpMaker, Operator } ;
-    self.factory.op(
-      Operator::Impl, vec![ self.factory.mk_var(actlit.clone()), rhs ]
-    )
+    self.factory.imp( self.factory.mk_var(actlit.clone()), rhs )
   }
 
   /** Deactivates an activation literal. */
   pub fn deactivate(
     & self, actlit: Var, solver: & mut Solver
   ) -> UnitSmtRes {
-    use term::{ OpMaker, Operator } ;
     solver.assert(
-      & self.factory.op(
-        Operator::Not, vec![ self.factory.mk_var(actlit) ]
-      ), & self.offset
+      & self.factory.not(self.factory.mk_var(actlit)), & self.offset
     )
   }
 }
@@ -237,7 +231,7 @@ impl PropManager {
     let mut map_2 = HashMap::new() ;
     let offset = Offset2::init() ;
     for prop in props {
-      let fresh = factory.var_consign().var(
+      let fresh: Var = factory.var(
         factory.sym(format!("activate({})", prop.sym().get().sym()))
       ) ;
       match solver.declare_fun(
@@ -248,9 +242,8 @@ impl PropManager {
       }
       match prop.body().clone() {
         STerm::One(ref state, _) => {
-          let state_impl = factory.op(
-            Operator::Impl,
-            vec![ factory.mk_var(fresh.clone()), state.clone() ]
+          let state_impl = factory.imp(
+            factory.mk_var(fresh.clone()), state.clone()
           ) ;
           let was_there = map_1.insert(
             prop.sym().clone(), (prop, fresh, state_impl)
@@ -258,9 +251,8 @@ impl PropManager {
           assert!(was_there.is_none())
         },
         STerm::Two(ref next) => {
-          let next_impl = factory.op(
-            Operator::Impl,
-            vec![ factory.mk_var(fresh.clone()), next.clone() ]
+          let next_impl = factory.imp(
+            factory.mk_var(fresh.clone()), next.clone()
           ) ;
           let was_there = map_2.insert(
             prop.sym().clone(), (prop, fresh, next_impl)
@@ -301,9 +293,7 @@ impl PropManager {
       } ;
       try!(
         solver.assert(
-          & self.factory.op(
-            Operator::Not, vec![ self.factory.mk_var(actlit) ]
-          ), & self.offset
+          & self.factory.not( self.factory.mk_var(actlit) ), & self.offset
         )
       )
     } ;
@@ -346,17 +336,7 @@ impl PropManager {
       }
     } ;
     if props.is_empty() { None } else {
-      Some(
-        self.factory.op(
-          Operator::Not,
-          vec![
-            self.factory.op(
-              Operator::And,
-              props
-            )
-          ]
-        )
-      )
+      Some( self.factory.not( self.factory.and(props) ) )
     }
   }
 
@@ -377,17 +357,7 @@ impl PropManager {
       }
     } ;
     if props.is_empty() { None } else {
-      Some(
-        self.factory.op(
-          Operator::Not,
-          vec![
-            self.factory.op(
-              Operator::And,
-              props
-            )
-          ]
-        )
-      )
+      Some( self.factory.not( self.factory.and(props) ) )
     }
   }
 

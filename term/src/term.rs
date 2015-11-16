@@ -306,19 +306,19 @@ impl VariableMaker for TermConsign {
 }
 
 /** Can create a constant value. */
-pub trait CstMaker<Const> {
+pub trait CstMaker<Const, Out> {
   /** Creates a constant value. */
   #[inline]
-  fn cst(& self, Const) -> Term ;
+  fn cst(& self, Const) -> Out ;
 }
 impl<
-  'a, Const: Clone, T: Sized + CstMaker<Const>
-> CstMaker<& 'a Const> for T {
+  'a, Const: Clone, T: Sized + CstMaker<Const, Term>
+> CstMaker<& 'a Const, Term> for T {
   fn cst(& self, c: & 'a Const) -> Term {
     self.cst(c.clone())
   }
 }
-impl CstMaker<Cst> for TermConsign {
+impl CstMaker<Cst, Term> for TermConsign {
   fn cst(& self, c: Cst) -> Term {
     self.lock().unwrap().mk( C(c) )
   }
@@ -412,7 +412,7 @@ impl BindMaker<Term> for TermConsign {
 /** A trait aggregating variable, constant, and term making traits. */
 pub trait Factory :
   VarMaker<Sym, Term> +
-  CstMaker<Cst> +
+  CstMaker<Cst, Term> +
   OpMaker +
   AppMaker<Sym> +
   BindMaker<Term> {

@@ -88,11 +88,9 @@ impl Atom {
   #[inline]
   pub fn into_var(self, f: & Factory) -> Term {
     use term::VarMaker ;
-    use term::OpMaker ;
-    use term::Operator::Not ;
     match self {
       Atom::Pos(sym) => f.var(sym),
-      Atom::Neg(sym) => f.op(Not, vec![ f.var(sym) ]),
+      Atom::Neg(sym) => f.not( f.var(sym) ),
     }
   }
 }
@@ -505,7 +503,7 @@ impl Context {
     let sys = sys.clone() ;
     let mut no_state = HashMap::new() ;
     let mut trace = HashMap::<Offset, HashMap<Sym, Cst>>::new() ;
-    {
+    { // Pushing scope to release the borrow on `state` later.
       let state = sys.state() ;
       for & ( ref pair, ref cst ) in model.iter() {
         let (ref var, ref off_opt) = * pair ;

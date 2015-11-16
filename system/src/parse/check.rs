@@ -428,7 +428,7 @@ pub fn check_sys(
 ) -> Result<(), Error> {
   use term::State::* ;
   use term::{
-    Operator, SymMaker, VarMaker, OpMaker, AppMaker, UnTermOps, BindMaker
+    SymMaker, VarMaker, AppMaker, UnTermOps, BindMaker
   } ;
   use std::iter::Extend ;
 
@@ -521,12 +521,12 @@ pub fn check_sys(
   let mut trans_state = Vec::with_capacity(2 * state.len()) ;
   let mut tmp_state = Vec::with_capacity(state.len()) ;
   {
-    let f = ctxt.factory().var_consign() ;
+    let f = ctxt.factory() ;
     for & (ref sym, ref typ) in state.args() {
-      let var = f.svar(sym.clone(), Curr) ;
+      let var: Var = f.svar(sym.clone(), Curr) ;
       init_state.push( (var.clone(), * typ) ) ;
       trans_state.push( (var, * typ) ) ;
-      let nxt = f.svar(sym.clone(), Next) ;
+      let nxt: Var = f.svar(sym.clone(), Next) ;
       tmp_state.push( (nxt, * typ) ) ;
     }
   }
@@ -558,11 +558,11 @@ pub fn check_sys(
 
   let init = ctxt.factory().let_b(
     init_binding.clone(),
-    ctxt.factory().op(Operator::And, init_conjs)
+    ctxt.factory().and(init_conjs)
   ) ;
   let trans = ctxt.factory().let_b(
     trans_binding,
-    ctxt.factory().op(Operator::And, trans_conjs)
+    ctxt.factory().and(trans_conjs)
   ) ;
 
   let mut init_params = Vec::with_capacity(init_state.len()) ;

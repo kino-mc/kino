@@ -56,7 +56,7 @@ impl fmt::Display for TermAndDep {
 impl TermAndDep {
   /** Creates a term with dependencies from a variable. */
   pub fn var(factory: & Factory, var: Var) -> Self {
-    let term = factory.mk_var(var.clone()) ;
+    let term: Term = factory.mk_var(var.clone()) ;
     let mut vars = HashSet::new() ;
     vars.insert(var) ;
     TermAndDep {
@@ -170,7 +170,7 @@ impl TermAndDep {
     let linear = kid.linear ;
     let mut binds = vec![] ;
     for (sym, typ) in bindings.into_iter() {
-      let var = factory.var_consign().var(sym.clone()) ;
+      let var = factory.var(sym.clone()) ;
       let was_there = vars.remove(& var) ;
       if was_there {
         binds.push( (sym, typ) ) ;
@@ -222,7 +222,7 @@ impl TermAndDep {
     let mut binds = vec![] ;
     let mut bind_vars = HashSet::new() ;
     for (sym, res) in bindings.into_iter() {
-      let var = factory.var_consign().var(sym.clone()) ;
+      let var = factory.var(sym.clone()) ;
       let was_there = vars.remove(& var) ;
       if was_there {
         let term = res.term ;
@@ -289,6 +289,7 @@ pub fn var_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<'a, & 'a [u8], TermAndDep> {
   use sym::SymMaker ;
+  use var::VarMaker ;
   alt!(
     bytes,
     chain!(
@@ -302,13 +303,13 @@ pub fn var_parser<'a>(
       opt!(space_comment) ~
       char!(')'),
       || {
-        let var = f.var_consign().svar(sym, state) ;
+        let var = f.svar(sym, state) ;
         TermAndDep::var(f, var)
       }
     ) |
     map!(
       id_parser, |s| {
-        let var = f.var_consign().var( f.sym(s) ) ;
+        let var = f.var( f.sym(s) ) ;
         TermAndDep::var(f, var)
       }
     )
@@ -321,7 +322,7 @@ pub fn cst_parser<'a>(
   use term::CstMaker ;
   map!(
     bytes,
-    apply!( super::cst_parser, f.cst_consign() ),
+    apply!( super::cst_parser, f ),
     |cst| TermAndDep::cst(f, cst)
   )
 }

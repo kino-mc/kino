@@ -11,11 +11,9 @@
 
 use nom::{ digit, multispace, IResult, not_line_ending } ;
 
-use cst::ConstMaker ;
-
 use typ::{ Type, Bool, Int, Rat } ;
 use cst::Cst ;
-use term::Operator ;
+use term::{ CstMaker, Operator };
 
 /** Used in tests for parsers. */
 #[cfg(test)]
@@ -144,18 +142,17 @@ named!{ pub rat_parser<Rat>,
   )
 }
 
-pub fn cst_parser<
-  'a, F: ConstMaker<Bool> + ConstMaker<Int> + ConstMaker<Rat>
->(
+pub fn cst_parser<'a, F>(
   bytes: & 'a [u8], f: & F
-) -> IResult<'a, & 'a [u8], Cst> {
+) -> IResult<'a, & 'a [u8], Cst>
+where F: CstMaker<Bool, Cst> + CstMaker<Int, Cst> + CstMaker<Rat, Cst> {
   preceded!(
     bytes,
     opt!(space_comment),
     alt!(
-      map!( int_parser, |i| f.constant(i) ) |
-      map!( rat_parser, |r| f.constant(r) ) |
-      map!( bool_parser, |b| f.constant(b) )
+      map!( int_parser, |i| f.cst(i) ) |
+      map!( rat_parser, |r| f.cst(r) ) |
+      map!( bool_parser, |b| f.cst(b) )
     )
   )
 }

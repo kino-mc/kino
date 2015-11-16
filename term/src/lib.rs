@@ -109,7 +109,7 @@ mod var ;
 pub use var::{ Var, VarMaker } ;
 mod term ;
 pub use term::{
-  Operator, Term, STerm, CstMaker, OpMaker, BindMaker, AppMaker
+  Operator, Term, STerm, CstMaker, BindMaker, AppMaker
 } ;
 mod parser ;
 pub use parser::sts2::TermAndDep ;

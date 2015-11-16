@@ -260,7 +260,7 @@ fn cst_parser<'a>(
   use term::CstMaker ;
   map!(
     bytes,
-    apply!( super::cst_parser, f.cst_consign() ),
+    apply!( super::cst_parser, f ),
     |cst| ( f.cst(cst), Smt2Offset::No )
   )
 }

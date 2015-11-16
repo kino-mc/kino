@@ -16,10 +16,10 @@ use rsmt2::ParseSmt2 ;
 use base::{ Mkable, State, Offset, Offset2, Smt2Offset } ;
 use typ::{ Type, Bool, Int, Rat } ;
 use sym::{ SymConsign, Sym, SymMaker } ;
-use cst::{ Cst, CstConsign } ;
+use cst::{ RealCst, Cst, CstConsign } ;
 use var::{ Var, VarConsign, VarMaker } ;
 use term::{
-  TermConsign, Operator, Term,
+  TermConsign, Operator, Term, RealTerm,
   CstMaker, VariableMaker, OpMaker, AppMaker, BindMaker,
   bump
 } ;
@@ -52,6 +52,34 @@ pub struct Factory {
   term: TermConsign,
 }
 
+// /** Helper macro to create operators. */
+// macro_rules! op_maker {
+//   ($doc:expr, fn $name:ident(1) for $op:ident) => (
+//     #[doc=$doc]
+//     pub fn $name(& self, kid: Term) -> Term {
+//       self.op(Operator::$op, vec![ kid ])
+//     }
+//   ) ;
+//   ($doc:expr, fn $name:ident(2) for $op:ident) => (
+//     #[doc=$doc]
+//     pub fn $name(& self, lhs: Term, rhs: Term) -> Term {
+//       self.op(Operator::$op, vec![ lhs, rhs ])
+//     }
+//   ) ;
+//   ($doc:expr, fn $name:ident(3) for $op:ident) => (
+//     #[doc=$doc]
+//     pub fn $name(& self, wan: Term, two: Term, tri: Term) -> Term {
+//       self.op(Operator::$op, vec![ wan, two, tri ])
+//     }
+//   ) ;
+//   ($doc:expr, fn $name:ident(*) for $op:ident) => (
+//     #[doc=$doc]
+//     pub fn $name(& self, kids: Vec<Term>) -> Term {
+//       self.op(Operator::$op, kids)
+//     }
+//   ) ;
+// }
+
 impl Factory {
   /** Creates an empty term factory. */
   pub fn mk() -> Self {
@@ -62,21 +90,150 @@ impl Factory {
       term: TermConsign::mk(),
     }
   }
+
   /** Parses a type. */
   pub fn parse_type<'a>(bytes: & 'a [u8]) -> IResult<'a, & 'a [u8], Type> {
     parser::type_parser(bytes)
   }
+
   /** The hash cons table for constants. */
   pub fn cst_consign(& self) -> & CstConsign {
     & self.cst
   }
-  /** The hash cons table for variables. */
-  pub fn var_consign(& self) -> & VarConsign {
-    & self.var
-  }
+
   /** Creates a variable from a `Var`. */
   pub fn mk_var(& self, var: Var) -> Term {
     self.term.var(var)
+  }
+
+  /** Creates a constant from a `Const`. */
+  pub fn mk_cst(& self, cst: Cst) -> Term {
+    self.term.cst(cst)
+  }
+
+
+
+  /** Creates an n-ary equality. */
+  pub fn eq(& self, kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 1) ;
+    self.op(Operator::Eq, kids)
+  }
+
+  /** Creates an if-then-else. */
+  pub fn ite(& self, condition: Term, then: Term, els3: Term) -> Term {
+    if then == els3 {
+      return then
+    } else {
+      match * condition.get() {
+        RealTerm::C( ref c ) => match * c.get() {
+          RealCst::Bool(true) => return then,
+          RealCst::Bool(false) => return els3,
+          _ => (),
+        },
+        _ => (),
+      }
+    } ;
+    self.op(Operator::Ite, vec![ condition, then, els3 ])
+  }
+
+  /** Creates a negation. */
+  pub fn not(& self, term: Term) -> Term {
+    match * term.get() {
+      RealTerm::C( ref c ) => match * c.get() {
+        RealCst::Bool(true) => return self.cst(false),
+        RealCst::Bool(false) => return self.cst(true),
+        _ => (),
+      },
+      RealTerm::Op(Operator::Not, ref kids) => {
+        debug_assert!(kids.len() == 1) ;
+        return kids[0].clone()
+      },
+      _ => (),
+    }
+    self.op(Operator::Not, vec![ term ])
+  }
+
+  /** Creates a conjunction. */
+  pub fn and(& self, mut kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 0) ;
+    if kids.len() == 1 { kids.pop().unwrap() } else {
+      self.op(Operator::And, kids)
+    }
+  }
+
+  /** Creates a conjunction. */
+  pub fn or(& self, mut kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 0) ;
+    if kids.len() == 1 { kids.pop().unwrap() } else {
+      self.op(Operator::Or, kids)
+    }
+  }
+
+  /** Creates an implication. */
+  pub fn imp(& self, lhs: Term, rhs: Term) -> Term {
+    self.op(Operator::Impl, vec![lhs, rhs])
+  }
+
+  /** Creates an addition. */
+  pub fn add(& self, mut kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 0) ;
+    if kids.len() == 1 { kids.pop().unwrap() } else {
+      self.op(Operator::Add, kids)
+    }
+  }
+
+  /** Creates a substraction. */
+  pub fn sub(& self, mut kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 0) ;
+    if kids.len() == 1 { kids.pop().unwrap() } else {
+      self.op(Operator::Sub, kids)
+    }
+  }
+
+  /** Creates a numeric negation. */
+  pub fn neg(& self, term: Term) -> Term {
+    match * term.get() {
+      RealTerm::C( ref c ) => match * c.get() {
+        RealCst::Int(ref i) => return self.cst(- i),
+        RealCst::Rat(ref r) => return self.cst(- r),
+        _ => (),
+      },
+      _ => (),
+    } ;
+    self.op(Operator::Neg, vec![ term ])
+  }
+
+  /** Creates a multiplication. */
+  pub fn mul(& self, mut kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 0) ;
+    if kids.len() == 1 { kids.pop().unwrap() } else {
+      self.op(Operator::Mul, kids)
+    }
+  }
+
+  /** Creates a division. */
+  pub fn div(& self, lhs: Term, rhs: Term) -> Term {
+    self.op(Operator::Div, vec![ lhs, rhs ])
+  }
+
+  /** Creates a less than or equal. */
+  pub fn le(& self, lhs: Term, rhs: Term) -> Term {
+    self.op(Operator::Le, vec![ lhs, rhs])
+  }
+
+  /** Creates a greater than or equal. */
+  pub fn ge(& self, lhs: Term, rhs: Term) -> Term {
+    self.op(Operator::Gt, vec![ lhs, rhs])
+  }
+
+  /** Creates a less than. */
+  pub fn lt(& self, lhs: Term, rhs: Term) -> Term {
+    self.op(Operator::Lt, vec![ lhs, rhs])
+  }
+
+  /** Creates a greater than. */
+  pub fn gt(& self, lhs: Term, rhs: Term) -> Term {
+    self.op(Operator::Gt, vec![ lhs, rhs])
   }
 }
 
@@ -97,27 +254,45 @@ impl SymMaker<String> for Factory {
 
 /* |===| Factory can create constants. */
 
-impl CstMaker<Cst> for Factory {
+impl CstMaker<Cst, Term> for Factory {
   fn cst(& self, cst: Cst) -> Term {
     self.term.cst(cst)
   }
 }
-impl CstMaker<Bool> for Factory {
+impl CstMaker<Bool, Term> for Factory {
   fn cst(& self, cst: Bool) -> Term {
     use cst::ConstMaker ;
     self.term.cst( self.cst.constant(cst) )
   }
 }
-impl CstMaker<Int> for Factory {
+impl CstMaker<Int, Term> for Factory {
   fn cst(& self, cst: Int) -> Term {
     use cst::ConstMaker ;
     self.term.cst( self.cst.constant(cst) )
   }
 }
-impl CstMaker<Rat> for Factory {
+impl CstMaker<Rat, Term> for Factory {
   fn cst(& self, cst: Rat) -> Term {
     use cst::ConstMaker ;
     self.term.cst( self.cst.constant(cst) )
+  }
+}
+impl CstMaker<Bool, Cst> for Factory {
+  fn cst(& self, cst: Bool) -> Cst {
+    use cst::ConstMaker ;
+    self.cst.constant(cst)
+  }
+}
+impl CstMaker<Int, Cst> for Factory {
+  fn cst(& self, cst: Int) -> Cst {
+    use cst::ConstMaker ;
+    self.cst.constant(cst)
+  }
+}
+impl CstMaker<Rat, Cst> for Factory {
+  fn cst(& self, cst: Rat) -> Cst {
+    use cst::ConstMaker ;
+    self.cst.constant(cst)
   }
 }
 
@@ -147,6 +322,10 @@ impl<'a> VarMaker<& 'a str, Term> for Factory {
       self.var.svar( self.sym(sym), st )
     )
   }
+}
+impl VarMaker<Sym, Var> for Factory {
+  fn var(& self, sym: Sym) -> Var { self.var.var(sym) }
+  fn svar(& self, sym: Sym, st: State) -> Var { self.var.svar(sym,st) }
 }
 impl VarMaker<Sym, Term> for Factory {
   fn var(& self, sym: Sym) -> Term {
@@ -261,7 +440,7 @@ impl ParseSmt2 for Factory {
   fn parse_value<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<'a, & 'a [u8], Cst> {
-    parser::cst_parser(bytes, & self.cst)
+    parser::cst_parser(bytes, self)
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8], off: & Offset2
