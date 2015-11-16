@@ -26,10 +26,6 @@ fn define(
   sys: & system::Sys, solver: & mut Solver, o: & Offset2
 ) -> UnitSmtRes {
   let init = sys.init() ;
-  // let mut init_args = Vec::with_capacity(init.1.len()) ;
-  // for &(ref v, ref typ) in init.1.iter() {
-  //   init_args.push( ( (v, o), * typ ) ) ;
-  // } ;
   try!(
     solver.define_fun(
       & init.0,
@@ -40,10 +36,6 @@ fn define(
     )
   ) ;
   let trans = sys.trans() ;
-  // let mut trans_args = Vec::with_capacity(trans.1.len()) ;
-  // for &(ref v, ref typ) in trans.1.iter() {
-  //   trans_args.push( ( (v, o), * typ ) ) ;
-  // } ;
   solver.define_fun(
     & trans.0,
     & trans.1,
@@ -85,26 +77,14 @@ impl Unroller for system::Sys {
     // Declaring UFs and defining functions.
     for fun in self.calls() {
       match * * fun {
-        Dec(ref fun) => {
-          try!(
-            solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
-          ) ;
-        },
-        Def(ref fun) => {
-          // let mut args = Vec::with_capacity(fun.args().len()) ;
-          // for & (ref sym, ref typ) in fun.args() {
-          //   args.push( ( (* sym.get()).clone(), * typ) )
-          // } ;
-          try!(
-            solver.define_fun(
-              fun.sym(),
-              fun.args(),
-              fun.typ(),
-              fun.body(),
-              & offset
-            )
+        Dec(ref fun) => try!(
+          solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
+        ),
+        Def(ref fun) => try!(
+          solver.define_fun(
+            fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
           )
-        },
+        ),
       }
     } ;
 

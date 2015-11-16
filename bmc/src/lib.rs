@@ -26,7 +26,7 @@ use term::Offset2 ;
 use term::smt::* ;
 use term::smt::sync::* ;
 
-use event::{ Event, MsgDown, Info } ;
+use event::msg::{ Event, MsgDown, Info } ;
 
 use system::{ Sys, Prop } ;
 

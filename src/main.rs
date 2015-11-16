@@ -16,7 +16,6 @@
 write stuff here
 */
 
-extern crate ansi_term as ansi ;
 extern crate nom ;
 extern crate term ;
 extern crate system as sys ;
@@ -28,122 +27,15 @@ use std::collections::HashMap ;
 use std::sync::mpsc ;
 use std::thread ;
 
-use ansi::{ ANSIString, Style, Colour } ;
-
 use term::{ Sym, Term } ;
 
-use sys::{ Prop, Sys, Cex } ;
+use sys::{ Prop, Sys } ;
 use sys::ctxt::* ;
 
-use event::{ MsgUp, MsgDown, CanRun, Technique, Event, Info } ;
-
-static header: & 'static str = "|=====| " ;
-static trailer: & 'static str = "|=====|" ;
-static prefix: & 'static str = "| " ;
-
-/** Provides logging helper functions. */
-pub struct Log {
-  bold: Style,
-  success_style: Colour,
-  success: ANSIString<'static>,
-  error_style: Style,
-  error: ANSIString<'static>,
-}
-impl Log {
-  fn mk() -> Self {
-    let bold = ansi::Style::new().bold() ;
-    let success_style = ansi::Colour::Green ;
-    let success = success_style.paint("success") ;
-    let error_style = ansi::Colour::Red.bold() ;
-    let error = error_style.paint("error:") ;
-    Log {
-      bold: bold,
-      success_style: success_style,
-      success: success,
-      error_style: error_style,
-      error: error,
-    }
-  }
-  fn space(& self) { println!("{}", prefix) }
-  fn empty_space(& self) { println!("") }
-  fn trail(& self) {
-    println!("{}", trailer) ;
-    println!("")
-  }
-  fn title(& self, e: & str) {
-    println!("{}{}", header, self.bold.paint(e))
-  }
-  fn success(& self) {
-    println!("{}{}", self.success_style.paint(prefix), self.success)
-  }
-  fn error(& self) {
-    println!("{}{}", self.error_style.paint(prefix), self.error)
-  }
-  fn error_from(& self, t: Technique) {
-    println!(
-      "{}{} in {}",
-      self.error_style.paint(prefix), self.error, self.bold.paint(t.to_str())
-    )
-  }
-  fn error_line(& self, s: & str) {
-    println!("{}{}", self.error_style.paint(prefix), s)
-  }
-  fn print(& self, s: & str) {
-    println!("{}{}", prefix, s)
-  }
-  fn log(& self, t: Technique, bla: String) {
-    let mut lines = bla.lines() ;
-    println!(
-      "{}{}: {}",
-      prefix, self.bold.paint(t.to_str()), lines.next().unwrap()
-    ) ;
-    for line in lines {
-      println!("{}{}", prefix, line)
-    } ;
-    self.space()
-  }
-  fn master_log(& self, bla: String) {
-    let mut lines = bla.lines() ;
-    println!(
-      "{}{}: {}",
-      prefix, self.bold.paint("kino"), lines.next().unwrap()
-    ) ;
-    for line in lines {
-      println!("{}{}", prefix, line)
-    } ;
-    self.space()
-  }
-  fn log_proved(
-    & self, t: Technique, props: & [Sym], info: & Info
-  ) {
-    let pref = self.success_style.paint(prefix) ;
-    println!(
-      "{}{} proved {} propertie(s) {}:",
-      pref, self.bold.paint(t.to_str()), props.len(), info
-    ) ;
-    for prop in props.iter() {
-      println!("{}  {}", pref, self.success_style.paint(prop.sym())) ;
-    } ;
-    self.space()
-  }
-  fn log_cex(
-    & self, t: Technique, cex: & Cex, props: & [Sym]
-  ) {
-    let pref = self.error_style.paint(prefix) ;
-    println!(
-      "{}{} falsified {} propertie(s) at {}:",
-      pref, self.bold.paint(t.to_str()), props.len(), cex.len()
-    ) ;
-    for prop in props.iter() {
-      println!("{}  {}", pref, self.error_style.paint(prop.sym())) ;
-    } ;
-    println!("{}{}:", pref, self.bold.paint("counterexample")) ;
-    for line in cex.format().lines() {
-      println!("{}  {}", pref, line)
-    } ;
-    self.space()
-  }
-}
+use event::{ CanRun, Technique } ;
+use event::Technique::Kino ;
+use event::log::{ MasterLog, Formatter, Styler } ;
+use event::msg::{ MsgUp, MsgDown, Event, Info } ;
 
 /** Wrapper around master and kids receive and send channels. */
 pub struct KidManager {
@@ -162,9 +54,8 @@ impl KidManager {
   }
   /** Launches a technique. */
   pub fn launch<T: CanRun + Send + 'static>(
-    & mut self, log: & Log,
-    t: T, sys: Sys, props: Vec<Prop>, f: & term::Factory
-  ) -> Result<(), ()> {
+    & mut self, t: T, sys: Sys, props: Vec<Prop>, f: & term::Factory
+  ) -> Result<(), String> {
     let (s,r) = mpsc::channel() ;
     let id = t.id().clone() ;
     let event = Event::mk(
@@ -174,24 +65,15 @@ impl KidManager {
       move || t.run(sys, props, event)
     ) {
       Ok(_) => (),
-      Err(e) => {
-        log.error() ;
-        log.error_line(
-          & format!("could not spawn process {}:", id.desc())
-        ) ;
-        log.error_line( & format!("{}", e) ) ;
-        return Err(())
-      },
+      Err(e) => return Err(
+        format!("could not spawn process {}:\n{}", id.desc(), e)
+      ),
     } ;
     match self.senders.insert(id, s) {
       None => Ok(()),
-      Some(_) => {
-        log.error() ;
-        log.error_line(
-          & format!("technique {} is already running", id.to_str())
-        ) ;
-        Err(())
-      },
+      Some(_) => Err(
+        format!("technique {} is already running", id.to_str())
+      ),
     }
   }
 
@@ -226,22 +108,29 @@ impl KidManager {
   pub fn kids_done(& self) -> bool { self.senders.is_empty() }
 }
 
-fn launch(
-  log: & Log, c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
+fn launch<F: Formatter, S: Styler>(
+  log: & MasterLog<F,S>,
+  c: & Context, sys: Sys, props: Vec<Prop>, _: Option<Vec<Term>>
 ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
-  use event::MsgUp::* ;
+  use event::msg::MsgUp::* ;
   use std::io::Write ;
   log.title( & format!("Running on {}", sys.sym().sym()) ) ;
-  log.space() ;
+  log.nl() ;
 
   let mut manager = KidManager::mk() ;
 
-  try!(
-    manager.launch(log, bmc::Bmc, sys.clone(), props.clone(), c.factory())
-  ) ;
-  try!(
-    manager.launch(log, kind::KInd, sys.clone(), props.clone(), c.factory())
-  ) ;
+  match manager.launch(
+    bmc::Bmc, sys.clone(), props.clone(), c.factory()
+  ) {
+    Ok(()) => (),
+    Err(s) => { log.sad(& Kino, & s) ; return Err(()) },
+  } ;
+  match manager.launch(
+    kind::KInd, sys.clone(), props.clone(), c.factory()
+  ) {
+    Ok(()) => (),
+    Err(s) => { log.sad(& Kino, & s) ; return Err(()) },
+  } ;
 
   // let mut bytes = Vec::<u8>::new() ;
   // sys.init().2.to_smt2(& mut bytes, & Offset2::init()) ;
@@ -261,15 +150,9 @@ fn launch(
 
     match manager.recv() {
 
-      Ok( Bla(from, bla) ) => log.log(from, bla),
+      Ok( Bla(from, bla) ) => log.log(& from, & bla),
 
-      Ok( Error(from, bla) ) => {
-        log.error_from(from) ;
-        for line in bla.lines() {
-          log.error_line(line)
-        } ;
-        log.space()
-      },
+      Ok( Error(from, bla) ) => log.sad(& from, & bla),
 
       Ok( Disproved(model, props, from, _) ) => {
         // let mut s = "model:".to_string() ;
@@ -281,12 +164,12 @@ fn launch(
         // } ;
         // log.master_log(s) ;
         let cex = c.cex_of(& model, & sys) ;
-        log.log_cex(from, & cex, & props) ;
+        log.log_cex(& from, & cex, & props) ;
         manager.broadcast( MsgDown::Forget(props) )
       },
 
       Ok( Proved(props, from, info) ) => {
-        log.log_proved(from, & props, & info) ;
+        log.log_proved(& from, & props, & info) ;
         let mut vec = Vec::with_capacity(props.len()) ;
         for prop in props.iter() {
           match c.get_prop(prop) {
@@ -317,17 +200,16 @@ fn launch(
       },
 
       Ok( Done(from, info) ) => {
-        log.log(from, format!("done {}", info)) ;
+        log.log(& from, & format!("done {}", info)) ;
         manager.forget(& from)
       },
 
-      Ok( _ ) => log.master_log("received a message".to_string()),
+      Ok( msg ) => log.bad(
+        & Kino, & format!("unknown message {}", msg)
+      ),
 
       Err(e) => {
-        log.error() ;
-        for line in (format!("{:?}", e)).lines() {
-          log.error_line(line)
-        } ;
+        log.bad(& Kino, & format!("{:?}", e)) ;
         break
       },
     }
@@ -341,10 +223,10 @@ fn main() {
   use std::fs::File ;
   use std::env::args ;
 
-  let log = Log::mk() ;
+  let log = MasterLog::default() ;
 
-  log.empty_space() ;
-  log.empty_space() ;
+  log.sep() ;
+  log.sep() ;
 
   let mut args = args() ;
   args.next().unwrap() ;
@@ -356,11 +238,11 @@ fn main() {
     log.title( & format!("opening \"{}\"", file) ) ;
     match File::open(& file) {
       Ok(mut f) => {
-        log.success() ;
+        log.print( & log.mk_happy("success") ) ;
         log.title("parsing") ;
         match context.read(& mut f) {
           Ok(res) => {
-            log.success() ;
+            log.print( & log.mk_happy("success") ) ;
 
             log.title("Context") ;
             for line in context.lines().lines() {
@@ -379,35 +261,26 @@ fn main() {
                 let _ = launch(& log, & context, sys, props, None) ;
               },
               Res::CheckAss(_, _, _) => {
-                log.space() ;
-                log.error() ;
-                log.error_line("verify with assumption is not supported") ;
-                log.space() ;
+                log.bad(
+                  & Kino, "verify with assumption is not supported"
+                ) ;
                 log.trail()
               },
             }
           },
           Err( e ) => {
-            log.space() ;
-            log.error() ;
-            for line in ( format!("{}", e) ).lines() {
-              log.error_line(line)
-            } ;
+            log.bad( & Kino, & format!("{}", e) ) ;
             log.trail()
           },
         }
       },
       Err(e) => {
-        log.space() ;
-        log.error() ;
-        for line in ( format!("{}", e) ).lines() {
-          log.error_line(line)
-        } ;
+        log.bad( & Kino, & format!("{}", e) ) ;
         log.trail()
       },
     } ;
 
-    log.empty_space()
+    log.sep()
   }
   ()
 }

@@ -72,6 +72,7 @@ only non-zero denominator will push the problem to function symbol application. 
 * document [`write` module][write module]
 * provide `mk_and`, `mk_or` *etc.*
 * provide local fresh symbol constructor
+* have separate enum for actlits (print as `|@actlit <num>|`)
 
 
 [state]: enum.State.html (State enum type)
