@@ -313,8 +313,6 @@ fn check_term_and_dep(
     }
   } ;
 
-  println!("returning with {} bindings", bindings.len()) ;
-
   Ok(bindings)
 }
 
