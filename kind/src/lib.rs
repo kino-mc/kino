@@ -193,7 +193,7 @@ impl event::CanRun for KInd {
                         props.forget(& mut solver, & unfalsifiable),
                         event
                       ) ;
-                      event.proved_at(unfalsifiable, k.next()) ; 
+                      event.proved_at(unfalsifiable, k.curr()) ; 
                       break 'split
                     } else {
                       // event.log("recv") ;
@@ -234,7 +234,7 @@ impl event::CanRun for KInd {
           } ;
 
           if props.none_left() {
-            event.done_at(k.next()) ;
+            event.done_at(k.curr()) ;
             break
           }
 
