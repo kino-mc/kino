@@ -8,7 +8,7 @@
 ;;  --%PROPERTY out < 0 ;
 ;; tel
 
-(define-system sys_a 
+(define-sys sys_a 
   ( (in Bool) (out Int) )
   ()
   (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))

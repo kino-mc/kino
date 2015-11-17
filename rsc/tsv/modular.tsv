@@ -9,7 +9,7 @@
 ;; tel
 
 ;; Defines a transition system from some initial and transition predicates.
-(define-system sys_a 
+(define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
   ;; Local definitions.
@@ -46,31 +46,25 @@
 ;; Will be used as the value of the ungarded pre at init.
 (declare-fun oracle () Bool)
 
-(define-system sys_b
+(define-sys sys_b
   (
     ;; Traceable inputs/outputs as quoted idents.
-    (  |input(b,act)| Bool)
-    (|input(b,deact)| Bool)
-    ( |output(b,out)| Int )
+    (       |input(b,act)| Bool)
+    (     |input(b,deact)| Bool)
+    (|pre(input(b,deact))| Bool)
+    (      |output(b,out)| Int )
   )
   ;; Local variables.
-  (
-    ( |pre(input(b,deact))| ;; Corresponds to the ungarded `pre deact`.
-      Bool
-      ;; Init.
-      oracle ;; First value is given by an oracle (declare-fun).
-      ;; Trans.
-      (_ state |input(b,deact)|) ) ;; Previous value of `deact`.
-  )
-  ;; Init.
-  true ;; Body of the node is just a call, no init.
-  ;; Trans
-  true ;; Body of the node is just a call, no trans.
+  ( )
+  ;; Init. Gives sense to the `pre deact`.
+  (= (_ state |pre(input(b,deact))|) oracle)
+  ;; Trans. Gives sense to the `pre deact`.
+  (= (_ next |pre(input(b,deact))|) (_ state |input(b,deact)|))
   ;; Compose with
   (
     (sys_a
       ;; Actual parameter for the first svar of sys_a (unguarded `pre deact`).
-      (and (_ state |input(b,act)|) (not |pre(input(b,deact))|))
+      (and (_ state |input(b,act)|) (not (_ state |pre(input(b,deact))|)))
       ;; Actual paramater for the second svar of sys_a. Output of `b`.
       (_ state |output(b,out)|)
     )

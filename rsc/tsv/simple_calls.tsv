@@ -2,11 +2,11 @@
 (declare-fun var () Bool)
 
 ;; Defines a transition system from some initial and transition predicates.
-(define-system sys_a 
+(define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
   ;; Local definitions.
-  ( (loc Bool true (bla (_ state out))) )
+  ( (loc Bool (bla (_ state out))) )
   ;; Init.
   (and
     (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))

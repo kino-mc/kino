@@ -9,7 +9,7 @@
 ;; tel
 
 ;; Defines a transition system from some initial and transition predicates.
-(define-system sys_a 
+(define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
   ;; Local definitions.
@@ -34,5 +34,5 @@
 (define-fun act () Bool true)
 
 ;; Check.
-( verify-assuming sys_a (out_positive) (act) )
+( verify sys_a (out_positive) )
 

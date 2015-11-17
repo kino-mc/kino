@@ -294,7 +294,7 @@ pub struct Sys {
   /** State of the system. */
   state: Args,
   /** Local variables of the system. */
-  locals: Vec<(Sym, Type, Term, Term)>,
+  locals: Vec<(Sym, Type, Term)>,
   /** Identifier of the init predicate of the system. */
   init: (Sym, Vec<(Var, Type)>, Term, Term),
   /** Identifier of the transition relation of the system. */
@@ -308,7 +308,7 @@ impl Sys {
   /** Creates a new system. */
   #[inline(always)]
   pub fn mk(
-    sym: Sym, state: Args, locals: Vec<(Sym, Type, Term, Term)>,
+    sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
     init: (Sym, Vec<(Var, Type)>, Term, Term),
     trans: (Sym, Vec<(Var, Type)>, Term, Term),
     subsys: Vec<(::Sys, Vec<Term>)>,
@@ -328,7 +328,7 @@ impl Sys {
   pub fn state(& self) -> & Args { & self.state }
   /** Locals variables of a system. */
   #[inline(always)]
-  pub fn locals(& self) -> & [ (Sym, Type, Term, Term) ] { & self.locals }
+  pub fn locals(& self) -> & [ (Sym, Type, Term) ] { & self.locals }
   /** Init predicate of a system. */
   #[inline(always)]
   pub fn init(& self) -> & (Sym, Vec<(Var, Type)>, Term, Term) {

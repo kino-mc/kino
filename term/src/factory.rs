@@ -375,7 +375,9 @@ impl BindMaker<Term> for Factory {
   fn let_b(
     & self, bindings: Vec<(Sym, Term)>, term: Term
   ) -> Term {
-    self.term.let_b(bindings, term)
+    if bindings.len() > 0 {
+      self.term.let_b(bindings, term)
+    } else { term }
   }
 }
 

@@ -183,6 +183,17 @@ fn svar_in_state(
   false
 }
 
+/** Checks that a symbol is in a list of local definitions. Returns an option
+of the relevant binding if it is, `None` otherwise. */
+fn is_sym_in_locals(
+  sym: & Sym, locals: & [(Sym, Type, Term)]
+) -> Option<(Sym, Term)> {
+  for & (ref local_sym, _, ref term) in locals.iter() {
+    if sym == local_sym { return Some( (local_sym.clone(), term.clone()) ) }
+  } ;
+  None
+}
+
 /** Checks that a function declaration is legal. */
 pub fn check_fun_dec(
   ctxt: & mut Context, sym: Sym, sig: Sig, typ: Type
@@ -248,26 +259,35 @@ enum CheckFailed {
   UnknownCall(Sym),
 }
 
+/** Checks everything in a term is well defined.
+
+Returns a `Result` of the bindings from the `locals` necessary for the term to
+make sense. */
 fn check_term_and_dep(
   ctxt: & Context,
   term: & TermAndDep,
-  locals: & [ (Sym, Type, Term, Term) ],
+  locals: & [ (Sym, Type, Term) ],
   state: & Args,
   svar_allowed: bool,
   next_allowed: bool,
   calls: & mut HashSet<::Callable>
-) -> Result<(), CheckFailed> {
+) -> Result<HashSet<(Sym, Term)>, CheckFailed> {
   use term::real::Var::Var as NSVar ;
   use term::real::Var::SVar ;
   use term::State::* ;
 
+  let mut bindings = HashSet::with_capacity(locals.len()) ;
+
   for var in term.vars.iter() {
     match * var.get() {
-      NSVar(ref var_sym) => if is_sym_in_locals(var_sym, locals) { () } else {
-        match var_defined(ctxt, var_sym) {
+      NSVar(ref var_sym) => match is_sym_in_locals(var_sym, locals) {
+        Some( (sym, term) ) => {
+          bindings.insert( (sym, term) ) ; ()
+        },
+        None => match var_defined(ctxt, var_sym) {
           None => return Err( UnknownVar(var.clone()) ),
           Some(fun) => { calls.insert(fun) ; () },
-        }
+        },
       },
       SVar(ref var_sym, ref st) => if ! svar_allowed {
         return Err( HasSVar(var.clone()) )
@@ -293,7 +313,9 @@ fn check_term_and_dep(
     }
   } ;
 
-  Ok(())
+  println!("returning with {} bindings", bindings.len()) ;
+
+  Ok(bindings)
 }
 
 /** Checks that a proposition definition is legal. */
@@ -396,20 +418,12 @@ pub fn check_prop_2(
   Ok(())
 }
 
-/** Checks that a symbol is in a list of local definitions. */
-fn is_sym_in_locals(
-  sym: & Sym, locals: & [(Sym, Type, Term, Term)]
-) -> bool {
-  for &(ref local_sym, _, _, _) in locals.iter() {
-    if sym == local_sym { return true }
-  } ;
-  false
-}
-
 macro_rules! sys_try {
-  ($check:expr, $sym:expr, $desc:expr) => (
+  ($check:expr, $ctxt:expr, $term:expr, $sym:expr, $desc:expr) => (
     match $check {
-      Ok(()) => (),
+      Ok( bindings ) => $ctxt.factory().let_b(
+        Vec::from_iter( bindings.into_iter() ), $term
+      ),
       Err( HasNext(var) ) => return Err( IllNxtSVar(var, $sym, $desc) ),
       Err( HasSVar(var) ) => return Err( IllSVar(var, $sym, $desc) ),
       Err( UnknownVar(var) ) => return Err( UkVar(var, $sym, $desc) ),
@@ -422,7 +436,7 @@ macro_rules! sys_try {
 /** Checks that a system definition is legal. */
 pub fn check_sys(
   ctxt: & mut Context, sym: Sym, state: Args,
-  locals: Vec<(Sym, Type, TermAndDep, TermAndDep)>,
+  locals: Vec<(Sym, Type, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
   sub_syss: Vec<(Sym, Vec<TermAndDep>)>
 ) -> Result<(), Error> {
@@ -430,7 +444,7 @@ pub fn check_sys(
   use term::{
     SymMaker, VarMaker, AppMaker, UnTermOps, BindMaker
   } ;
-  use std::iter::Extend ;
+  use std::iter::{ Extend, FromIterator } ;
 
   let desc = super::sys_desc ;
   check_sym!(ctxt, sym, desc) ;
@@ -439,42 +453,34 @@ pub fn check_sys(
 
   let mut local_vars = Vec::with_capacity(locals.len()) ;
   // All locals definitions make sense.
-  for (local_sym, typ, def_init, def_trans) in locals.into_iter() {
-    // Check init def. No next allowed.
-    sys_try!(
+  for (local_sym, typ, term) in locals.into_iter() {
+    // Check local definition. No next allowed.
+    let term = sys_try!(
       check_term_and_dep(
-        ctxt, & def_init, & local_vars, & state, true, false, & mut calls
-      ), sym, desc
+        ctxt, & term, & local_vars, & state, true, false, & mut calls
+      ), ctxt, term.term, sym, desc
     ) ;
-    // Check trans def. Next allowed.
-    sys_try!(
-      check_term_and_dep(
-        ctxt, & def_trans, & local_vars, & state, true, true, & mut calls
-      ), sym, desc
-    ) ;
-    local_vars.push( (local_sym, typ, def_init.term, def_trans.term) )
+    local_vars.push( (local_sym, typ, term) )
   } ;
 
   // Init:
   // * no next state vars
   // * current state vars exist in state
   // * non-stateful var exist.
-  sys_try!(
+  let init = sys_try!(
     check_term_and_dep(
       ctxt, & init, & local_vars, & state, true, false, & mut calls
-    ), sym, desc
+    ), ctxt, init.term, sym, desc
   ) ;
-  let init = init.term ;
 
   // Trans:
   // * state vars exist in state
   // * non-stateful var exist.
-  sys_try!(
+  let trans = sys_try!(
     check_term_and_dep(
       ctxt, & trans, & local_vars, & state, true, true, & mut calls
-    ), sym, desc
+    ), ctxt, trans.term, sym, desc
   ) ;
-  let trans = trans.term ;
 
   let mut subsys = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.
@@ -494,12 +500,12 @@ pub fn check_sys(
 
     let mut nu_params = Vec::with_capacity(params.len()) ;
     for param in params.into_iter() {
-      sys_try!(
+      let term = sys_try!(
         check_term_and_dep(
           ctxt, & param, & local_vars, & state, true, false, & mut calls
-        ), sym, desc
+        ), ctxt, param.term, sym, desc
       ) ;
-      nu_params.push(param.term)
+      nu_params.push(term)
     } ;
 
     for call in sub_sys.calls().iter() {
@@ -509,13 +515,13 @@ pub fn check_sys(
     subsys.push( (sub_sys, nu_params) )
   } ;
 
-  let mut init_binding = Vec::with_capacity(local_vars.len()) ;
-  let mut trans_binding = Vec::with_capacity(local_vars.len()) ;
+  // let mut init_binding = Vec::with_capacity(local_vars.len()) ;
+  // let mut trans_binding = Vec::with_capacity(local_vars.len()) ;
 
-  for & (ref sym, _, ref i, ref t) in local_vars.iter() {
-    init_binding.push( (sym.clone(), i.clone()) ) ;
-    trans_binding.push( (sym.clone(), t.clone()) )
-  } ;
+  // for & (ref sym, _, ref t) in local_vars.iter() {
+  //   init_binding.push( (sym.clone(), i.clone()) ) ;
+  //   trans_binding.push( (sym.clone(), t.clone()) )
+  // } ;
 
   let mut init_state = Vec::with_capacity(state.len()) ;
   let mut trans_state = Vec::with_capacity(2 * state.len()) ;
@@ -556,14 +562,8 @@ pub fn check_sys(
     )
   } ;
 
-  let init = ctxt.factory().let_b(
-    init_binding.clone(),
-    ctxt.factory().and(init_conjs)
-  ) ;
-  let trans = ctxt.factory().let_b(
-    trans_binding,
-    ctxt.factory().and(trans_conjs)
-  ) ;
+  let init = ctxt.factory().and(init_conjs) ;
+  let trans = ctxt.factory().and(trans_conjs) ;
 
   let mut init_params = Vec::with_capacity(init_state.len()) ;
   for & (ref var, _) in init_state.iter() {
