@@ -234,7 +234,7 @@ impl event::CanRun for KInd {
           } ;
 
           if props.none_left() {
-            event.done_at(k.curr()) ;
+            event.done_at( k.curr() ) ;
             break
           }
 

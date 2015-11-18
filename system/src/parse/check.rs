@@ -18,7 +18,7 @@ use term::{ TermAndDep, Type, Sym, Var, Term, STerm } ;
 use term::real ;
 
 use base::* ;
-use super::{ Context, CanAdd, Atom, Res } ;
+use super::{ Context, Atom, Res } ;
 
 use self::Error::* ;
 use self::CheckFailed::* ;
@@ -196,20 +196,17 @@ fn is_sym_in_locals(
 
 /** Checks that a function declaration is legal. */
 pub fn check_fun_dec(
-  ctxt: & mut Context, sym: Sym, sig: Sig, typ: Type
-) -> Result<(), Error> {
+  ctxt: & Context, sym: Sym, sig: Sig, typ: Type
+) -> Result<Callable, Error> {
   let desc = super::uf_desc ;
   check_sym!(ctxt, sym, desc) ;
-  ctxt.add_callable(
-    Callable::Dec( Uf::mk(sym, sig, typ) )
-  ) ;
-  Ok(())
+  Ok( Callable::Dec( Uf::mk(sym, sig, typ) ) )
 }
 
 /** Checks that a function definition is legal. */
 pub fn check_fun_def(
-  ctxt: & mut Context, sym: Sym, args: Args, typ: Type, body: TermAndDep
-) -> Result<(), Error> {
+  ctxt: & Context, sym: Sym, args: Args, typ: Type, body: TermAndDep
+) -> Result<Callable, Error> {
   let desc = super::fun_desc ;
   check_sym!(ctxt, sym, desc) ;
 
@@ -245,10 +242,9 @@ pub fn check_fun_def(
       _ => return Err( SVarInDef(var.clone(), sym) ),
     }
   } ;
-  ctxt.add_callable(
+  Ok(
     Callable::Def( Fun::mk(sym, args, typ, body.term, calls) )
-  ) ;
-  Ok(())
+  )
 }
 
 enum CheckFailed {
@@ -317,9 +313,9 @@ fn check_term_and_dep(
 }
 
 /** Checks that a proposition definition is legal. */
-pub fn check_prop_1(
-  ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
-) -> Result<(), Error> {
+pub fn check_prop(
+  ctxt: & Context, sym: Sym, sys: Sym, body: TermAndDep
+) -> Result<Prop, Error> {
   use term::State::Curr ;
   use term::UnTermOps ;
   let desc = super::prop_desc ;
@@ -363,16 +359,15 @@ pub fn check_prop_1(
   // Unwrap cannot fail, we just checked no svar was used as next.
   let nxt = ctxt.factory().bump(body.term.clone()).unwrap() ;
   let body = STerm::One(body.term, nxt) ;
-  ctxt.add_prop(
+  Ok(
     Prop::mk(sym.clone(), sys.clone(), body, calls)
-  ) ;
-  Ok(())
+  )
 }
 
-/** Checks that a proposition definition is legal. */
-pub fn check_prop_2(
-  ctxt: & mut Context, sym: Sym, sys: Sym, body: TermAndDep
-) -> Result<(), Error> {
+/** Checks that a relation definition is legal. */
+pub fn check_rel(
+  ctxt: & Context, sym: Sym, sys: Sym, body: TermAndDep
+) -> Result<Prop, Error> {
   let desc = super::prop_desc ;
   check_sym!(ctxt, sym, desc) ;
   let sys = match ctxt.get_sys(& sys) {
@@ -410,10 +405,9 @@ pub fn check_prop_2(
   } ;
   // Unwrap cannot fail, we just checked no svar was used as next.
   let body = STerm::Two(body.term) ;
-  ctxt.add_prop(
+  Ok(
     Prop::mk(sym.clone(), sys.clone(), body, calls)
-  ) ;
-  Ok(())
+  )
 }
 
 macro_rules! sys_try {
@@ -433,11 +427,11 @@ macro_rules! sys_try {
 
 /** Checks that a system definition is legal. */
 pub fn check_sys(
-  ctxt: & mut Context, sym: Sym, state: Args,
+  ctxt: & Context, sym: Sym, state: Args,
   locals: Vec<(Sym, Type, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
   sub_syss: Vec<(Sym, Vec<TermAndDep>)>
-) -> Result<(), Error> {
+) -> Result<Sys, Error> {
   use term::State::* ;
   use term::{
     SymMaker, VarMaker, AppMaker, UnTermOps, BindMaker
@@ -576,16 +570,14 @@ pub fn check_sys(
     ctxt.factory().app(trans_sym.clone(), trans_params)
   ) ;
 
-  ctxt.add_sys(
+  Ok(
     Sys::mk(
       sym, state, local_vars,
       (init_sym, init_state, init, init_term),
       (trans_sym, trans_state, trans, trans_term),
       subsys, calls,
     )
-  ) ;
-
-  Ok(())
+  )
 }
 
 /** Checks that a check is legal. */

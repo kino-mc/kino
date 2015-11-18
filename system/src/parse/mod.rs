@@ -30,7 +30,9 @@ use std::sync::Arc ;
 use std::thread::sleep_ms ;
 use std::collections::{ HashSet, HashMap } ;
 
-use term::{ Offset, Cst, Sym, Term, Factory, Model } ;
+use term::{
+  TermAndDep, Type, Offset, Cst, Sym, Term, Factory, Model
+} ;
 
 use base::* ;
 mod parsers ;
@@ -497,8 +499,8 @@ impl Context {
 
   /** Returns a counterexample for a system from a model.
 
-  Assumes the offset **do not have reverse semantics**. That is, the model does
-  not come from a backward unrolling. */
+  Assumes the offset **does not have reverse semantics**. That is, the model
+  does not come from a backward unrolling.*/
   pub fn cex_of(& self, model: & Model, sys: & ::Sys) -> Cex {
     let mut no_state = HashMap::new() ;
     let mut trace = HashMap::<Offset, HashMap<Sym, Cst>>::new() ;
@@ -508,8 +510,13 @@ impl Context {
       match * off_opt {
         None => match self.sym_unused(var.sym()) {
           Some(_) => {
-            no_state.insert(var.get().sym().clone(), cst.clone()) ;
-            ()
+            let old = no_state.insert(var.get().sym().clone(), cst.clone()) ;
+            if let Some(old) = old {
+              panic!(
+                "var {} appears twice ({}, {}) in model for {}",
+                var, old, cst, sys.sym()
+              )
+            }
           },
           None => (),
         },
@@ -538,37 +545,7 @@ impl Context {
   }
 
 
-  // fn build_sys(ctxt: & self, sym: Sym) -> super::sys::Sys {
-  //   let mut ufs = vec![] ;
-  //   let mut sub_sys = HashMap::new() ;
-  //   let mut funs = vec![] ;
-
-  //   // The unwraps below cannot fail, this comes after dependency checking. */
-
-  //   let top = self.get(& sym).unwrap() ;
-  //   let state = top.state().clone() ;
-  //   let init = self.get(top.init()).unwrap() ;
-  //   let trans = self.get(top.trans()).unwrap() ;
-  // }
-}
-
-
-/** Trait use to allow adding functions, properties and systems to a context.
-
-The point is that this trait should not be public outside of the library, so
-that it cannot be corrupted. */
-pub trait CanAdd {
-  /** Adds a function. */
-  fn add_callable(& mut self, Callable) ;
-  /** Adds a property. */
-  fn add_prop(& mut self, Prop) ;
-  /** Adds a system. */
-  fn add_sys(& mut self, Sys) ;
-}
-
-
-impl CanAdd for Context {
-  fn add_callable(& mut self, fun: Callable) {
+  fn internal_add_callable(& mut self, fun: Callable) {
     let sym = fun.sym().clone() ;
     match self.all.insert(sym.clone()) {
       true => (),
@@ -585,7 +562,7 @@ impl CanAdd for Context {
       },
     }
   }
-  fn add_prop(& mut self, prop: Prop) {
+  fn internal_add_prop(& mut self, prop: Prop) {
     let sym = prop.sym().clone() ;
     match self.all.insert(sym.clone()) {
       true => (),
@@ -602,7 +579,7 @@ impl CanAdd for Context {
       },
     }
   }
-  fn add_sys(& mut self, sys: Sys) {
+  fn internal_add_sys(& mut self, sys: Sys) {
     let sym = sys.sym().clone() ;
     match self.all.insert(sym.clone()) {
       true => (),
@@ -619,4 +596,61 @@ impl CanAdd for Context {
       },
     }
   }
+
+
+  /** Adds a function declaration to the context. */
+  pub fn add_fun_dec(
+    & mut self, sym: Sym, sig: Sig, typ: Type
+  ) -> Result<(), Error> {
+    match check::check_fun_dec(self, sym, sig, typ) {
+      Ok(callable) => Ok( self.internal_add_callable(callable) ),
+      Err(e) => Err(e),
+    }
+  }
+
+  /** Adds a function definition to the context. */
+  pub fn add_fun_def(
+    & mut self, sym: Sym, args: Args, typ: Type, body: TermAndDep
+  ) -> Result<(), Error> {
+    match check::check_fun_def(self, sym, args, typ, body) {
+      Ok(callable) => Ok( self.internal_add_callable(callable) ),
+      Err(e) => Err(e),
+    }
+  }
+
+  /** Adds a state property definition to the context. */
+  pub fn add_prop(
+    & mut self, sym: Sym, sys: Sym, body: TermAndDep
+  ) -> Result<(), Error> {
+    match check::check_prop(self, sym, sys, body) {
+      Ok(prop) => Ok( self.internal_add_prop(prop) ),
+      Err(e) => Err(e),
+    }
+  }
+
+  /** Adds a state relation definition to the context. */
+  pub fn add_rel(
+    & mut self, sym: Sym, sys: Sym, body: TermAndDep
+  ) -> Result<(), Error> {
+    match check::check_rel(self, sym, sys, body) {
+      Ok(rel) => Ok( self.internal_add_prop(rel) ),
+      Err(e) => Err(e),
+    }
+  }
+
+  /** Adds a system definition to the context. */
+  pub fn add_sys(
+    & mut self, sym: Sym, state: Args,
+    locals: Vec<(Sym, Type, TermAndDep)>,
+    init: TermAndDep, trans: TermAndDep,
+    sub_syss: Vec<(Sym, Vec<TermAndDep>)>
+  ) -> Result<(), Error> {
+    match check::check_sys(
+      self, sym, state, locals, init, trans, sub_syss
+    ) {
+      Ok(sys) => Ok( self.internal_add_sys(sys) ),
+      Err(e) => Err(e),
+    }
+  }
+
 }

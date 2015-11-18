@@ -113,7 +113,7 @@ fn fun_dec_parser<'a>(
     typ: type_parser ~
     opt!(space_comment) ~
     char!(')'),
-    || check_fun_dec(c, sym, sig, typ)
+    || c.add_fun_dec(sym, sig, typ)
   )
 }
 
@@ -143,12 +143,12 @@ fn fun_def_parser<'a>(
     body: apply!(term_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || check_fun_def(c, sym, args, typ, body)
+    || c.add_fun_def(sym, args, typ, body)
   )
 }
 
-/** Parses a one-state property definition. */
-fn prop_1_parser<'a>(
+/** Parses a state property definition. */
+fn prop_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
@@ -164,12 +164,12 @@ fn prop_1_parser<'a>(
     body: apply!(term_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || check_prop_1(c, sym, state, body)
+    || c.add_prop(sym, state, body)
   )
 }
 
-/** Parses a one-state property definition. */
-fn prop_2_parser<'a>(
+/** Parses a state relation definition. */
+fn rel_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<'a, & 'a [u8], Result<(), Error>> {
   chain!(
@@ -185,7 +185,7 @@ fn prop_2_parser<'a>(
     body: apply!(term_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || check_prop_2(c, sym, state, body)
+    || c.add_rel(sym, state, body)
   )
 }
 
@@ -272,7 +272,7 @@ fn sys_parser<'a>(
     sub_syss: apply!(sub_sys_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || check_sys(c, sym, state, locals, init, trans, sub_syss)
+    || c.add_sys(sym, state, locals, init, trans, sub_syss)
   )
 }
 
@@ -286,8 +286,8 @@ pub fn item_parser<'a>(
     alt!(
       apply!(fun_dec_parser, c) |
       apply!(fun_def_parser, c) |
-      apply!(prop_1_parser, c) |
-      apply!(prop_2_parser, c) |
+      apply!(prop_parser, c) |
+      apply!(rel_parser, c) |
       apply!(sys_parser, c)
     )
   )
