@@ -10,6 +10,8 @@
 /*! Messages from kino to techniques and back. */
 
 use std::fmt ;
+use std::thread ;
+use std::sync::mpsc ;
 use std::sync::mpsc::{ Sender, Receiver, TryRecvError } ;
 use std::collections::HashMap ;
 
@@ -17,9 +19,80 @@ use term::{
   Offset, Sym, Factory, Model, STerm
 } ;
 
-use sys::Prop ;
+use sys::{ Prop, Sys } ;
 
-use ::{ Technique } ;
+use ::{ Technique, CanRun } ;
+
+/** Wrapper around master and kids receive and send channels. */
+pub struct KidManager {
+  /** Receives messages from kids. */
+  r: mpsc::Receiver<MsgUp>,
+  /** Sends messages to master. */
+  s: mpsc::Sender<MsgUp>,
+  /** Senders to running techniques. */
+  senders: HashMap<Technique, mpsc::Sender<MsgDown>>,
+}
+impl KidManager {
+  /** Constructs a kid manager. */
+  pub fn mk() -> Self {
+    let (sender, receiver) = mpsc::channel() ;
+    KidManager { r: receiver, s: sender, senders: HashMap::new() }
+  }
+  /** Launches a technique. */
+  pub fn launch<T: CanRun + Send + 'static>(
+    & mut self, t: T, sys: Sys, props: Vec<Prop>, f: & Factory
+  ) -> Result<(), String> {
+    let (s,r) = mpsc::channel() ;
+    let id = t.id().clone() ;
+    let event = Event::mk(
+      self.s.clone(), r, t.id().clone(), f.clone(), & props
+    ) ;
+    match thread::Builder::new().name(id.thread_name()).spawn(
+      move || t.run(sys, props, event)
+    ) {
+      Ok(_) => (),
+      Err(e) => return Err(
+        format!("could not spawn process {}:\n{}", id.desc(), e)
+      ),
+    } ;
+    match self.senders.insert(id, s) {
+      None => Ok(()),
+      Some(_) => Err(
+        format!("technique {} is already running", id.to_str())
+      ),
+    }
+  }
+
+  /** Broadcasts a message to the kids. */
+  #[inline(always)]
+  pub fn broadcast(& self, msg: MsgDown) {
+    for (_, sender) in self.senders.iter() {
+      match sender.send(msg.clone()) {
+        Ok(()) => (),
+        // Should do something here.
+        // This happens when the techniques already exited.
+        Err(_) => (),
+      }
+    }
+  }
+
+  /** Receive a message from the kids. */
+  #[inline(always)]
+  pub fn recv(& self) -> Result<MsgUp, mpsc::RecvError> {
+    self.r.recv()
+  }
+  /** Forget a kid. */
+  #[inline(always)]
+  pub fn forget(& mut self, t: & Technique) {
+    match self.senders.remove(t) {
+      Some(_) => (),
+      None => panic!("[kid_manager.forget] did not know {}", t.to_str()),
+    }
+  }
+  /** True iff there's no more kids known by the manager. */
+  #[inline(always)]
+  pub fn kids_done(& self) -> bool { self.senders.is_empty() }
+}
 
 
 

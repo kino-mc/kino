@@ -12,18 +12,18 @@
 properties. */
 
 extern crate term ;
-extern crate system ;
+extern crate system as sys ;
 
 use std::collections::{ HashSet, HashMap } ;
 
 use term::* ;
 use term::smt::* ;
 
-use system::{ Prop } ;
+use sys::{ Prop } ;
 
 /** Defines the init and trans predicates of a system. */
 fn define(
-  sys: & system::Sys, solver: & mut Solver, o: & Offset2
+  sys: & sys::Sys, solver: & mut Solver, o: & Offset2
 ) -> UnitSmtRes {
   let init = sys.init() ;
   try!(
@@ -68,9 +68,9 @@ pub trait Unroller {
     & self, solver: & mut Solver, o: & Offset2
   ) -> UnitSmtRes ;
 }
-impl Unroller for system::Sys {
+impl Unroller for sys::Sys {
   fn defclare_funs(& self, solver: & mut Solver) -> UnitSmtRes {
-    use system::real::Callable::* ;
+    use sys::real_sys::Callable::* ;
     // Will not really be used.
     let offset = Offset2::init() ;
 
@@ -384,8 +384,8 @@ impl PropManager {
         let mut syms = Vec::with_capacity(7) ;
         for ((t, _), v) in vec {
           match * v.get() {
-            term::real::Cst::Bool(true) => (),
-            term::real::Cst::Bool(false) => match back_map.remove(& t) {
+            real_term::Cst::Bool(true) => (),
+            real_term::Cst::Bool(false) => match back_map.remove(& t) {
               Some(sym) => syms.push(sym),
               None => panic!("unknown term {}", t),
             },
@@ -443,8 +443,8 @@ impl PropManager {
         let mut syms = Vec::with_capacity(7) ;
         for ((t, _), v) in vec {
           match * v.get() {
-            term::real::Cst::Bool(true) => (),
-            term::real::Cst::Bool(false) => match back_map.remove(& t) {
+            real_term::Cst::Bool(true) => (),
+            real_term::Cst::Bool(false) => match back_map.remove(& t) {
               Some(sym) => syms.push(sym),
               None => {
                 let mut s = format!("unknown {}", t) ;

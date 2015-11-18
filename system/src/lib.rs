@@ -44,7 +44,7 @@ mod base ;
 mod parse ;
 
 /** Real types of the elements of a context. */
-pub mod real {
+pub mod real_sys {
   pub use base::{
     Sig, Args, Uf, Fun, Prop, Sys, Callable
   } ;

@@ -1,7 +1,11 @@
 [package]
-name = "kino"
+name = "kino-api"
 version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
+
+[[bin]]
+name = "kino"
+doc = false
 
 [dependencies]
 nom = "0.5.0"

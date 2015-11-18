@@ -120,7 +120,7 @@ pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 pub type Model = Vec<( (Var, Option<Offset>), Cst )> ;
 
 /** Real, underlying representation of symbols, constants and terms. */
-pub mod real {
+pub mod real_term {
   pub use sym::RealSym as Sym ;
   pub use var::RealVar as Var ;
   pub use cst::RealCst as Cst ;

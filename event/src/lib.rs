@@ -8,7 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Messages, structures for receiving and sending messages. */
+/*! Messages, structures for receiving and sending messages.
+
+# To do
+
+* check that first argument of custom technique is legal
+
+*/
 
 extern crate ansi_term as ansi ;
 extern crate term ;
@@ -39,6 +45,10 @@ pub enum Technique {
   Bmc,
   /** Induction. */
   KInd,
+  /** Custom technique.
+  First string is a short description that should be a legal filename.
+  Second is an arbitrarily long description. */
+  Tec(& 'static str, & 'static str),
 }
 impl fmt::Display for Technique {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -54,6 +64,7 @@ impl Technique {
       Kino => "master",
       Bmc => "bmc",
       KInd => "k-ind",
+      Tec(ref s, _) => & s,
     }
   }
   /** A description of a technique. */
@@ -64,6 +75,7 @@ impl Technique {
       Kino => "supervisor",
       Bmc => "bounded model checking",
       KInd => "k-induction",
+      Tec(_, ref desc) => & desc,
     }
   }
   /** Thread name for techniques. */
@@ -74,6 +86,7 @@ impl Technique {
       Kino => panic!("thread name of supervisor requested"),
       Bmc => "kino_bmc".to_string(),
       KInd => "kino_k-induction".to_string(),
+      Tec(ref s, _) => format!("kino_{}", s),
     }
   }
 }

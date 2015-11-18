@@ -15,7 +15,7 @@ use std::fmt ;
 use std::collections::HashSet ;
 
 use term::{ TermAndDep, Type, Sym, Var, Term, STerm } ;
-use term::real ;
+use term::real_term ;
 
 use base::* ;
 use super::{ Context, Atom, Res } ;
@@ -58,7 +58,7 @@ pub enum Error {
 }
 impl fmt::Display for Error {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
-    use term::real::Var::* ;
+    use term::real_term::Var::* ;
     match * self {
       Redef(ref sym, ref original, ref redef) => write!(
         fmt, "{} for {} conflicts with previous {}", sym, original, redef
@@ -225,7 +225,7 @@ pub fn check_fun_def(
   // No stateful var, all non-stateful vars exist.
   for var in body.vars.iter() {
     match * var.get() {
-      real::Var::Var(ref var_sym) => {
+      real_term::Var::Var(ref var_sym) => {
         match var_defined(ctxt, var_sym) {
           None => {
             let mut exists = false ;
@@ -268,8 +268,8 @@ fn check_term_and_dep(
   next_allowed: bool,
   calls: & mut HashSet<::Callable>
 ) -> Result<HashSet<(Sym, Term)>, CheckFailed> {
-  use term::real::Var::Var as NSVar ;
-  use term::real::Var::SVar ;
+  use term::real_term::Var::Var as NSVar ;
+  use term::real_term::Var::SVar ;
   use term::State::* ;
 
   let mut bindings = HashSet::with_capacity(locals.len()) ;
@@ -340,18 +340,18 @@ pub fn check_prop(
   for var in body.vars.iter() {
     match * var.get() {
       // Non-stateful var exist.
-      real::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
+      real_term::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
         None => return Err( UkVar(var.clone(), sym, desc) ),
         Some(fun) => { calls.insert(fun) ; },
       },
       // Stateful var belong to state.
       // Next forbidden.
-      real::Var::SVar(ref var_sym, Curr) => if ! svar_in_state(
+      real_term::Var::SVar(ref var_sym, Curr) => if ! svar_in_state(
         var_sym, sys.state()
       ) {
         return Err( UkVar(var.clone(), sym, desc) )
       },
-      real::Var::SVar(_, _) => return Err(
+      real_term::Var::SVar(_, _) => return Err(
         NxtInProp1(var.clone(), sym, desc)
       ),
     }
@@ -390,13 +390,13 @@ pub fn check_rel(
   for var in body.vars.iter() {
     match * var.get() {
       // Non-stateful var exist.
-      real::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
+      real_term::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
         None => return Err( UkVar(var.clone(), sym, desc) ),
         Some(fun) => { calls.insert(fun) ; },
       },
       // Stateful var belong to state.
       // Next forbidden.
-      real::Var::SVar(ref var_sym, _) => if ! svar_in_state(
+      real_term::Var::SVar(ref var_sym, _) => if ! svar_in_state(
         var_sym, sys.state()
       ) {
         return Err( UkVar(var.clone(), sym, desc) )
