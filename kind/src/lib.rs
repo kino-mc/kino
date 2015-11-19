@@ -257,3 +257,55 @@ impl event::CanRun for KInd {
 }
 
 
+/** Configuration for k-induction. */
+#[derive(Clone)]
+pub struct KIndConf {
+  max: Option<usize>,
+  restart: bool,
+  solver: term::smt::SolverStyle,
+}
+
+impl KIndConf {
+  /** Creates a default k-induction configuration.
+  Default is no max `k`, restart when max `k` reached, use z3. */
+  #[inline(always)]
+  pub fn default() -> Self {
+    KIndConf {
+      max: None, restart: true, solver: term::smt::SolverStyle::Z3
+    }
+  }
+
+  /** Sets the max `k`. */
+  #[inline(always)]
+  pub fn set_max(& mut self, k: usize) {
+    self.max = Some(k)
+  }
+  /** Sets the restart option. */
+  #[inline(always)]
+  pub fn set_restart(& mut self, b: bool) {
+    self.restart = b
+  }
+  /** Sets the solver style. */
+  #[inline(always)]
+  pub fn set_solver(& mut self, s: term::smt::SolverStyle) {
+    self.solver = s
+  }
+
+  /** The max `k`. */
+  #[inline(always)]
+  pub fn max(& self) -> & Option<usize> {
+    & self.max
+  }
+  /** True if the solver should restart when max `k` is reached. */
+  #[inline(always)]
+  pub fn restart(& self) -> bool {
+    self.restart
+  }
+  /** The solver style. */
+  #[inline(always)]
+  pub fn solver(& self) -> & term::smt::SolverStyle {
+    & self.solver
+  }
+}
+
+

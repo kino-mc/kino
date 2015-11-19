@@ -1,0 +1,9 @@
+[package]
+name = "conf"
+version = "0.1.0"
+authors = ["Adrien Champion <adrien.champion@mail.com>"]
+
+[dependencies]
+event = { path = "../event" }
+bmc = { path = "../bmc" }
+kind = { path = "../kind" }

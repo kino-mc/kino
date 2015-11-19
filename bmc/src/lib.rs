@@ -295,3 +295,42 @@ impl event::CanRun for Bmc {
 }
 
 
+/** Configuration for BMC. */
+#[derive(Clone)]
+pub struct BmcConf {
+  max: Option<usize>,
+  solver: term::smt::SolverStyle,
+}
+
+impl BmcConf {
+  /** Creates a default bmc configuration.
+  Default is no max `k`, use z3. */
+  #[inline(always)]
+  pub fn default() -> Self {
+    BmcConf {
+      max: None, solver: term::smt::SolverStyle::Z3
+    }
+  }
+
+  /** Sets the max `k`. */
+  #[inline(always)]
+  pub fn set_max(& mut self, k: usize) {
+    self.max = Some(k)
+  }
+  /** Sets the solver style. */
+  #[inline(always)]
+  pub fn set_solver(& mut self, s: term::smt::SolverStyle) {
+    self.solver = s
+  }
+
+  /** The max `k`. */
+  #[inline(always)]
+  pub fn max(& self) -> & Option<usize> {
+    & self.max
+  }
+  /** The solver style. */
+  #[inline(always)]
+  pub fn solver(& self) -> & term::smt::SolverStyle {
+    & self.solver
+  }
+}

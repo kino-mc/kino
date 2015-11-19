@@ -1,5 +1,3 @@
-#![allow(non_upper_case_globals)]
-#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -9,6 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![allow(non_upper_case_globals)]
+#![deny(missing_docs)]
+
 /*! API for the kinō model-checker. */
 
 extern crate term ;
@@ -16,12 +17,14 @@ extern crate system as sys ;
 extern crate event ;
 extern crate bmc ;
 extern crate kind ;
+extern crate conf ;
 
 mod master ;
 
 pub use term::* ;
 pub use sys::* ;
 pub use event::* ;
+pub use conf::* ;
 
 /** The techniques provided by kino. */
 pub mod teks {
