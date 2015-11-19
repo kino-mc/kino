@@ -136,6 +136,8 @@ pub enum MsgUp {
   Bla(Technique, String),
   /** Error message. */
   Error(Technique, String),
+  /** Warning message. */
+  Warning(Technique, String),
   /** KTrue. */
   KTrue(Vec<Sym>, Technique, Offset),
   /** Some properties were proved. */
@@ -152,6 +154,7 @@ impl fmt::Display for MsgUp {
       Done(ref t, _) => write!(fmt, "Done({})", t),
       Bla(ref t, _) => write!(fmt, "Bla({})", t),
       Error(ref t, _) => write!(fmt, "Error({})", t),
+      Warning(ref t, _) => write!(fmt, "Warning({})", t),
       KTrue(_, ref t, _) => write!(fmt, "KTrue({})", t),
       Proved(_, ref t, _) => write!(fmt, "Proved({})", t),
       Disproved(_, _, ref t, _) => write!(fmt, "Disproved({})", t),
@@ -229,10 +232,16 @@ impl Event {
       MsgUp::Bla(self.t, s.to_string())
     ).unwrap()
   }
-  /** Sends a log message upwards. */
+  /** Sends an error upwards. */
   pub fn error(& self, s: & str) {
     self.s.send(
       MsgUp::Error(self.t, s.to_string())
+    ).unwrap()
+  }
+  /** Sends a warning upwards. */
+  pub fn warning(& self, s: & str) {
+    self.s.send(
+      MsgUp::Warning(self.t, s.to_string())
     ).unwrap()
   }
   /** The factory in an `Event`. */

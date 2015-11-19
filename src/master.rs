@@ -69,7 +69,9 @@ impl Master {
 
         Ok( Bla(from, bla) ) => log.log(& from, & bla),
 
-        Ok( Error(from, bla) ) => log.sad(& from, & bla),
+        Ok( Error(from, bla) ) => log.bad(& from, & bla),
+
+        Ok( Warning(from, bla) ) => log.sad(& from, & bla),
 
         Ok( Disproved(model, props, from, _) ) => {
           let cex = c.cex_of(& model, & sys) ;

@@ -129,6 +129,7 @@ impl event::CanRun for Bmc {
               // No more transitions can be taken, all remaining properties
               // hold.
               event.proved_at( props.not_inhibited(), k.curr() ) ;
+              event.warning("no more reachable state") ;
               event.done_at(k.curr()) ;
               return ()
             },
@@ -257,6 +258,7 @@ impl event::CanRun for Bmc {
                 // No more transitions can be taken, all remaining properties
                 // hold.
                 event.proved_at( props.not_inhibited(), k.next() ) ;
+                event.warning("no more reachable state") ;
                 event.done_at( k.next() ) ;
                 return ()
               },
