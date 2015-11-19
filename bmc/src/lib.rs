@@ -129,6 +129,7 @@ impl event::CanRun for Bmc {
               // No more transitions can be taken, all remaining properties
               // hold.
               event.proved_at( props.not_inhibited(), k.curr() ) ;
+              event.done_at(k.curr()) ;
               return ()
             },
             Err(e) => {
@@ -255,7 +256,8 @@ impl event::CanRun for Bmc {
               Ok(false) => {
                 // No more transitions can be taken, all remaining properties
                 // hold.
-                event.proved_at( props.not_inhibited(), k.curr() ) ;
+                event.proved_at( props.not_inhibited(), k.next() ) ;
+                event.done_at( k.next() ) ;
                 return ()
               },
               Err(e) => {

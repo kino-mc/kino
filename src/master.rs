@@ -111,6 +111,8 @@ impl Master {
       }
     } ;
 
+    log.trail() ;
+
     Err(())
 
   }
