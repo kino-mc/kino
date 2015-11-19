@@ -130,14 +130,14 @@ pub enum MsgUp {
   Invariants,
   /** Not implemented. */
   Unimplemented,
-  /** Technique is done. */
-  Done(Technique, Info),
   /** Log message. */
   Bla(Technique, String),
-  /** Error message. */
-  Error(Technique, String),
   /** Warning message. */
   Warning(Technique, String),
+  /** Error message. */
+  Error(Technique, String),
+  /** Technique is done. */
+  Done(Technique, Info),
   /** KTrue. */
   KTrue(Vec<Sym>, Technique, Offset),
   /** Some properties were proved. */

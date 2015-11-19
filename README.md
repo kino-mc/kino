@@ -16,7 +16,12 @@ future:
 
 # Build and run
 
-Building running etc. follows the standard cargo workflow.
+Building running etc. follows the standard cargo workflow. A few example
+systems can be found in `rsc/tsv/`. For instance
+
+```bash
+> cargo run rsc/tsv/modular_four.tsv
+```
 
 To run kinō you need a SMT solver installed and in your path.
 For now, only [Z3][z3] is supported. It must be in your path with command `z3`.

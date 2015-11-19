@@ -16,8 +16,8 @@ use std::collections::HashMap ;
 
 use term::{ Sym, Term } ;
 
-use sys::{ Prop, Sys } ;
-use sys::ctxt::* ;
+use system::{ Prop, Sys } ;
+use system::ctxt::* ;
 
 use event::Technique::Kino ;
 use event::msg::MsgUp::* ;

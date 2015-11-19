@@ -18,12 +18,12 @@ write stuff here
 
 extern crate nom ;
 extern crate term ;
-extern crate system as sys ;
+extern crate system ;
 extern crate event ;
 extern crate bmc ;
 extern crate kind ;
 
-use sys::ctxt::* ;
+use system::ctxt::* ;
 
 use event::Technique::Kino ;
 use event::log::{ MasterLog, Formatter, Styler } ;

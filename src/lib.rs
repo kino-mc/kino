@@ -13,7 +13,7 @@
 /*! API for the kinō model-checker. */
 
 extern crate term ;
-extern crate system as sys ;
+extern crate system ;
 extern crate unroll ;
 extern crate event ;
 extern crate bmc ;
@@ -23,7 +23,7 @@ extern crate conf ;
 mod master ;
 
 pub use term::* ;
-pub use sys::* ;
+pub use system::* ;
 pub use event::* ;
 pub use unroll::* ;
 pub use conf::* ;
@@ -35,4 +35,4 @@ pub mod teks {
 }
 
 pub use master::Master ;
-pub use sys::ctxt::Context ;
+pub use system::ctxt::Context ;
