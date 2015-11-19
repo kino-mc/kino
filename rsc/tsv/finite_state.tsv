@@ -1,0 +1,20 @@
+(define-sys sys
+  ( (out Int) )
+  ()
+  (= (_ state out) 0)
+  (and
+    (< (_ state out) 42)
+    (= (_ next out) (+ (_ state out) 1))
+  )
+  ()
+)
+
+(define-prop out_le_42 sys
+  (<= (_ state out) 42)
+)
+
+(define-rel out_inc sys
+  (>= (_ next out) (_ state out))
+)
+
+( verify sys ( out_le_42 out_inc ) )

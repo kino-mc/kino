@@ -123,6 +123,22 @@ impl event::CanRun for Bmc {
           //   )
           // ) ;
 
+          match solver.check_sat() {
+            Ok(true) => (),
+            Ok(false) => {
+              // No more transitions can be taken, all remaining properties
+              // hold.
+              event.proved_at( props.not_inhibited(), k.curr() ) ;
+              return ()
+            },
+            Err(e) => {
+              event.error(
+                & format!("could not perform check-sat\n{:?}", e)
+              ) ;
+              return ()
+            },
+          } ;
+
           match solver.check_sat_assuming( & actlits, k.next() ) {
             Ok(true) => {
               // event.log("sat, getting falsified properties") ;
@@ -163,7 +179,7 @@ impl event::CanRun for Bmc {
             },
             Err(e) => {
               event.error(
-                & format!("could not perform check-sat\n{:?}", e)
+                & format!("could not perform check-sat-assuming\n{:?}", e)
               ) ;
               return ()
             },
@@ -234,6 +250,22 @@ impl event::CanRun for Bmc {
             //   )
             // ) ;
 
+            match solver.check_sat() {
+              Ok(true) => (),
+              Ok(false) => {
+                // No more transitions can be taken, all remaining properties
+                // hold.
+                event.proved_at( props.not_inhibited(), k.curr() ) ;
+                return ()
+              },
+              Err(e) => {
+                event.error(
+                  & format!("could not perform check-sat\n{:?}", e)
+                ) ;
+                return ()
+              },
+            } ;
+
             match solver.check_sat_assuming( & actlits, k.next() ) {
               Ok(true) => {
                 // event.log("sat, getting falsified properties") ;
@@ -274,7 +306,7 @@ impl event::CanRun for Bmc {
               },
               Err(e) => {
                 event.error(
-                  & format!("could not perform check-sat\n{:?}", e)
+                  & format!("could not perform check-sat-assuming\n{:?}", e)
                 ) ;
                 break
               },

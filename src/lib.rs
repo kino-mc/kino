@@ -14,6 +14,7 @@
 
 extern crate term ;
 extern crate system as sys ;
+extern crate unroll ;
 extern crate event ;
 extern crate bmc ;
 extern crate kind ;
@@ -24,6 +25,7 @@ mod master ;
 pub use term::* ;
 pub use sys::* ;
 pub use event::* ;
+pub use unroll::* ;
 pub use conf::* ;
 
 /** The techniques provided by kino. */
