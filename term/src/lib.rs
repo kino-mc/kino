@@ -127,6 +127,11 @@ pub mod real_term {
   pub use term::RealTerm as Term ;
 }
 
+/** Zipper on terms. */
+pub mod zip {
+  pub use term::zip2::{ Step, fold, fold_info } ;
+} 
+
 /** Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
 
 Exposed for extensibility. */

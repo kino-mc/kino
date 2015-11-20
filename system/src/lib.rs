@@ -40,7 +40,7 @@ extern crate term ;
 use std::sync::Arc ;
 
 mod base ;
-
+mod type_check ;
 mod parse ;
 
 /** Real types of the elements of a context. */

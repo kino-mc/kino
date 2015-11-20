@@ -653,3 +653,250 @@ mod zip {
     }
   }
 }
+
+
+
+
+
+pub mod zip2 {
+  use std::collections::HashMap ;
+
+  use ::sym::Sym ;
+  use ::typ::Type ;
+  use ::cst::Cst ;
+  use ::var::Var ;
+
+  use super::* ;
+
+  use self::ZipStep::* ;
+  use self::Res::* ;
+
+  enum ZipStep<T> {
+    App(Sym, Vec<T>, Vec<Term>),
+    Op(Operator, Vec<T>, Vec<Term>),
+    Let1(
+      Vec<(Sym, T)>, Sym, Vec<(Sym, Term)>, Term
+    ),
+    Let2(
+      Vec<(Sym, T)>
+    ),
+    Forall(
+      Vec<(Sym, Type)>
+    ),
+    Exists(
+      Vec<(Sym, Type)>
+    ),
+  }
+
+  /** A step upward in the zipper. */
+  pub enum Step<T> {
+    /** Application. */
+    App(Sym, Vec<T>),
+    /** Operator. */
+    Op(Operator, Vec<T>),
+    /** Let binding. */
+    Let(Vec<(Sym,T)>, T),
+    /** Universal quantifier. */
+    Forall(Vec<(Sym, Type)>),
+    /** Existential quantifier. */
+    Exists(Vec<(Sym, Type)>),
+    /** Constant. */
+    C(Cst),
+    /** Variable. */
+    V(Var),
+  }
+
+  enum Res<T> {
+    NYet(Step<T>),
+    Done(T),
+  }
+
+  struct Zip<T> {
+    path: Vec<ZipStep<T>>,
+    bindings: HashMap<Sym, T>,
+    quantified: HashMap<Sym, Type>,
+  }
+
+  impl<T: Clone> Zip<T> {
+
+    #[inline(always)]
+    fn push(& mut self, step: ZipStep<T>) {
+      self.path.push(step)
+    }
+
+    #[inline(always)]
+    fn pop(& mut self) -> Option<ZipStep<T>> {
+      self.path.pop()
+    }
+
+    fn zip_down(& mut self, mut term: Term) -> Step<T> {
+      loop {
+        term = match * term.get() {
+
+          RealTerm::Op(ref op, ref terms) => {
+            let mut terms = terms.clone() ;
+            terms.reverse() ;
+            if let Some(kid) = terms.pop() {
+              self.push(
+                Op(op.clone(), Vec::with_capacity(terms.len() + 1), terms)
+              ) ;
+              kid.clone()
+            } else {
+              panic!("zipping down an operator ({}) applied to nothing", op)
+            }
+          },
+
+          RealTerm::App(ref sym, ref terms) => {
+            let mut terms = terms.clone() ;
+            terms.reverse() ;
+            if let Some(kid) = terms.pop() {
+              self.push(
+                App(sym.clone(), Vec::with_capacity(terms.len() + 1), terms)
+              ) ;
+              kid.clone()
+            } else {
+              panic!("zipping down an application ({}) to nothing", sym)
+            }
+          },
+
+          RealTerm::Forall(ref syms, ref kid) => {
+            self.push( Forall(syms.clone()) ) ;
+            for & (ref sym, ref typ) in syms.iter() {
+              self.quantified.insert(sym.clone(), typ.clone()) ;
+            } ;
+            kid.clone()
+          },
+
+          RealTerm::Exists(ref syms, ref kid) => {
+            self.push( Exists(syms.clone()) ) ;
+            for & (ref sym, ref typ) in syms.iter() {
+              self.quantified.insert(sym.clone(), typ.clone()) ;
+            } ;
+            kid.clone()
+          },
+
+          RealTerm::Let(ref syms, ref kid) => {
+            let mut syms = syms.clone() ;
+            syms.reverse() ;
+            if let Some( (sym, fst) ) = syms.pop() {
+              self.push(
+                Let1(
+                  Vec::with_capacity(syms.len() + 1), sym, syms, kid.clone()
+                )
+              ) ;
+              fst.clone()
+            } else {
+              panic!("zipping down a let-binding with no bindings")
+            }
+          },
+
+          RealTerm::C(ref cst) => return Step::C(cst.clone()),
+
+          RealTerm::V(ref var) => return Step::V(var.clone()),
+
+        }
+      }
+    }
+
+
+    fn zip_up(& mut self, t: T) -> Res<T> {
+      match self.pop() {
+
+        None => Done(t),
+
+        Some( App(sym, mut lft, mut rgt) ) => {
+          lft.push(t) ;
+          if let Some(term) = rgt.pop() {
+            self.push( App(sym, lft, rgt) ) ;
+            NYet( self.zip_down(term) )
+          } else {
+            NYet( Step::App(sym, lft) )
+          }
+        },
+
+        Some( Op(op, mut lft, mut rgt) ) => {
+          lft.push(t) ;
+          if let Some(term) = rgt.pop() {
+            self.push( Op(op, lft, rgt) ) ;
+            NYet( self.zip_down(term) )
+          } else {
+            NYet( Step::Op(op, lft) )
+          }
+        },
+
+        Some( Let1(mut lft, sym, mut rgt, kid) ) => {
+          self.bindings.insert(sym.clone(), t.clone()) ;
+          lft.push( (sym, t) ) ;
+          if let Some( (sym, term) ) = rgt.pop() {
+            self.push( Let1(lft, sym, rgt, kid) ) ;
+            NYet( self.zip_down(term) )
+          } else {
+            self.push( Let2(lft) ) ;
+            NYet( self.zip_down(kid) )
+          }
+        },
+
+        Some( Let2(syms) ) => {
+          for & (ref sym, _) in syms.iter() {
+            self.bindings.remove(sym) ;
+          } ;
+          NYet( Step::Let(syms, t) )
+        },
+
+        Some( Forall(syms) ) => {
+          for & (ref sym, _) in syms.iter() {
+            self.quantified.remove(sym) ;
+          } ;
+          NYet( Step::Forall(syms) )
+        },
+
+        Some( Exists(syms) ) => {
+          for & (ref sym, _) in syms.iter() {
+            self.quantified.remove(sym) ;
+          } ;
+          NYet( Step::Forall(syms) )
+        },
+
+      }
+    }
+
+  }
+
+  /** Bottom-up, left-to-right fold. */
+  pub fn fold<
+    T: Clone, Fun: Fn(Step<T>) -> T
+  >(f: Fun, term: Term) -> T {
+    let mut zip = Zip {
+      path: vec![], bindings: HashMap::new(), quantified: HashMap::new()
+    } ;
+    let first = zip.zip_down(term) ;
+    let mut t = f(first) ;
+    loop {
+      match zip.zip_up(t) {
+        NYet(step) => t = f(step),
+        Done(t) => return t,
+      }
+    }
+  }
+
+  /** Bottom-up, left-to-right fold with information. */
+  pub fn fold_info<
+    T: Clone,
+    Fun: Fn(
+      Step<T>, & HashMap<Sym, T>, & HashMap<Sym, Type>
+    ) -> T
+  >(f: Fun, term: Term) -> T {
+    let mut zip = Zip {
+      path: vec![], bindings: HashMap::new(), quantified: HashMap::new()
+    } ;
+    let first = zip.zip_down(term) ;
+    let mut t = f(first, & zip.bindings, & zip.quantified) ;
+    loop {
+      match zip.zip_up(t) {
+        NYet(step) => t = f(step, & zip.bindings, & zip.quantified),
+        Done(t) => return t,
+      }
+    }
+  }
+
+}
