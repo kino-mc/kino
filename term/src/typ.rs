@@ -32,7 +32,7 @@ impl fmt::Display for Type {
       match * self {
         Type::Bool => "Bool",
         Type::Int => "Int",
-        Type::Rat => "Rat",
+        Type::Rat => "Real",
       }
     )
   }

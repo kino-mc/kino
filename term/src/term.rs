@@ -61,6 +61,220 @@ pub enum Operator {
   Gt,
 }
 
+impl Operator {
+  /** Returns its return type if its arguments type check. */
+  pub fn type_check(& self, sig: & [Type]) -> Result<
+    Type, (Option<Vec<usize>>, String)
+  > {
+    use Operator::* ;
+    match * self {
+
+      Eq => {
+        let mut sig = sig.iter() ;
+        if let Some(first) = sig.next() {
+          let mut cpt = 0 ;
+          for typ in sig {
+            if typ != first {
+              return Err( (
+                Some( vec![cpt] ),
+                format!(
+                  "parameter {} of equality:\n  \
+                    first parameter(s) have type {}, got {}",
+                  cpt + 1, first, typ
+                )
+              ) )
+            } ;
+            cpt = cpt + 1 ;
+          } ;
+          Ok(Type::Bool)
+        } else {
+          Ok(Type::Bool)
+        }
+      },
+
+      Ite => {
+        if sig.len() != 3 {
+          return Err( (
+            None,
+            format!("operator ite expects 3 arguments, got {}", sig.len())
+          ) )
+        } ;
+        if sig[0] != Type::Bool {
+          return Err( (
+            Some(vec![0]),
+            format!(
+              "first argument of ite should have sort Bool, got {}", sig[0]
+            )
+          ) )
+        } ;
+        if sig[1] != sig[2] {
+          return Err( (
+            Some(vec![1, 2]),
+            format!(
+              "second and third argument of ite are incompatible: {} and {}",
+              sig[1], sig[2]
+            )
+          ) )
+        } ;
+        Ok( sig[1].clone() )
+      },
+
+      Not => {
+        if sig.len() != 1 {
+          return Err( (
+            None,
+            format!("operator not expects 1 argument, got {}", sig.len())
+          ) )
+        } else {
+          if sig[0] != Type::Bool {
+            return Err( (
+              Some(vec![0]),
+              format!(
+                "first argument of not should have sort Bool, got {} ", sig[0]
+              )
+            ) )
+          } ;
+          Ok( Type::Bool )
+        }
+      },
+
+      And | Or | Impl | Xor => {
+        let mut cpt = 0 ;
+        for typ in sig.iter() {
+          if * typ != Type::Bool {
+            return Err( (
+              Some( vec![cpt] ),
+              format!(
+                "parameter {} of operator {}:\n  \
+                  first parameter(s) have type Bool, got {}",
+                self, cpt + 1, typ
+              )
+            ) )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        Ok( Type::Bool )
+      },
+
+      Distinct => {
+        let mut sig = sig.iter() ;
+        if let Some(first) = sig.next() {
+          let mut cpt = 1 ;
+          for typ in sig {
+            if typ != first {
+              return Err( (
+                Some( vec![cpt] ),
+                format!(
+                  "argument {} of operator distinct:\n  \
+                    first argument(s) have type {}, got {}",
+                  cpt + 1, first, typ
+                )
+              ) )
+            } ;
+            cpt = cpt + 1 ;
+          } ;
+          Ok(Type::Bool)
+        } else {
+          Ok(Type::Bool)
+        }
+      },
+
+      Neg => {
+        if sig.len() != 1 {
+          return Err( (
+            None,
+            format!(
+              "operator unary minus expects one argument, got {}", sig.len()
+            )
+          ) )
+        } ;
+        if sig[0] != Type::Int && sig[0] != Type::Rat {
+          return Err( (
+            Some( vec![0] ),
+            format!("operator unary minus expects Int or Real, got {}", sig[0])
+          ) )
+        } ;
+        Ok( sig[0] )
+      },
+
+      Add | Sub | Mul | Div => {
+        let mut sig = sig.iter() ;
+        if let Some(first) = sig.next() {
+          match * first {
+            Type::Int | Type::Rat => (),
+            _ => return Err( (
+              Some( vec![0] ),
+              format!(
+                "first argument of operator {}:\n  \
+                  expected Int or Real but got {}",
+                self, first
+              )
+            ) ),
+          } ;
+          let mut cpt = 1 ;
+          for typ in sig {
+            if typ != first {
+              return Err( (
+                Some( vec![cpt] ),
+                format!(
+                  "argument {} as incompatible type\n  \
+                    expected {}, got {}",
+                  cpt + 1, first, typ
+                )
+              ) )
+            } ;
+            cpt = cpt + 1 ;
+          } ;
+          Ok(first.clone())
+        } else {
+          return Err( (
+            None,
+            format!("operator {} is applied to nothing", self)
+          ) )
+        }
+      },
+
+      Le | Ge | Lt | Gt => {
+        let mut sig = sig.iter() ;
+        if let Some(first) = sig.next() {
+          match * first {
+            Type::Int | Type::Rat => (),
+            _ => return Err( (
+              Some( vec![0] ),
+              format!(
+                "first argument of operator {}:\n  \
+                  expected Int or Real but got {}",
+                self, first
+              )
+            ) ),
+          } ;
+          let mut cpt = 1 ;
+          for typ in sig {
+            if typ != first {
+              return Err( (
+                Some( vec![cpt] ),
+                format!(
+                  "argument {} as incompatible type\n  \
+                    expected {}, got {}",
+                  cpt + 1, first, typ
+                )
+              ) )
+            } ;
+            cpt = cpt + 1 ;
+          } ;
+          Ok(Type::Bool)
+        } else {
+          return Err( (
+            None,
+            format!("operator {} is applied to nothing", self)
+          ) )
+        }
+      },
+
+    }
+  }
+}
+
 impl fmt::Display for Operator {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     use std::str::from_utf8 ;
@@ -697,9 +911,9 @@ pub mod zip2 {
     /** Let binding. */
     Let(Vec<(Sym,T)>, T),
     /** Universal quantifier. */
-    Forall(Vec<(Sym, Type)>),
+    Forall(Vec<(Sym, Type)>, T),
     /** Existential quantifier. */
-    Exists(Vec<(Sym, Type)>),
+    Exists(Vec<(Sym, Type)>, T),
     /** Constant. */
     C(Cst),
     /** Variable. */
@@ -847,14 +1061,14 @@ pub mod zip2 {
           for & (ref sym, _) in syms.iter() {
             self.quantified.remove(sym) ;
           } ;
-          NYet( Step::Forall(syms) )
+          NYet( Step::Forall(syms, t) )
         },
 
         Some( Exists(syms) ) => {
           for & (ref sym, _) in syms.iter() {
             self.quantified.remove(sym) ;
           } ;
-          NYet( Step::Forall(syms) )
+          NYet( Step::Forall(syms, t) )
         },
 
       }
@@ -881,21 +1095,26 @@ pub mod zip2 {
 
   /** Bottom-up, left-to-right fold with information. */
   pub fn fold_info<
-    T: Clone,
+    T: Clone, E,
     Fun: Fn(
       Step<T>, & HashMap<Sym, T>, & HashMap<Sym, Type>
-    ) -> T
-  >(f: Fun, term: Term) -> T {
+    ) -> Result<T,E>
+  >(f: Fun, term: Term) -> Result<T, E> {
     let mut zip = Zip {
       path: vec![], bindings: HashMap::new(), quantified: HashMap::new()
     } ;
     let first = zip.zip_down(term) ;
-    let mut t = f(first, & zip.bindings, & zip.quantified) ;
-    loop {
-      match zip.zip_up(t) {
-        NYet(step) => t = f(step, & zip.bindings, & zip.quantified),
-        Done(t) => return t,
-      }
+    match f(first, & zip.bindings, & zip.quantified) {
+      Ok(mut t) => loop {
+        match zip.zip_up(t) {
+          NYet(step) => match f(step, & zip.bindings, & zip.quantified) {
+            Ok(nu_t) => t = nu_t,
+            e => return e,
+          },
+          Done(t) => return Ok(t),
+        }
+      },
+      e => return e,
     }
   }
 

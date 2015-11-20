@@ -72,6 +72,7 @@ only non-zero denominator will push the problem to function symbol application. 
 * document [`write` module][write module]
 * provide local fresh symbol constructor
 * have separate enum for actlits (print as `|@actlit <num>|`)
+* factor type checking code for operators
 
 
 [state]: enum.State.html (State enum type)
@@ -109,7 +110,7 @@ mod var ;
 pub use var::{ Var, VarMaker } ;
 mod term ;
 pub use term::{
-  Operator, Term, STerm, CstMaker, BindMaker, AppMaker
+  Operator, Term, STerm, CstMaker, BindMaker, AppMaker, OpMaker
 } ;
 mod parser ;
 pub use parser::tsv::TermAndDep ;

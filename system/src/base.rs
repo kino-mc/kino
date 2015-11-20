@@ -226,6 +226,49 @@ impl Callable {
       Callable::Dec(ref f) => f.sym(),
     }
   }
+  /** Returns the output type if the input signature type checks. */
+  pub fn type_check(& self, sig: & [ Type ]) -> Result<Type, (usize, String)> {
+    // use std::iter::Zip ;
+    let mut cpt = 0 ;
+    let typ = match * self {
+      Callable::Dec(ref fun) => {
+        for (
+          type_formal, type_actual
+        ) in fun.sig().iter().zip(sig.iter()) {
+          if type_formal != type_actual {
+            return Err( (
+              cpt,
+              format!(
+                "parameter {} of the application of UF {}:\n  \
+                  expected {}, got {}",
+                cpt + 1, self.sym(), type_formal, type_actual
+              )
+            ) )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        fun.typ().clone()
+      },
+      Callable::Def(ref fun) => {
+        for (
+          & (ref sym, ref type_formal), ref type_actual
+        ) in fun.args().iter().zip(sig.iter()) {
+          if type_formal != * type_actual {
+            return Err( (
+              cpt,
+              format!(
+                "parameter {} of function {}: expected {}, got {}",
+                sym, self.sym(), type_formal, type_actual
+              )
+            ) )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        fun.typ().clone()
+      },
+    } ;
+    Ok( typ )
+  }
 }
 impl fmt::Display for Callable {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
