@@ -1099,7 +1099,8 @@ pub mod zip2 {
     Fun: Fn(
       Step<T>, & HashMap<Sym, T>, & HashMap<Sym, Type>
     ) -> Result<T,E>
-  >(f: Fun, term: Term) -> Result<T, E> {
+  >(f: Fun, term: & Term) -> Result<T, E> {
+    let term = term.clone() ;
     let mut zip = Zip {
       path: vec![], bindings: HashMap::new(), quantified: HashMap::new()
     } ;

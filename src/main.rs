@@ -82,12 +82,14 @@ fn main() {
             }
           },
           Err( e ) => {
+            log.nl() ;
             log.bad( & Kino, & format!("{}", e) ) ;
             log.trail()
           },
         }
       },
       Err(e) => {
+        log.nl() ;
         log.bad( & Kino, & format!("{}", e) ) ;
         log.trail()
       },

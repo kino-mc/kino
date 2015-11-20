@@ -53,6 +53,8 @@ pub enum Error {
   UkSysCall(Sym, Sym),
   /** Inconsistent arity of system call in system definition. */
   IncSysCall(Sym, usize, Sym, usize),
+  /** Type check error. */
+  TypeCheck(String),
   /** I/O error. */
   Io(::std::io::Error),
 }
@@ -114,18 +116,17 @@ impl fmt::Display for Error {
           uses state variable {} in next state\
         ", sym, var_sym
       ),
-      /** Uknown system call in system definition. */
       UkSysCall(ref sub_sym, ref sym) => write!(
         fmt, "unknown system call to {} in {} {}",
         sub_sym, sym, super::sys_desc
       ),
-      /** Inconsistent arity of system call in system definition. */
       IncSysCall(ref sub_sym, ref arity, ref sym, ref arg_count) => write!(
         fmt, "\
           illegal system call to {} in {} {}: \
           {} parameters given but {} has arity {}\
         ", sub_sym, super::sys_desc, sym, arg_count, sub_sym, arity
       ),
+      TypeCheck(ref s) => write!(fmt, "{}", s),
       Io(ref e) => write!(fmt, "i/o error \"{}\"", e),
     }
   }
@@ -141,6 +142,39 @@ macro_rules! check_sym {
       ),
     }
   )
+}
+
+/** Type checks a term. */
+macro_rules! type_check {
+  (
+    $ctxt:expr, $term:expr, $ty:expr, state: $state:expr, $( $fmt:tt )+
+  ) => (
+    type_check!(internal
+      $ctxt, $term, $ty, Some($state), None, $( $fmt )+
+    )
+  ) ;
+  (
+    $ctxt:expr, $term:expr, $ty:expr, sig: $sig:expr, $( $fmt:tt )+
+  ) => (
+    type_check!(internal
+      $ctxt, $term, $ty, None, Some($sig), $( $fmt )+
+    )
+  ) ;
+  (
+    internal $ctxt:expr, $term:expr, $ty:expr,
+    $state:expr, $sig:expr, $t:ident => $( $fmt:tt )+
+  ) => (
+    match ::type_check::type_check(
+      $ctxt, & $term, $state, $sig
+    ) {
+      Ok($t) => if $t != $ty {
+        return Err(
+          TypeCheck( format!( $( $fmt )+ ) )
+        )
+      },
+      Err(s) => return Err( TypeCheck(s) ),
+    }
+  ) ;
 }
 
 /** Checks that a variable is defined. That is, looks for a function symbol
@@ -242,6 +276,14 @@ pub fn check_fun_def(
       _ => return Err( SVarInDef(var.clone(), sym) ),
     }
   } ;
+
+  type_check!(
+    ctxt, body.term, typ, sig: args.args(),
+    t => "body of function is inconsistent with return type\n  \
+      expected {}, got {}",
+    typ, t
+  ) ;
+
   Ok(
     Callable::Def( Fun::mk(sym, args, typ, body.term, calls) )
   )
@@ -356,9 +398,16 @@ pub fn check_prop(
       ),
     }
   } ;
+
+  type_check!(
+    ctxt, body.term, Type::Bool, state: sys.state().args(),
+    t => "body of property should have type Bool, got {}", t
+  ) ;
+
   // Unwrap cannot fail, we just checked no svar was used as next.
   let nxt = ctxt.factory().bump(body.term.clone()).unwrap() ;
   let body = STerm::One(body.term, nxt) ;
+
   Ok(
     Prop::mk(sym.clone(), sys.clone(), body, calls)
   )
@@ -403,7 +452,12 @@ pub fn check_rel(
       },
     }
   } ;
-  // Unwrap cannot fail, we just checked no svar was used as next.
+
+  type_check!(
+    ctxt, body.term, Type::Bool, state: sys.state().args(),
+    t => "body of property should have type Bool, got {}", t
+  ) ;
+
   let body = STerm::Two(body.term) ;
   Ok(
     Prop::mk(sym.clone(), sys.clone(), body, calls)
@@ -452,6 +506,14 @@ pub fn check_sys(
         ctxt, & term, & local_vars, & state, true, false, & mut calls
       ), ctxt, term.term, sym, desc
     ) ;
+
+    type_check!(
+      ctxt, term, typ, state: state.args(),
+      t =>
+        "local variable {} was declared with type {}, got {}",
+        local_sym, typ, t
+    ) ;
+
     local_vars.push( (local_sym, typ, term) )
   } ;
 
@@ -459,6 +521,10 @@ pub fn check_sys(
   // * no next state vars
   // * current state vars exist in state
   // * non-stateful var exist.
+  type_check!(
+    ctxt, init.term, Type::Bool, state: state.args(),
+    t => "init predicate should have type Bool, got {}", t
+  ) ;
   let init = sys_try!(
     check_term_and_dep(
       ctxt, & init, & local_vars, & state, true, false, & mut calls
@@ -468,6 +534,10 @@ pub fn check_sys(
   // Trans:
   // * state vars exist in state
   // * non-stateful var exist.
+  type_check!(
+    ctxt, trans.term, Type::Bool, state: state.args(),
+    t => "trans predicate should have type Bool, got {}", t
+  ) ;
   let trans = sys_try!(
     check_term_and_dep(
       ctxt, & trans, & local_vars, & state, true, true, & mut calls
