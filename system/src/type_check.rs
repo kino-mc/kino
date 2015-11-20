@@ -19,6 +19,7 @@ use term::real_term::Var as RVar ;
 
 use super::parse::Context ;
 
+/** Function passed to `fold` over terms for type checking. */
 fn checker(
   context: & Context,
   state: & Option<HashMap<Sym, Type>>,
@@ -30,6 +31,7 @@ fn checker(
   use term::zip::Step::* ;
   match step {
 
+    /* Application. */
     App(sym, kids) => {
       let (mut nu_kids, mut types) = (
         Vec::with_capacity(kids.len()),
@@ -54,6 +56,7 @@ fn checker(
       }
     },
 
+    /* Operator. */
     Op(op, kids) => {
       let (mut nu_kids, mut types) = (
         Vec::with_capacity(kids.len()),
@@ -78,6 +81,7 @@ fn checker(
       }
     },
 
+    /* Let binding. */
     Let(bindings, (kid, typ)) => {
       let mut nu_bindings = Vec::with_capacity(bindings.len()) ;
       for (sym, (term,_)) in bindings {
@@ -88,6 +92,7 @@ fn checker(
       ) )
     },
 
+    /* Universal quantifier. */
     Forall(qf, (kid, typ)) => {
       if typ != Type::Bool {
         return Err(
@@ -103,6 +108,7 @@ fn checker(
       ) )
     },
 
+    /* Existential quantifier. */
     Exists(qf, (kid, typ)) => {
       if typ != Type::Bool {
         return Err(
@@ -118,11 +124,13 @@ fn checker(
       ) )
     },
 
+    /* Constant. */
     C(cst) => {
       let typ = cst.typ().clone() ;
       Ok( (context.factory().mk_cst(cst), typ) )
     },
 
+    /* Variable. */
     V(var) => {
       let typ = match * var.get() {
         RVar::SVar(ref sym, _) => {

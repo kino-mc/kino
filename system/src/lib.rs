@@ -24,6 +24,7 @@ thread-safe and can be cloned.
 * more clever input consumption in [`Context`][context struct]
 * less copy in [`Context`][context struct]
 * more informative parse error (depency checking)
+* integrate type checking in parser
 
 [sym type]: ../term/type.Sym.html (Sym type)
 [term type]: ../term/type.Term.html (Term type)
@@ -50,13 +51,14 @@ pub mod real_sys {
   } ;
 }
 
-/** Reads and remembers what has been read. */
+/** Parses, type checks and remembers the input. */
 pub mod ctxt {
   pub use super::base::Callable ;
   pub use super::parse::{
     Res, Context
   } ;
   pub use super::parse::check::Error ;
+  pub use type_check::type_check ;
 }
 
 pub use base::{ CallSet, PropSet } ;
