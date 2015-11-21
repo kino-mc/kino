@@ -66,6 +66,7 @@ Parsing TSV and parsing answers in SMT Lib is different.
 
 ## TODO
 
+* modify rsmt2 so that `get_model` returns a hashmap
 * [`StateWritable::write`][state writable] for terms copies way too much stuff
 * `num::rational` crash if denominator is zero. Can happen in parser. Parsing
 only non-zero denominator will push the problem to function symbol application. Need proper handling.
@@ -86,7 +87,7 @@ only non-zero denominator will push the problem to function symbol application. 
 [write module]: write/index.html (write module)
 */
 
-extern crate num as numeric ;
+extern crate num ;
 #[macro_use]
 extern crate nom ;
 extern crate hashconsing as hcons ;
@@ -140,10 +141,8 @@ pub mod write {
   pub use base::{ Writable, SVarWriter, StateWritable } ;
 }
 
-/** Re-export of the `num` library. */
-pub mod num {
-  pub use ::numeric::* ;
-}
+// Re-export of num.
+pub use ::num::* ;
 
 /** SMT solver. */
 pub mod smt {

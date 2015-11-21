@@ -37,6 +37,84 @@ impl RealCst {
       Rat(_) => typ::Type::Rat,
     }
   }
+
+  /** Adds two constants if possible. */
+  pub fn add(& self, rhs: & Self) -> Result<Self, Self> {
+    match * self {
+      Bool(_) => Err(self.clone()),
+      Int(ref lhs) => match * rhs {
+        Int(ref rhs) => Ok( Int(lhs + rhs) ),
+        _ => Err(rhs.clone()),
+      },
+      Rat(ref lhs) => match * rhs {
+        Rat(ref rhs) => Ok( Rat(lhs + rhs) ),
+        _ => Err(rhs.clone()),
+      },
+    }
+  }
+
+  /** Substracts two constants if possible. */
+  pub fn sub(& self, rhs: & Self) -> Result<Self, Self> {
+    match * self {
+      Bool(_) => Err(self.clone()),
+      Int(ref lhs) => match * rhs {
+        Int(ref rhs) => Ok( Int(lhs - rhs) ),
+        _ => Err(rhs.clone()),
+      },
+      Rat(ref lhs) => match * rhs {
+        Rat(ref rhs) => Ok( Rat(lhs - rhs) ),
+        _ => Err(rhs.clone()),
+      },
+    }
+  }
+
+  /** Multiplies two constants if possible. */
+  pub fn mul(& self, rhs: & Self) -> Result<Self, Self> {
+    match * self {
+      Bool(_) => Err(self.clone()),
+      Int(ref lhs) => match * rhs {
+        Int(ref rhs) => Ok( Int(lhs * rhs) ),
+        _ => Err(rhs.clone()),
+      },
+      Rat(ref lhs) => match * rhs {
+        Rat(ref rhs) => Ok( Rat(lhs * rhs) ),
+        _ => Err(rhs.clone()),
+      },
+    }
+  }
+
+  /** Divides two constants if possible. */
+  pub fn div(& self, in_rhs: & Self) -> Result<Self, Self> {
+    use num::traits::Zero ;
+    match * self {
+      Int(ref lhs) => match * in_rhs {
+        Int(ref rhs) => if rhs.is_zero() {
+          Err(in_rhs.clone())
+        } else {
+          Ok( Int(lhs / rhs) )
+        },
+        _ => Err(in_rhs.clone()),
+      },
+      Rat(ref lhs) => match * in_rhs {
+        Rat(ref rhs) => if rhs.is_zero() {
+          Err(in_rhs.clone())
+        } else {
+          Ok( Rat(lhs / rhs) )
+        },
+        _ => Err(in_rhs.clone()),
+      },
+      _ => Err(self.clone()),
+    }
+  }
+
+  /** Negates a constant if possible. */
+  pub fn neg(& self) -> Result<Self, Self> {
+    match * self {
+      Bool(_) => Err(self.clone()),
+      Int(ref v) => Ok( Int(- v) ),
+      Rat(ref v) => Ok( Rat(- v) ),
+    }
+  }
 }
 
 impl fmt::Display for RealCst {
@@ -93,5 +171,10 @@ impl ConstMaker<typ::Int> for CstConsign {
 impl ConstMaker<typ::Rat> for CstConsign {
   fn constant(& self, r: typ::Rat) -> Cst {
     self.lock().unwrap().mk( Rat(r) )
+  }
+}
+impl ConstMaker<RealCst> for CstConsign {
+  fn constant(& self, cst: RealCst) -> Cst {
+    self.lock().unwrap().mk( cst )
   }
 }

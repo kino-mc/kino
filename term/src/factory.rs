@@ -96,19 +96,20 @@ impl Factory {
     parser::type_parser(bytes)
   }
 
-  /** The hash cons table for constants. */
-  pub fn cst_consign(& self) -> & CstConsign {
-    & self.cst
-  }
-
   /** Creates a variable from a `Var`. */
   pub fn mk_var(& self, var: Var) -> Term {
     self.term.var(var)
   }
 
-  /** Creates a constant from a `Const`. */
+  /** Creates a constant from a `Cst`. */
   pub fn mk_cst(& self, cst: Cst) -> Term {
     self.term.cst(cst)
+  }
+
+  /** Creates a constant from a real `Cst`. */
+  pub fn mk_rcst(& self, cst: ::real_term::Cst) -> Cst {
+    use cst::ConstMaker ;
+    self.cst.constant(cst)
   }
 
 
@@ -166,6 +167,14 @@ impl Factory {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
       self.op(Operator::Or, kids)
+    }
+  }
+
+  /** Creates a conjunction. */
+  pub fn xor(& self, mut kids: Vec<Term>) -> Term {
+    debug_assert!(kids.len() > 0) ;
+    if kids.len() == 1 { kids.pop().unwrap() } else {
+      self.op(Operator::Xor, kids)
     }
   }
 
@@ -234,6 +243,13 @@ impl Factory {
   /** Creates a greater than. */
   pub fn gt(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Gt, vec![ lhs, rhs])
+  }
+
+  /** Evaluates a term. */
+  pub fn eval(
+    & self, term: & Term, off: & Offset2, model: & ::Model
+  ) -> Result<Cst, String> {
+    ::term::eval::eval(& self, term, off, model)
   }
 }
 

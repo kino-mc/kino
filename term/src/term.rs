@@ -273,6 +273,342 @@ impl Operator {
 
     }
   }
+
+  /** Evaluates itself given some arguments. */
+  pub fn eval(
+    & self, factory: & ::Factory, mut args: Vec<Cst>
+  ) -> Result<Cst, String> {
+    use Operator::* ;
+    use ::real_term::Cst as RCst ;
+    match * self {
+
+      Eq => {
+        let mut args = args.iter() ;
+        if let Some(first) = args.next() {
+          for arg in args {
+            if arg != first { return Ok( factory.cst(false) ) }
+          }
+        } ;
+        Ok( factory.cst(true) )
+      },
+
+      Ite => if args.len() != 3 {
+        Err(
+          format!("operator ite expects 3 arguments, got {}", args.len())
+        )
+      } else {
+        args.reverse() ;
+        match * args.pop().unwrap().get() {
+          RCst::Bool(true) => Ok( args.pop().unwrap() ),
+          RCst::Bool(false) => {
+            args.pop() ;
+            Ok( args.pop().unwrap() )
+          },
+          _ => Err(
+            format!(
+              "first argument of ite should have sort Bool, got {}", args[0]
+            )
+          )
+        }
+      },
+
+      Not => if args.len() != 1 {
+        Err(
+          format!("operator not expects 1 argument, got {}", args.len())
+        )
+      } else {
+        match * args[0].get() {
+          RCst::Bool(b) => Ok( factory.cst(! b) ),
+          _ => Err(
+            format!(
+              "first argument of not should have sort Bool, got {} ", args[0]
+            )
+          )
+        }
+      },
+
+      And => {
+        let mut cpt = 0 ;
+        let mut res = true ;
+        for arg in args.iter() {
+          match * arg.get() {
+            RCst::Bool(b) => res = res && b,
+            _ => return Err(
+              format!(
+                "parameter {} of operator And:\n  \
+                  expected Bool, got {}",
+                cpt + 1, arg
+              )
+            )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        Ok( factory.cst(res) )
+      },
+
+      Or => {
+        let mut cpt = 0 ;
+        let mut res = true ;
+        for arg in args.iter() {
+          match * arg.get() {
+            RCst::Bool(b) => res = res || b,
+            _ => return Err(
+              format!(
+                "parameter {} of operator Or:\n  \
+                  expected Bool, got {}",
+                cpt + 1, arg
+              )
+            )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        Ok( factory.cst(res) )
+      },
+
+      Impl => {
+        let mut cpt = 0 ;
+        let mut so_far = false ;
+        for arg in args.iter() {
+          match * arg.get() {
+            RCst::Bool(b) => if so_far {
+              if ! b {
+                return Ok( factory.cst(false) )
+              }
+            } else {
+              if b { so_far = true }
+            },
+            _ => return Err(
+              format!(
+                "parameter {} of operator Impl:\n  \
+                  expected Bool, got {}",
+                cpt + 1, arg
+              )
+            )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        Ok( factory.cst(true) )
+      },
+
+      Xor => {
+        let mut cpt = 0 ;
+        let mut trues = 0 ;
+        for arg in args.iter() {
+          match * arg.get() {
+            RCst::Bool(b) => if b { trues = trues + 1 },
+            _ => return Err(
+              format!(
+                "parameter {} of operator Xor:\n  \
+                  expected Bool, got {}",
+                cpt + 1, arg
+              )
+            )
+          } ;
+          cpt = cpt + 1 ;
+        } ;
+        Ok( factory.cst(trues == 1) )
+      },
+
+      Distinct => {
+        match Eq.eval(factory, args) {
+          Ok(cst) => match * cst.get() {
+            RCst::Bool(b) => Ok( factory.cst(! b) ),
+            _ => unreachable!(),
+          },
+          Err(s) => Err(
+            format!("in evaluation of Distinct as (not (= ...))\n{}", s)
+          ),
+        }
+      },
+
+      Neg => {
+        if args.len() != 1 {
+          return Err(
+            format!(
+              "operator unary minus expects one argument, got {}", args.len()
+            )
+          )
+        } ;
+        match args[0].get().neg() {
+          Ok(cst) => Ok( factory.mk_rcst(cst) ),
+          Err(cst) => Err(
+            format!(
+              "operator unary minus cannot be applied to {}", cst
+            )
+          )
+        }
+      },
+
+      Add => {
+        let mut args = args.into_iter() ;
+        if let Some(arg) = args.next() {
+          let mut res = arg.get().clone() ;
+          for arg in args {
+            match res.add(& arg) {
+              Ok(cst) => res = cst,
+              Err(cst) => return Err(
+                format!("unexpected argument in operator Add: {}", cst)
+              ),
+            }
+          } ;
+          Ok( factory.mk_rcst(res) )
+        } else {
+          Err("operator Add applied to nothing".to_string())
+        }
+      },
+
+      Sub => {
+        let mut args = args.into_iter() ;
+        if let Some(arg) = args.next() {
+          let mut res = arg.get().clone() ;
+          for arg in args {
+            match res.sub(& arg) {
+              Ok(cst) => res = cst,
+              Err(cst) => return Err(
+                format!("unexpected argument in operator Sub: {}", cst)
+              ),
+            }
+          } ;
+          Ok( factory.mk_rcst(res) )
+        } else {
+          Err("operator Sub applied to nothing".to_string())
+        }
+      },
+
+      Mul => {
+        let mut args = args.into_iter() ;
+        if let Some(arg) = args.next() {
+          let mut res = arg.get().clone() ;
+          for arg in args {
+            match res.mul(& arg) {
+              Ok(cst) => res = cst,
+              Err(cst) => return Err(
+                format!("unexpected argument in operator Mul: {}", cst)
+              ),
+            }
+          } ;
+          Ok( factory.mk_rcst(res) )
+        } else {
+          Err("operator Mul applied to nothing".to_string())
+        }
+      },
+
+      Div => {
+        let mut args = args.into_iter() ;
+        if let Some(arg) = args.next() {
+          let mut res = arg.get().clone() ;
+          for arg in args {
+            match res.div(& arg) {
+              Ok(cst) => res = cst,
+              Err(cst) => return Err(
+                format!("unexpected argument in operator Div: {}", cst)
+              ),
+            }
+          } ;
+          Ok( factory.mk_rcst(res) )
+        } else {
+          Err("operator Div applied to nothing".to_string())
+        }
+      },
+
+      Le => if args.len() == 2 {
+        match * args[0].get() {
+          RCst::Int(ref lhs) => match * args[1].get() {
+            RCst::Int(ref rhs) => Ok( factory.cst( lhs <= rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator <=: {}", args[1])
+            ),
+          },
+          RCst::Rat(ref lhs) => match * args[1].get() {
+            RCst::Rat(ref rhs) => Ok( factory.cst( lhs <= rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator <=: {}", args[1])
+            ),
+          },
+          _ => Err(
+            format!("unexpected argument in operator <=: {}", args[1])
+          ),
+        }
+      } else {
+        Err(
+          format!("operator <= expects 2 arguments, got {:?}", args)
+        )
+      },
+
+      Ge => if args.len() == 2 {
+        match * args[0].get() {
+          RCst::Int(ref lhs) => match * args[1].get() {
+            RCst::Int(ref rhs) => Ok( factory.cst( lhs >= rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator >=: {}", args[1])
+            ),
+          },
+          RCst::Rat(ref lhs) => match * args[1].get() {
+            RCst::Rat(ref rhs) => Ok( factory.cst( lhs >= rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator >=: {}", args[1])
+            ),
+          },
+          _ => Err(
+            format!("unexpected argument in operator >=: {}", args[1])
+          ),
+        }
+      } else {
+        Err(
+          format!("operator >= expects 2 arguments, got {:?}", args)
+        )
+      },
+
+      Lt => if args.len() == 2 {
+        match * args[0].get() {
+          RCst::Int(ref lhs) => match * args[1].get() {
+            RCst::Int(ref rhs) => Ok( factory.cst( lhs < rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator <: {}", args[1])
+            ),
+          },
+          RCst::Rat(ref lhs) => match * args[1].get() {
+            RCst::Rat(ref rhs) => Ok( factory.cst( lhs < rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator <: {}", args[1])
+            ),
+          },
+          _ => Err(
+            format!("unexpected argument in operator <: {}", args[1])
+          ),
+        }
+      } else {
+        Err(
+          format!("operator < expects 2 arguments, got {:?}", args)
+        )
+      },
+
+      Gt => if args.len() == 2 {
+        match * args[0].get() {
+          RCst::Int(ref lhs) => match * args[1].get() {
+            RCst::Int(ref rhs) => Ok( factory.cst( lhs > rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator >: {}", args[1])
+            ),
+          },
+          RCst::Rat(ref lhs) => match * args[1].get() {
+            RCst::Rat(ref rhs) => Ok( factory.cst( lhs > rhs) ),
+            _ => Err(
+              format!("unexpected argument in operator >: {}", args[1])
+            ),
+          },
+          _ => Err(
+            format!("unexpected argument in operator >: {}", args[1])
+          ),
+        }
+      } else {
+        Err(
+          format!("operator > expects 2 arguments, got {:?}", args)
+        )
+      },
+
+    }
+  }
 }
 
 impl fmt::Display for Operator {
@@ -1119,4 +1455,89 @@ pub mod zip2 {
     }
   }
 
+}
+
+
+
+
+/** Term evaluator. */
+pub mod eval {
+  use ::{
+    Type, Cst, Sym, Term, Offset2, Factory, UnTermOps
+  } ;
+  use std::collections::HashMap ;
+  use ::zip::{ Step, fold_info } ;
+  use ::zip::Step::* ;
+
+  /** Function passed to fold to evaluate a term. */
+  fn eval_term(
+    factory: & Factory,
+    model: & HashMap<Term, & Cst>,
+    step: Step<Cst>,
+    bindings: & HashMap<Sym, Cst>,
+    quantified: & HashMap<Sym, Type>,
+  ) -> Result<Cst, String> {
+    match step {
+
+      App(_, _) => Err(
+        "evaluation of applications is not implemented".to_string()
+      ),
+
+      Op(op, args) => op.eval(factory, args),
+
+      Let(_, cst) => Ok(cst),
+
+      C(cst) => Ok(cst),
+
+      V(r_var) => {
+        let sym = r_var.sym().clone() ;
+        let var = factory.mk_var(r_var) ;
+        match model.get(& var) {
+          Some(cst) => Ok( (* cst).clone() ),
+          None => match bindings.get(& sym) {
+            Some(cst) => Ok( cst.clone() ),
+            None => match quantified.get(& sym) {
+              Some(_) => Err(
+                format!("cannot evaluate quantified variable {}", var)
+              ),
+              None => Err(
+                format!("unknown variable {}", var)
+              ),
+            },
+          },
+        }
+      },
+
+      _ => Err("evaluation of quantifiers is not implemented".to_string()),
+    }
+  }
+
+  /** Evaluates a term. */
+  pub fn eval(
+    factory: & Factory, term: & Term, offset: & Offset2, model: & ::Model
+  ) -> Result<Cst, String> {
+    let mut map = HashMap::new() ;
+    for & ( (ref v, ref o), ref cst ) in model.iter() {
+      if let Some(ref o) = * o {
+        if o == offset.curr() {
+          let v = factory.mk_var( v.clone() ) ;
+          map.insert( v, cst ) ;
+        } else {
+          let v = factory.mk_var( v.clone() ) ;
+          if o == offset.next() {
+            map.insert( factory.bump(v).unwrap(), cst ) ;
+          }
+        }
+      } else {
+        let v = factory.mk_var( v.clone() ) ;
+        map.insert( v, cst ) ;
+      }
+    } ;
+    fold_info(
+      |step, bindings, quantified| eval_term(
+        factory, & map, step, bindings, quantified
+      ),
+      term
+    )
+  }
 }
