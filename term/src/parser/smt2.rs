@@ -527,216 +527,216 @@ mod quoted_sym {
   }
 }
 
-#[cfg(test)]
-mod terms {
-  use base::{ State, Offset, Smt2Offset, Offset2, PrintSmt2 } ;
-  use sym::* ;
-  use var::* ;
-  use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
-  use factory::* ;
-  use typ::* ;
-  use std::str::FromStr ;
+// #[cfg(test)]
+// mod terms {
+//   use base::{ State, Offset, Smt2Offset, Offset2, PrintSmt2 } ;
+//   use sym::* ;
+//   use var::* ;
+//   use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
+//   use factory::* ;
+//   use typ::* ;
+//   use std::str::FromStr ;
 
-  #[test]
-  fn cst() {
-    use super::* ;
-    let factory = Factory::mk() ;
-    let res = factory.cst( Int::from_str("7").unwrap() ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"7",
-      Smt2Offset::No,
-      res
-    ) ;
-    let res = factory.cst(
-      Rat::new(
-        Int::from_str("5357").unwrap(),
-        Int::from_str("2046").unwrap()
-      )
-    ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"(/ 5357 2046)",
-      Smt2Offset::No,
-      res
-    ) ;
-    let res = factory.cst( true ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"true",
-      Smt2Offset::No,
-      res
-    ) ;
-    let res = factory.cst( false ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"false",
-      Smt2Offset::No,
-      res
-    ) ;
-  }
+//   #[test]
+//   fn cst() {
+//     use super::* ;
+//     let factory = Factory::mk() ;
+//     let res = factory.cst( Int::from_str("7").unwrap() ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"7",
+//       Smt2Offset::No,
+//       res
+//     ) ;
+//     let res = factory.cst(
+//       Rat::new(
+//         Int::from_str("5357").unwrap(),
+//         Int::from_str("2046").unwrap()
+//       )
+//     ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"(/ 5357 2046)",
+//       Smt2Offset::No,
+//       res
+//     ) ;
+//     let res = factory.cst( true ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"true",
+//       Smt2Offset::No,
+//       res
+//     ) ;
+//     let res = factory.cst( false ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"false",
+//       Smt2Offset::No,
+//       res
+//     ) ;
+//   }
 
-  #[test]
-  fn var() {
-    use super::* ;
-    let factory = Factory::mk() ;
-    let res = factory.var( factory.sym("bla") ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"| bla|",
-      Smt2Offset::No,
-      res
-    ) ;
-    let res = factory.svar( factory.sym("bla"), State::Curr ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"|@7 bla|",
-      Smt2Offset::One(Offset::of_int(7)),
-      res
-    ) ;
-    try_parse_term!(
-      term_parser, & factory,
-      b"|@8 bla|",
-      Smt2Offset::One(Offset::of_int(8)),
-      res
-    ) ;
-  }
+//   #[test]
+//   fn var() {
+//     use super::* ;
+//     let factory = Factory::mk() ;
+//     let res = factory.var( factory.sym("bla") ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"| bla|",
+//       Smt2Offset::No,
+//       res
+//     ) ;
+//     let res = factory.svar( factory.sym("bla"), State::Curr ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"|@7 bla|",
+//       Smt2Offset::One(Offset::of_int(7)),
+//       res
+//     ) ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       b"|@8 bla|",
+//       Smt2Offset::One(Offset::of_int(8)),
+//       res
+//     ) ;
+//   }
 
-  #[test]
-  fn op() {
-    use super::* ;
-    let factory = Factory::mk() ;
+//   #[test]
+//   fn op() {
+//     use super::* ;
+//     let factory = Factory::mk() ;
 
-    let bla_plus_7 = factory.op(
-      Operator::Add, vec![
-        factory.var( factory.sym("bla") ),
-        factory.cst( Int::from_str("7").unwrap() )
-      ]
-    ) ;
-    let offset = & Offset2::init() ;
-    let mut s: Vec<u8> = vec![] ;
-    bla_plus_7.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::No,
-      bla_plus_7
-    ) ;
+//     let bla_plus_7 = factory.op(
+//       Operator::Add, vec![
+//         factory.var( factory.sym("bla") ),
+//         factory.cst( Int::from_str("7").unwrap() )
+//       ]
+//     ) ;
+//     let offset = & Offset2::init() ;
+//     let mut s: Vec<u8> = vec![] ;
+//     bla_plus_7.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::No,
+//       bla_plus_7
+//     ) ;
 
-    let nested = factory.op(
-      Operator::Le, vec![
-        factory.cst( Int::from_str("17").unwrap() ),
-        bla_plus_7
-      ]
-    ) ;
-    let mut s: Vec<u8> = vec![] ;
-    nested.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::No,
-      nested
-    ) ;
+//     let nested = factory.op(
+//       Operator::Le, vec![
+//         factory.cst( Int::from_str("17").unwrap() ),
+//         bla_plus_7
+//       ]
+//     ) ;
+//     let mut s: Vec<u8> = vec![] ;
+//     nested.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::No,
+//       nested
+//     ) ;
 
-    let nested = factory.op(
-      Operator::And, vec![
-        factory.svar( factory.sym("svar"), State::Curr ),
-        nested
-      ]
-    ) ;
-    let offset = & offset.nxt().nxt() ;
-    let mut s: Vec<u8> = vec![] ;
-    nested.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::One( Offset::of_int(2) ),
-      nested
-    ) ;
+//     let nested = factory.op(
+//       Operator::And, vec![
+//         factory.svar( factory.sym("svar"), State::Curr ),
+//         nested
+//       ]
+//     ) ;
+//     let offset = & offset.nxt().nxt() ;
+//     let mut s: Vec<u8> = vec![] ;
+//     nested.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::One( Offset::of_int(2) ),
+//       nested
+//     ) ;
 
-    let nested = factory.op(
-      Operator::Or, vec![
-        factory.svar( factory.sym("something else"), State::Next ),
-        nested
-      ]
-    ) ;
-    let offset = & offset.nxt().nxt() ;
-    let mut s: Vec<u8> = vec![] ;
-    nested.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::Two( Offset::of_int(4), Offset::of_int(5) ),
-      nested
-    ) ;
-  }
+//     let nested = factory.op(
+//       Operator::Or, vec![
+//         factory.svar( factory.sym("something else"), State::Next ),
+//         nested
+//       ]
+//     ) ;
+//     let offset = & offset.nxt().nxt() ;
+//     let mut s: Vec<u8> = vec![] ;
+//     nested.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::Two( Offset::of_int(4), Offset::of_int(5) ),
+//       nested
+//     ) ;
+//   }
 
-  #[test]
-  fn app() {
-    use super::* ;
-    let factory = Factory::mk() ;
+//   #[test]
+//   fn app() {
+//     use super::* ;
+//     let factory = Factory::mk() ;
 
-    let bla_plus_7 = factory.app(
-      factory.sym("function symbol"), vec![
-        factory.var( factory.sym("bla") ),
-        factory.cst( Int::from_str("7").unwrap() )
-      ]
-    ) ;
-    let offset = & Offset2::init() ;
-    let mut s: Vec<u8> = vec![] ;
-    bla_plus_7.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::No,
-      bla_plus_7
-    ) ;
+//     let bla_plus_7 = factory.app(
+//       factory.sym("function symbol"), vec![
+//         factory.var( factory.sym("bla") ),
+//         factory.cst( Int::from_str("7").unwrap() )
+//       ]
+//     ) ;
+//     let offset = & Offset2::init() ;
+//     let mut s: Vec<u8> = vec![] ;
+//     bla_plus_7.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::No,
+//       bla_plus_7
+//     ) ;
 
-    let nested = factory.app(
-      factory.sym("another function symbol"), vec![
-        factory.cst( Int::from_str("17").unwrap() ),
-        bla_plus_7
-      ]
-    ) ;
-    let mut s: Vec<u8> = vec![] ;
-    nested.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::No,
-      nested
-    ) ;
+//     let nested = factory.app(
+//       factory.sym("another function symbol"), vec![
+//         factory.cst( Int::from_str("17").unwrap() ),
+//         bla_plus_7
+//       ]
+//     ) ;
+//     let mut s: Vec<u8> = vec![] ;
+//     nested.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::No,
+//       nested
+//     ) ;
 
-    let nested = factory.app(
-      factory.sym("yet another one"), vec![
-        factory.svar( factory.sym("svar"), State::Curr ),
-        nested
-      ]
-    ) ;
-    let offset = & offset.nxt().nxt() ;
-    let mut s: Vec<u8> = vec![] ;
-    nested.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::One( Offset::of_int(2) ),
-      nested
-    ) ;
+//     let nested = factory.app(
+//       factory.sym("yet another one"), vec![
+//         factory.svar( factory.sym("svar"), State::Curr ),
+//         nested
+//       ]
+//     ) ;
+//     let offset = & offset.nxt().nxt() ;
+//     let mut s: Vec<u8> = vec![] ;
+//     nested.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::One( Offset::of_int(2) ),
+//       nested
+//     ) ;
 
-    let nested = factory.op(
-      Operator::Or, vec![
-        factory.svar( factory.sym("something else"), State::Next ),
-        nested
-      ]
-    ) ;
-    let offset = & offset.nxt().nxt() ;
-    let mut s: Vec<u8> = vec![] ;
-    nested.to_smt2(& mut s, offset).unwrap() ;
-    try_parse_term!(
-      term_parser, & factory,
-      & s,
-      Smt2Offset::Two( Offset::of_int(4), Offset::of_int(5) ),
-      nested
-    ) ;
-  }
-}
+//     let nested = factory.op(
+//       Operator::Or, vec![
+//         factory.svar( factory.sym("something else"), State::Next ),
+//         nested
+//       ]
+//     ) ;
+//     let offset = & offset.nxt().nxt() ;
+//     let mut s: Vec<u8> = vec![] ;
+//     nested.to_smt2(& mut s, offset).unwrap() ;
+//     try_parse_term!(
+//       term_parser, & factory,
+//       & s,
+//       Smt2Offset::Two( Offset::of_int(4), Offset::of_int(5) ),
+//       nested
+//     ) ;
+//   }
+// }

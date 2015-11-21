@@ -487,7 +487,7 @@ macro_rules! try_parse_term {
   ($fun:expr, $factory:expr, $arg:expr, $e:expr) => (
     try_parse!($fun, $factory, $arg,
       (s, res) -> {
-        assert_eq!(res, $e)
+        assert_eq!(res.term, $e)
       }
     )
   ) ;
@@ -496,7 +496,7 @@ macro_rules! try_parse_term {
 
 #[cfg(test)]
 mod terms {
-  use base::{ State, PrintSts2 } ;
+  use base::{ State, PrintTsv } ;
   use sym::* ;
   use var::* ;
   use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
@@ -558,13 +558,13 @@ mod terms {
     let res = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"(state bla)",
+      b"(_ state bla)",
       res
     ) ;
     let res = factory.svar( factory.sym("bla"), State::Next ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"(next bla)",
+      b"(_ next bla)",
       res
     ) ;
   }
