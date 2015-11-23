@@ -6,5 +6,6 @@ authors = ["Adrien Champion <adrien.champion@email.com>"]
 [dependencies]
 num = "*"
 nom = "0.5.0"
+rand = "0.3"
 hashconsing = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git", rev = "1c5b9b0" }
 rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git", rev = "accc2cd" }

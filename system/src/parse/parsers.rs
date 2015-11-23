@@ -134,13 +134,13 @@ fn fun_def_parser<'a>(
     opt!(space_comment) ~
     tag!("define-fun") ~
     space_comment ~
-    sym: apply!(sym_parser, c.factory()) ~
+    sym: dbg_dmp!(apply!(sym_parser, c.factory())) ~
     opt!(space_comment) ~
-    args: apply!(args_parser, c.factory()) ~
+    args: dbg_dmp!(apply!(args_parser, c.factory())) ~
     opt!(space_comment) ~
     typ: type_parser ~
     opt!(space_comment) ~
-    body: apply!(term_parser, c.factory()) ~
+    body: dbg_dmp!(apply!(term_parser, c.factory())) ~
     opt!(space_comment) ~
     char!(')'),
     || c.add_fun_def(sym, args, typ, body)

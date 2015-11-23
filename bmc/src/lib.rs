@@ -110,18 +110,8 @@ impl event::CanRun for Bmc {
 
           try_error!(solver.assert(& check, & k), event) ;
 
-          // event.log(& format!("check-sat assuming {}", lit)) ;
-
           let mut actlits = props.actlits() ;
           actlits.push(lit) ;
-
-          // event.log(
-          //   & format!(
-          //     "checking {} properties @{}",
-          //     props.len(),
-          //     k.curr()
-          //   )
-          // ) ;
 
           match solver.check_sat() {
             Ok(true) => (),
@@ -140,6 +130,14 @@ impl event::CanRun for Bmc {
               return ()
             },
           } ;
+
+          event.log(
+            & format!(
+              "checking {} properties @{}",
+              props.len(),
+              k.curr()
+            )
+          ) ;
 
           match solver.check_sat_assuming( & actlits, k.next() ) {
             Ok(true) => {
@@ -223,7 +221,7 @@ impl event::CanRun for Bmc {
             break
           }
 
-          // event.log( & format!("unrolling at {}", k) ) ;
+          event.log( & format!("unrolling at {}", k) ) ;
           try_error!( sys.unroll(& mut solver, & k), event ) ;
 
           if let Some(one_prop_false) = props.one_false_next() {
@@ -244,14 +242,6 @@ impl event::CanRun for Bmc {
             let mut actlits = props.actlits() ;
             actlits.push(lit) ;
 
-            // event.log(
-            //   & format!(
-            //     "checking {} properties @{}",
-            //     props.len(),
-            //     k.curr()
-            //   )
-            // ) ;
-
             match solver.check_sat() {
               Ok(true) => (),
               Ok(false) => {
@@ -269,6 +259,14 @@ impl event::CanRun for Bmc {
                 return ()
               },
             } ;
+
+            event.log(
+              & format!(
+                "checking {} properties @{}",
+                props.len(),
+                k.curr()
+              )
+            ) ;
 
             match solver.check_sat_assuming( & actlits, k.next() ) {
               Ok(true) => {

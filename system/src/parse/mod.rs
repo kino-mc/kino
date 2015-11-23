@@ -98,6 +98,7 @@ impl Atom {
 }
 
 /** Normal result of a parsing attempt. */
+#[derive(Debug)]
 pub enum Res {
   /** Found an exit command. */
   Exit,
@@ -420,7 +421,7 @@ impl Context {
     loop {
       let mut new_things = false ;
 
-      // println!("  entering lines loop") ;
+      println!("  entering lines loop") ;
       loop {
         match lines.next() {
           Some(Ok(line)) => {
@@ -453,7 +454,7 @@ impl Context {
         }
       }
 
-      // println!("  entering parse loop") ;
+      println!("  entering parse loop") ;
       loop {
         // println!("  updating") ;
         buffer.clear() ;
@@ -471,7 +472,11 @@ impl Context {
           },
           Done(_, Err(e)) => return Err(e),
           Incomplete(_) => {
-            // println!("  incomplete (item)") ;
+            println!("Context:") ;
+            for line in self.lines().lines() {
+              println!("| {}", line)
+            } ;
+            println!("  incomplete (item)") ;
             break
           },
           _ => match check_exit_parser(buffer.as_bytes(), self) {
@@ -481,6 +486,10 @@ impl Context {
               return res
             },
             Incomplete(_) => {
+              println!("Context:") ;
+              for line in self.lines().lines() {
+                println!("| {}", line)
+              } ;
               println!("  incomplete (check)") ;
               break
             },

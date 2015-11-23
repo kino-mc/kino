@@ -141,13 +141,14 @@ impl event::CanRun for KInd {
               // let prop_count = actlits.len() ;
               actlits.push(lit) ;
 
-              // event.log(
-              //   & format!(
-              //     "checking {} properties @{}",
-              //     props.len(),
-              //     check_offset.next()
-              //   )
-              // ) ;
+              event.log(
+                & format!(
+                  "checking {} properties @{} ({} unrolling(s))",
+                  props.len(),
+                  check_offset.next(),
+                  k.curr()
+                )
+              ) ;
 
               match solver.check_sat_assuming( & actlits, check_offset.next() ) {
                 Ok(true) => {

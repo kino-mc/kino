@@ -90,8 +90,11 @@ only non-zero denominator will push the problem to function symbol application. 
 extern crate num ;
 #[macro_use]
 extern crate nom ;
+extern crate rand ;
 extern crate hashconsing as hcons ;
 extern crate rsmt2 ;
+
+use std::collections::HashSet ;
 
 macro_rules! unimpl {
   () => ( panic!("not implemented") ) ;
@@ -117,9 +120,17 @@ mod parser ;
 pub use parser::tsv::TermAndDep ;
 mod factory ;
 pub use factory::{ Factory, ParseSts2, UnTermOps } ;
+pub mod gen ;
 
 /** A model is a vector of variables with optional offset and values. */
 pub type Model = Vec<( (Var, Option<Offset>), Cst )> ;
+
+/** A set of constants. */
+pub type CstSet = HashSet<Cst> ;
+/** A set of variables. */
+pub type VarSet = HashSet<Var> ;
+/** A set of terms. */
+pub type TermSet = HashSet<Term> ;
 
 /** Real, underlying representation of symbols, constants and terms. */
 pub mod real_term {
@@ -131,7 +142,7 @@ pub mod real_term {
 
 /** Zipper on terms. */
 pub mod zip {
-  pub use term::zip2::{ Step, fold, fold_info } ;
+  pub use term::zip2::{ Step, fold, fold_info, extract } ;
 } 
 
 /** Internal traits used for SMT Lib 2 and TSV Lib 2 writing.

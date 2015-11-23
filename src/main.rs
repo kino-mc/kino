@@ -1,5 +1,3 @@
-#![allow(non_upper_case_globals)]
-#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -8,6 +6,9 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+#![allow(non_upper_case_globals)]
+#![deny(missing_docs)]
 
 /*! Main project for kinō.
 

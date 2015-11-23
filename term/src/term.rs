@@ -62,6 +62,24 @@ pub enum Operator {
 }
 
 impl Operator {
+
+  /** The arity of the operator. `None` for n-ary operators. */
+  pub fn arity(& self) -> Option<u8> {
+    use self::Operator::* ;
+    match * self {
+      // Unary.
+      Not | Neg => Some(1u8),
+      // Binary.
+      Div | Le | Ge | Lt | Gt => Some(2),
+      // Ternary.
+      Ite => Some(3),
+      // N-ary.
+      Eq | And | Or | Impl | Xor |
+      Distinct |
+      Add | Sub | Mul => None,
+    }
+  }
+
   /** Returns its return type if its arguments type check. */
   pub fn type_check(& self, sig: & [Type]) -> Result<
     Type, (Option<Vec<usize>>, String)
@@ -1263,11 +1281,24 @@ pub mod zip2 {
 
   struct Zip<T> {
     path: Vec<ZipStep<T>>,
-    bindings: HashMap<Sym, T>,
-    quantified: HashMap<Sym, Type>,
+    bindings: Vec<HashMap<Sym, T>>,
+    quantified: Vec<HashMap<Sym, Type>>,
   }
 
   impl<T: Clone> Zip<T> {
+
+    #[inline(always)]
+    fn add_binding(& mut self, sym: Sym, t: T) {
+      if self.bindings.is_empty() {
+        panic!(
+          "[term::zip] trying to add binding on empty list of binding maps"
+        )
+      } else {
+        let last = self.bindings.len() - 1 ;
+        self.bindings[last].insert(sym, t) ;
+        ()
+      }
+    }
 
     #[inline(always)]
     fn push(& mut self, step: ZipStep<T>) {
@@ -1311,21 +1342,26 @@ pub mod zip2 {
 
           RealTerm::Forall(ref syms, ref kid) => {
             self.push( Forall(syms.clone()) ) ;
+            let mut map = HashMap::new() ;
             for & (ref sym, ref typ) in syms.iter() {
-              self.quantified.insert(sym.clone(), typ.clone()) ;
+              map.insert(sym.clone(), typ.clone()) ;
             } ;
+            self.quantified.push(map) ;
             kid.clone()
           },
 
           RealTerm::Exists(ref syms, ref kid) => {
             self.push( Exists(syms.clone()) ) ;
+            let mut map = HashMap::new() ;
             for & (ref sym, ref typ) in syms.iter() {
-              self.quantified.insert(sym.clone(), typ.clone()) ;
+              map.insert(sym.clone(), typ.clone()) ;
             } ;
+            self.quantified.push(map) ;
             kid.clone()
           },
 
           RealTerm::Let(ref syms, ref kid) => {
+            self.bindings.push(HashMap::new()) ;
             let mut syms = syms.clone() ;
             syms.reverse() ;
             if let Some( (sym, fst) ) = syms.pop() {
@@ -1336,7 +1372,7 @@ pub mod zip2 {
               ) ;
               fst.clone()
             } else {
-              panic!("zipping down a let-binding with no bindings")
+              panic!("[term::zip] zipping down a let-binding with no bindings")
             }
           },
 
@@ -1375,7 +1411,7 @@ pub mod zip2 {
         },
 
         Some( Let1(mut lft, sym, mut rgt, kid) ) => {
-          self.bindings.insert(sym.clone(), t.clone()) ;
+          self.add_binding(sym.clone(), t.clone()) ;
           lft.push( (sym, t) ) ;
           if let Some( (sym, term) ) = rgt.pop() {
             self.push( Let1(lft, sym, rgt, kid) ) ;
@@ -1387,24 +1423,33 @@ pub mod zip2 {
         },
 
         Some( Let2(syms) ) => {
-          for & (ref sym, _) in syms.iter() {
-            self.bindings.remove(sym) ;
+          match self.bindings.pop() {
+            Some(_) => (),
+            None => panic!(
+              "[term::zip] going up Let2 but list of bindings is empty"
+            ),
           } ;
           NYet( Step::Let(syms, t) )
         },
 
         Some( Forall(syms) ) => {
-          for & (ref sym, _) in syms.iter() {
-            self.quantified.remove(sym) ;
+          match self.quantified.pop() {
+            Some(_) => (),
+            None => panic!(
+              "[term::zip] going up Forall but list of quantifieds is empty"
+            ),
           } ;
           NYet( Step::Forall(syms, t) )
         },
 
         Some( Exists(syms) ) => {
-          for & (ref sym, _) in syms.iter() {
-            self.quantified.remove(sym) ;
+          match self.quantified.pop() {
+            Some(_) => (),
+            None => panic!(
+              "[term::zip] going up Exists but list of quantifieds is empty"
+            ),
           } ;
-          NYet( Step::Forall(syms, t) )
+          NYet( Step::Exists(syms, t) )
         },
 
       }
@@ -1417,7 +1462,7 @@ pub mod zip2 {
     T: Clone, Fun: Fn(Step<T>) -> T
   >(f: Fun, term: Term) -> T {
     let mut zip = Zip {
-      path: vec![], bindings: HashMap::new(), quantified: HashMap::new()
+      path: vec![], bindings: vec![], quantified: vec![]
     } ;
     let first = zip.zip_down(term) ;
     let mut t = f(first) ;
@@ -1433,12 +1478,12 @@ pub mod zip2 {
   pub fn fold_info<
     T: Clone, E,
     Fun: Fn(
-      Step<T>, & HashMap<Sym, T>, & HashMap<Sym, Type>
+      Step<T>, & [ HashMap<Sym, T> ], & [ HashMap<Sym, Type> ]
     ) -> Result<T,E>
   >(f: Fun, term: & Term) -> Result<T, E> {
     let term = term.clone() ;
     let mut zip = Zip {
-      path: vec![], bindings: HashMap::new(), quantified: HashMap::new()
+      path: vec![], bindings: vec![], quantified: vec![]
     } ;
     let first = zip.zip_down(term) ;
     match f(first, & zip.bindings, & zip.quantified) {
@@ -1455,6 +1500,20 @@ pub mod zip2 {
     }
   }
 
+  /** Extracts the value associated to a symbol in a hash map. */
+  pub fn extract<'a, T>(
+    sym: & Sym, maps: & 'a [ HashMap<Sym, T> ]
+  ) -> Option<& 'a T> {
+    let maps = maps.iter().rev() ;
+    for map in maps {
+      match map.get(sym) {
+        None => (),
+        Some(t) => return Some(t),
+      } ;
+    } ;
+    None
+  }
+
 }
 
 
@@ -1466,7 +1525,7 @@ pub mod eval {
     Type, Cst, Sym, Term, Offset2, Factory, UnTermOps
   } ;
   use std::collections::HashMap ;
-  use ::zip::{ Step, fold_info } ;
+  use ::zip::{ Step, fold_info, extract } ;
   use ::zip::Step::* ;
 
   /** Function passed to fold to evaluate a term. */
@@ -1474,8 +1533,8 @@ pub mod eval {
     factory: & Factory,
     model: & HashMap<Term, & Cst>,
     step: Step<Cst>,
-    bindings: & HashMap<Sym, Cst>,
-    quantified: & HashMap<Sym, Type>,
+    bindings: & [ HashMap<Sym, Cst> ],
+    quantified: & [ HashMap<Sym, Type> ],
   ) -> Result<Cst, String> {
     match step {
 
@@ -1494,9 +1553,9 @@ pub mod eval {
         let var = factory.mk_var(r_var) ;
         match model.get(& var) {
           Some(cst) => Ok( (* cst).clone() ),
-          None => match bindings.get(& sym) {
+          None => match extract(& sym, bindings) {
             Some(cst) => Ok( cst.clone() ),
-            None => match quantified.get(& sym) {
+            None => match extract(& sym, quantified) {
               Some(_) => Err(
                 format!("cannot evaluate quantified variable {}", var)
               ),

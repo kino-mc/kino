@@ -1,0 +1,149 @@
+;; Top node is `fault_conf` with takes two inputs:
+;;   - a real signal `in`
+;;   - an error flag `err_in`
+;; and returns
+;;   - a real signal `out`
+;;   - an error flag `err_out`
+;;
+;; At each cycle the output signal gets closer to the last value of `in` when
+;; there was no error, or a default value (`default`) if there is no such
+;; value. The derivative of the output signal is limited by `max_deriv`.
+;;
+;; The saturation of the derivative of the output signal is performed by the
+;; `sat_deriv: Real -> Real` system.
+;;
+;; The output error flag is raised and stays that way when the input error
+;; flag has been true `err_thres` times. When this happens the input error is
+;; *confirmed* and the value of out should be `default`.
+
+;; const err_thres: int  = 7   ;
+;; const max_deriv: real = 1.0 ;
+;; const default:   real = 0.0 ;
+
+(define-fun err_thres () Int 7)
+(define-fun max_deriv () Real (/ 1 1))
+(define-fun default () Real (/ 0 1))
+
+;; node sat_deriv(in: real) returns (out: real) ;
+;; let
+;;   out = in -> (
+;;     if in < pre out then (
+;;       if (pre out) - in > max_deriv then (pre out) - max_deriv else in
+;;     ) else (
+;;       if in - pre out > max_deriv then (pre out) + max_deriv else in
+;;     )
+;;   ) ;
+;; tel
+
+(define-sys sat_deriv
+  ( (in Real) (out Real) )
+  ()
+  (= (_ state out) (_ state in))
+  (= (_ next out)
+    (ite (< (_ next in) (_ state out))
+      (ite (> (- (_ state out) (_ next in)) max_deriv)
+        (- (_ state out) max_deriv)
+        (_ next in)
+      )
+      (ite (> (- (_ next in) (_ state out)) max_deriv)
+        (+ (_ state out) max_deriv)
+        (_ next in)
+      )
+    )
+  )
+  ()
+)
+
+;; node fault_conf (in: real ; err_in: bool)
+;; returns (out: Real ; err_out: bool) ;
+;; var cnt: int ; last_legal: real ;
+;; let
+;;   ;; `cnt` counts how many errors have happened so far.
+;;   cnt = (if err_in then 1 else 0) + (0 -> pre cnt) ;
+;;   ;; Output error flag is raised when `err_thres` errors have happened
+;;   err_out = cnt >= err_thres ;
+;;   ;; Remember the last non-error input value.
+;;   last_legal = if err_in then (default -> pre last_legal) else in ;
+;;   ;; Output signal follows the last legal value, or is default.
+;;   out = if err_out then default else sat_deriv(last_legal) ;
+;;
+;;   ;; Does not hold, when error confirmed `out` takes the default value.
+;;   (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => out = in ; *)
+;;   (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => (
+;;     if err_out then out = default else out = in)
+;;   ) ; *)
+;;
+;; tel
+
+(define-sys fault_conf
+  ;; State.
+  (
+    ;; Input signal.
+    (in Real)
+    ;; Input error flag.
+    (err_in Bool)
+    ;; Memory counting the number of errors that occured.
+    (cnt Int)
+    ;; Last legal input value.
+    (last_legal Real)
+    ;; Output of `sat_deriv`.
+    (out_sub Real)
+    ;; Output signal.
+    (out Real)
+    ;; Output error flag.
+    (err_out Bool)
+  )
+  ;; Local state.
+  ()
+  ;; Init.
+  (and
+    (= (_ state cnt) (ite (_ state err_in) 1 0))
+    (= (_ state err_out) (>= (_ state cnt) err_thres))
+    (= (_ state last_legal)
+      (ite (_ state err_in) default (_ state in))
+    )
+    (= (_ state out) (ite (_ state err_out) default (_ state out_sub)))
+  )
+  ;; Trans.
+  (and
+    (= (_ next cnt) (+ (ite (_ state err_in) 1 0)) (_ state cnt))
+    (= (_ next err_out) (>= (_ next cnt) err_thres))
+    (= (_ next last_legal)
+      (ite (_ next err_in) (_ state last_legal) (_ next in))
+    )
+    (= (_ next out) (ite (_ next err_out) default (_ next out_sub)))
+  )
+  ;; Parallel composition with `sat_deriv`.
+  ( (sat_deriv (_ state last_legal) (_ state out_sub)) )
+)
+
+
+;; (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => out = in ; *)
+(define-prop prop_1 fault_conf
+  (=>
+    (and
+      (>= (- (_ state in) (_ state out)) max_deriv)
+      (not (_ state err_in))
+    )
+    (= (_ state out) (_ state in))
+  )
+)
+
+;; (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => (
+;;   if err_out then out = default else out = in)
+;; ) ; *)
+(define-prop prop_2 fault_conf
+  (=>
+    (and
+      (>= (- (_ state in) (_ state out)) max_deriv)
+      (not (_ state err_in))
+    )
+    (ite (_ state err_out)
+      (= (_ state out) default)
+      (= (_ state out) (_ state in))
+    )
+  )
+)
+
+;; Let's do this.
+(verify fault_conf (prop_1 prop_2))

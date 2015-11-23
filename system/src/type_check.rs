@@ -25,8 +25,8 @@ fn checker(
   state: & Option<HashMap<Sym, Type>>,
   sig: & Option<HashMap<Sym, Type>>,
   step: Step<(Term, Type)>,
-  bindings: & HashMap<Sym, (Term, Type)>,
-  quantified: & HashMap<Sym, Type>,
+  bindings: & [ HashMap<Sym, (Term, Type)> ],
+  quantified: & [ HashMap<Sym, Type> ],
 ) -> Result<(Term, Type), String> {
   use term::zip::Step::* ;
   match step {
@@ -87,6 +87,7 @@ fn checker(
       for (sym, (term,_)) in bindings {
         nu_bindings.push( (sym, term) )
       } ;
+      nu_bindings.reverse() ;
       Ok( (
         context.factory().let_b(nu_bindings, kid), typ
       ) )
@@ -164,11 +165,13 @@ fn checker(
                   Err( (_, bla) ) => return Err( format!("{}", bla) ),
                 },
                 None => {
-                  if let Some( & (_, typ) ) = bindings.get(sym) {
+                  if let Some( & (_, typ) ) = extract(sym, bindings) {
                     typ.clone()
                   } else {
-                  if let Some(typ) = quantified.get(sym) { typ.clone() } else {
-                      return Err(format!("unknown symbol {}", sym))
+                    if let Some(typ) = extract(sym, quantified) {
+                      typ.clone()
+                    } else {
+                        return Err(format!("unknown symbol {}", sym))
                     }
                   }
                 }
@@ -216,5 +219,183 @@ pub fn type_check(
   ) {
     Ok( (_, typ) ) => Ok(typ),
     Err(e) => Err(e),
+  }
+}
+
+
+
+#[cfg(test)]
+mod test {
+  use term::gen::* ;
+  use term::* ;
+  use base::Callable ;
+  use parse::{ Context, Res } ;
+
+  #[test]
+  fn rand_terms_fault_conf() {
+    use std::fs::File ;
+    use std::collections::HashMap ;
+
+    let file = "rsc/tsv/fault_conf.tsv" ;
+    let factory = Factory::mk() ;
+    let mut context = Context::mk(factory.clone(), 1000) ;
+
+    println!("opening file {}", file) ;
+    match File::open(& format!("../{}", file)) {
+      Ok(mut f) => {
+        println!("parsing") ;
+        match context.read(& mut f) {
+          Ok(res) => {
+            println!("done parsing") ;
+            match res {
+
+              Res::Check(sys, _) => {
+
+                // Throw in some constants.
+                let (
+                  zero, one, two, three, four, five, six, seven, eight, ftwo
+                ) = (
+                  Int::parse_bytes(b"0",  10).unwrap(),
+                  Int::parse_bytes(b"1",  10).unwrap(),
+                  Int::parse_bytes(b"2",  10).unwrap(),
+                  Int::parse_bytes(b"3",  10).unwrap(),
+                  Int::parse_bytes(b"4", 10).unwrap(),
+                  Int::parse_bytes(b"5",  10).unwrap(),
+                  Int::parse_bytes(b"6",  10).unwrap(),
+                  Int::parse_bytes(b"7",  10).unwrap(),
+                  Int::parse_bytes(b"8",  10).unwrap(),
+                  Int::parse_bytes(b"42", 10).unwrap()
+                ) ;
+                let mut bool_terms = TermSet::new() ;
+                bool_terms.extend(
+                  vec![ factory.cst(true ), factory.cst(false) ]
+                ) ;
+                let mut int_terms = TermSet::new() ;
+                int_terms.extend(
+                  vec![
+                    factory.cst(zero.clone()),
+                    factory.cst(one.clone()),
+                    factory.cst(two.clone()),
+                    factory.cst(three.clone()),
+                    factory.cst(four.clone()),
+                    factory.cst(five.clone()),
+                    factory.cst(six.clone()),
+                    factory.cst(seven.clone()),
+                    factory.cst(eight.clone()),
+                    factory.cst(ftwo.clone())
+                  ]
+                ) ;
+                let mut rat_terms = TermSet::new() ;
+                rat_terms.extend(
+                  vec![
+                    factory.cst( Rat::new(zero.clone(), one.clone()) ),
+                    factory.cst( Rat::new(ftwo.clone(), one.clone()) ),
+                    factory.cst( Rat::new(ftwo.clone(), two.clone()) ),
+                    factory.cst( Rat::new(three.clone(), ftwo.clone()) ),
+                    factory.cst( Rat::new(two.clone(), three.clone()) ),
+                    factory.cst( Rat::new(seven.clone(), one.clone()) ),
+                    factory.cst( Rat::new(eight.clone(), ftwo.clone()) ),
+                    factory.cst( Rat::new(five.clone(), three.clone()) ),
+                    factory.cst( Rat::new(six.clone(), one.clone()) ),
+                    factory.cst( Rat::new(one.clone(), seven.clone()) ),
+                    factory.cst( Rat::new(ftwo.clone(), six.clone()) ),
+                    factory.cst( Rat::new(ftwo.clone(), eight.clone()) ),
+                    factory.cst( Rat::new(one.clone(), one.clone()) ),
+                    factory.cst( Rat::new(one.clone(), eight.clone()) ),
+                    factory.cst( Rat::new(seven.clone(), two.clone()) )
+                  ]
+                ) ;
+
+
+                let mut term_map = HashMap::new() ;
+                term_map.insert(Type::Bool, bool_terms) ;
+                term_map.insert(Type::Int, int_terms) ;
+                term_map.insert(Type::Rat, rat_terms) ;
+
+                // Add variable definitions to map.
+                for call in sys.calls().iter() {
+                  match * * call {
+                    Callable::Dec(_) => (),
+                    Callable::Def(ref def) => {
+                      // Only want variables.
+                      if def.args().is_empty() {
+                        match term_map.get_mut(def.typ()) {
+                          Some(set) => {
+                            set.insert(
+                              factory.var(def.sym().clone())
+                            ) ;
+                            ()
+                          },
+                          None => panic!(
+                            "unexpected type {} (in define-fun {})",
+                            def.typ(), def.sym()
+                          ),
+                        }
+                      }
+                    },
+                  }
+                } ;
+
+                // Add svars to map.
+                for & (ref sym, ref typ) in sys.state().args() {
+                  match term_map.get_mut(typ) {
+                    Some(set) => {
+                      set.insert(
+                        factory.svar(sym.clone(), State::Curr)
+                      ) ;
+                      set.insert(
+                        factory.svar(sym.clone(), State::Next)
+                      ) ;
+                      ()
+                    },
+                    None => panic!(
+                      "unexpected type {} (state variable {})",
+                      typ, sym
+                    ),
+                  }
+                } ;
+
+                // Create generator.
+                let mut gen = TermGen::random(factory, term_map) ;
+
+                // Generating terms, type checking them.
+                for t in vec![ Type::Bool, Type::Int, Type::Rat ] {
+                  for term in gen.generate(t, 40) {
+                    match super::type_check(
+                      & context, & term, Some(sys.state().args()), None
+                    ) {
+                      Ok(typ) => if typ != t {
+                        println!("term {}", term) ;
+                        println!("") ;
+                        panic!("expected {}, got {}", t, typ)
+                      },
+                      Err(e) => {
+                        println!("term {}", term) ;
+                        println!("") ;
+                        panic!("expected {}, got error {}", t, e)
+                      },
+                    }
+                  } ;
+                }
+
+              },
+
+              _ => panic!(
+                "expected a check, got {:?}", res
+              ),
+            }
+          },
+          Err(e) => {
+            println!("could not parse input file:") ;
+            for line in format!("{}", e).lines() {
+              println!("| {}", line)
+            } ;
+            panic!("could not parse test file")
+          },
+        }
+      },
+
+      Err(e) => panic!("could not open test file: {}", e),
+    }
   }
 }
