@@ -270,20 +270,23 @@ impl event::CanRun for Bmc {
 
             match solver.check_sat_assuming( & actlits, k.next() ) {
               Ok(true) => {
-                // event.log("sat, getting falsified properties") ;
+                event.log("sat, getting falsified properties") ;
                 match props.get_false_next(& mut solver, & k) {
                   Ok(falsified) => {
-                    // let mut s = "falsified:".to_string() ;
-                    // for sym in falsified.iter() {
-                    //   s = format!("{}\n  {}", s, sym)
-                    // } ;
-                    // event.log(& s) ;
+                    let mut s = "falsified:".to_string() ;
+                    for sym in falsified.iter() {
+                      s = format!("{}\n  {}", s, sym)
+                    } ;
+                    event.log(& s) ;
 
+                    event.log("getting model") ;
                     match solver.get_model() {
                       Ok(model) => {
+                        event.log("got model") ;
                         try_error!(
                           props.forget(& mut solver, & falsified), event
                         ) ;
+                        event.log("communicating model") ;
                         event.disproved_at(model, falsified, k.curr())
                       },
                       Err(e) => {
@@ -304,6 +307,7 @@ impl event::CanRun for Bmc {
                 }
               },
               Ok(false) => {
+                event.log("unsat") ;
                 event.k_true(props.not_inhibited(), k.curr())
               },
               Err(e) => {

@@ -224,15 +224,17 @@ pub fn type_check(
 
 
 
+/** Tests the evaluator. */
 #[cfg(test)]
-mod test {
+pub mod test {
   use term::gen::* ;
   use term::* ;
   use base::Callable ;
   use parse::{ Context, Res } ;
 
+  /** Generates random terms to check the evaluator. */
   #[test]
-  fn rand_terms_fault_conf() {
+  pub fn rand_terms_fault_conf() {
     use std::fs::File ;
     use std::collections::HashMap ;
 
@@ -240,13 +242,13 @@ mod test {
     let factory = Factory::mk() ;
     let mut context = Context::mk(factory.clone(), 1000) ;
 
-    println!("opening file {}", file) ;
+    println!("| opening file {}", file) ;
     match File::open(& format!("../{}", file)) {
       Ok(mut f) => {
-        println!("parsing") ;
+        println!("| parsing") ;
         match context.read(& mut f) {
           Ok(res) => {
-            println!("done parsing") ;
+            println!("| > done") ;
             match res {
 
               Res::Check(sys, _) => {
@@ -358,21 +360,28 @@ mod test {
                 // Create generator.
                 let mut gen = TermGen::random(factory, term_map) ;
 
+                let (term_cnt, depth) = (30, 20) ;
+
                 // Generating terms, type checking them.
                 for t in vec![ Type::Bool, Type::Int, Type::Rat ] {
-                  for term in gen.generate(t, 40) {
+                  println!("| generating {} terms of type {}", term_cnt, t) ;
+                  println!("| max depth is {}", depth) ;
+                  let terms = gen.generate(t, term_cnt, Some(depth)) ;
+                  println!("| > done ({})", terms.len()) ;
+                  for term in terms {
+                    println!("") ;
+                    println!("| > term: {}", term) ;
+                    println!("|   type checking") ;
                     match super::type_check(
                       & context, & term, Some(sys.state().args()), None
                     ) {
                       Ok(typ) => if typ != t {
-                        println!("term {}", term) ;
-                        println!("") ;
-                        panic!("expected {}, got {}", t, typ)
+                        panic!("| > expected {}, got {}", t, typ)
+                      } else {
+                        println!("| > ok")
                       },
                       Err(e) => {
-                        println!("term {}", term) ;
-                        println!("") ;
-                        panic!("expected {}, got error {}", t, e)
+                        panic!("| > expected {}, got error {}", t, e)
                       },
                     }
                   } ;

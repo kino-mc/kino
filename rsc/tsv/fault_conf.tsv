@@ -122,7 +122,8 @@
 (define-prop prop_1 fault_conf
   (=>
     (and
-      (>= (- (_ state in) (_ state out)) max_deriv)
+      (<= (- (_ state in) (_ state out)) max_deriv)
+      (<= (- (_ state out) (_ state in)) max_deriv)
       (not (_ state err_in))
     )
     (= (_ state out) (_ state in))
@@ -135,7 +136,8 @@
 (define-prop prop_2 fault_conf
   (=>
     (and
-      (>= (- (_ state in) (_ state out)) max_deriv)
+      (<= (- (_ state in) (_ state out)) max_deriv)
+      (<= (- (_ state out) (_ state in)) max_deriv)
       (not (_ state err_in))
     )
     (ite (_ state err_out)

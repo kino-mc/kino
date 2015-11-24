@@ -89,15 +89,19 @@ impl<Rand: Rng> TermGen<Rand> {
     }
   }
 
-  /** Generates `n` random terms of type `typ`. */
-  pub fn generate(& mut self, typ: Type, n: usize) -> TermSet {
+  /** Generates `n` random terms of type `typ`. The optional `max_depth`
+  argument is maximal number of layers on top of the terms given during the
+  creation of the term generator. */
+  pub fn generate(
+    & mut self, typ: Type, n: usize, max_depth: Option<usize>
+  ) -> TermSet {
     let mut constructor = Zip::mk(
       typ, & mut self.generated, & mut self.rng, & self.factory
     ) ;
     let mut terms = TermSet::with_capacity(n) ;
     for _ in (0..n) {
       terms.insert(
-        constructor.build()
+        constructor.build(max_depth)
       ) ;
     } ;
     terms
@@ -165,13 +169,13 @@ enum Step {
   /** Zipper is below the condition of an ite. */
   Ite0(Type),
   /** Zipper is below the then of an ite. */
-  Ite1(Term),
+  Ite1(usize, Term),
   /** Zipper is below the else of an ite. */
-  Ite2(Term, Term),
+  Ite2(usize, Term, Term),
   /** We're below a let-binding. */
   Let,
   /** We're below an operator. */
-  Op(Operator, Type, Vec<Term>),
+  Op(Operator, Type, usize, Vec<Term>),
 }
 
 impl fmt::Display for Step {
@@ -179,11 +183,11 @@ impl fmt::Display for Step {
     use self::Step::* ;
     match * self {
       Ite0(ref t) => write!(fmt, "Ite0({})", t),
-      Ite1(ref t) => write!(fmt, "Ite1({})", t),
-      Ite2(ref c, ref t) => write!(fmt, "Ite2({}, {})", c, t),
+      Ite1(ref d, ref t) => write!(fmt, "Ite1({})({})", d, t),
+      Ite2(ref d, ref c, ref t) => write!(fmt, "Ite2({})({}, {})", d, c, t),
       Let => write!(fmt, "Let"),
-      Op(ref op, ref t, ref terms) => {
-        try!( write!(fmt, "Op( {}, {}, (", op, t) ) ;
+      Op(ref op, ref t, ref d, ref terms) => {
+        try!( write!(fmt, "Op({})( {}, {}, (", d, op, t) ) ;
         for t in terms.iter() {
           try!( write!(fmt, " {},", t) )
         } ;
@@ -205,6 +209,14 @@ struct Zip<'a, Rand: 'a> {
   bindings: Vec< (HashMap<Type, Vec<Sym>>, Vec<(Sym, Term)>) >,
   /** Terms available. */
   terms: & 'a mut HashMap<Type, TermSet>,
+  /** Depth associated to the terms.
+  Does **not** correspond to the actual depth of the terms.
+
+  Terms provided at creation of the generator are given depth zero. */
+  depth: HashMap<Term, usize>,
+  /** Max depth requested by the generation query.
+  Stored in the structure to make things easier. */
+  max_depth: Option<usize>,
   /** RNG. */
   rng: & 'a mut Rand,
   /** Factory. */
@@ -234,11 +246,20 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
         None => false, Some(set) => set.len() > 0
       },
     ) ;
+    let mut depth = HashMap::with_capacity(terms.len()) ;
+    for (_, set) in terms.iter() {
+      for term in set {
+        depth.insert(term.clone(), 0) ;
+        ()
+      }
+    } ;
     Zip {
       path: Vec::with_capacity(107),
       typ: typ,
       bindings: Vec::with_capacity(5),
       terms: terms,
+      depth: depth,
+      max_depth: None,
       rng: rng,
       factory: factory,
       can_int: can_int,
@@ -259,6 +280,71 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
 
   /** Returns true iff `bindings` is not empty. */
   fn below_let(& self) -> bool { ! self.bindings.is_empty() }
+
+  /** Returns the depth of a zipper. */
+  fn depth(& self) -> usize {
+    self.path.len()
+  }
+
+  /** Returns the depth of a term. Fails if it is not defined. */
+  fn depth_of(& self, t: & Term) -> usize {
+    match self.depth.get(t) {
+      Some(d) => * d,
+      None => panic!(
+        "[gen::zip] asked for depth of a term I don't know the depth of: {}",
+        t
+      ),
+    }
+  }
+
+  /** Returns a term of type `typ` of depth less than `depth - max` if
+  `max_depth = Some(max)`. Otherwise just returns a term of type `typ`.
+
+  Also returns the depth of the term choosen. */
+  fn get_term(& mut self, typ: Type) -> (Term, usize) {
+    println!(
+      "|   > get_term ({}/{})",
+      self.depth(),
+      match self.max_depth {
+        None => 0,
+        Some(max) => max,
+      }
+    ) ;
+    match self.terms.get(& typ) {
+      Some(term_set) => loop {
+        // Get a random term of type `typ`.
+        let term = term_set.nth(
+          rand_int(& mut self.rng, term_set.len())
+        ) ;
+        // Check its depth.
+        match self.depth.get(& term) {
+          Some(d) => match self.max_depth {
+            Some(max) => if self.depth() + d <= max {
+              println!("|     done") ;
+              // Less than max depth, returning this term.
+              return (term, * d)
+            } else {
+              // Term's depth is too high, looping to get another one.
+              continue
+            },
+            // No max depth, returning the term and its depth.
+            None => {
+              println!("|     done") ;
+              return (term, * d)
+            },
+          },
+          None => panic!(
+            "[gen::zip] I don't know the depth of term {}", term
+          ),
+        }
+      },
+      None => panic!(
+        "[gen::zip] asked for a term of type {}, \
+        but no term of that type is available",
+        typ
+      ),
+    }
+  }
 
   /** Inserts a new binding. */
   fn insert_binding(& mut self, (sym, term): (Sym, Term)) -> Result<(),()> {
@@ -329,12 +415,12 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
         _ => unreachable!(),
       } ;
       let op = rand_arith_to_bool(& mut self.rng) ;
-      self.push( Step::Op(op, Type::Bool, Vec::with_capacity(3) ) ) ;
+      self.push( Step::Op(op, Type::Bool, 0, Vec::with_capacity(3) ) ) ;
       self.typ = typ
     } else {
       // Staying in bool.
       let op = rand_bool_to_bool(& mut self.rng) ;
-      self.push( Step::Op(op, Type::Bool, Vec::with_capacity(2)) ) ;
+      self.push( Step::Op(op, Type::Bool, 0, Vec::with_capacity(2)) ) ;
       // Type is still bool.
       ()
     }
@@ -344,11 +430,14 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
   fn arith_down(& mut self) {
     let op = rand_arith_to_arith(& mut self.rng) ;
     let typ = self.typ ;
-    self.push( Step::Op(op, typ, Vec::with_capacity(1)) )
+    self.push( Step::Op(op, typ, 0, Vec::with_capacity(1)) )
   }
 
   /** Builds a random term. */
-  pub fn build(& mut self) -> Term { self.down() }
+  pub fn build(& mut self, max_depth: Option<usize>) -> Term {
+    self.max_depth = max_depth ;
+    self.down()
+  }
 
   /** Goes down a constructive zipper. */
   fn down(& mut self) -> Term {
@@ -356,38 +445,38 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
 
     loop {
 
+      println!("|   > down ({})", self.depth()) ;
+
+      let down_allowed = match self.max_depth {
+        None => true,
+        Some(d) => self.depth() < d,
+      } ;
 
       // Generate a let binding with 5% chance.
-      if rand_bool(& mut self.rng, 5) {
+      if down_allowed && rand_bool(& mut self.rng, 5) {
         self.push( Let ) ;
         self.bindings.push( (HashMap::new(), vec![]) )
       } else {
 
         // Generate an if then else with 5% chance.
-        if rand_bool(& mut self.rng, 5) {
+        if down_allowed && rand_bool(& mut self.rng, 5) {
           let typ = self.typ ;
           self.push( Ite0(typ) ) ;
           self.typ = Type::Bool
         } else {
 
           // Reuse existing term if not at top level with 70% probability.
-          if ! self.at_top() && rand_bool(& mut self.rng, 70) {
-            let term = match self.terms.get(& self.typ) {
-              Some(term_set) if term_set.len() > 0 => {
-                term_set.nth( rand_int(& mut self.rng, term_set.len()) )
-              },
-              _ => panic!(
-                "[gen::zip] \
-                trying to generate term of type {} which has no candidate",
-                self.typ
-              ),
-            } ;
-            match self.up(term) {
+          if ! down_allowed || (
+            ! self.at_top() && rand_bool(& mut self.rng, 70)
+          ) {
+            let typ = self.typ ;
+            let (term, depth) = self.get_term(typ) ;
+            match self.up(term, depth) {
               Some(term) => return term,
               None => (),
             }
-          } else {
 
+          } else {
             // Otherwise generate new term.
             match self.typ {
               Type::Bool => self.bool_down(),
@@ -400,14 +489,20 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
   }
 
   /** Goes up a constructive zipper. */
-  fn up(& mut self, mut term: Term) -> Option<Term> {
+  fn up(& mut self, mut term: Term, mut depth: usize) -> Option<Term> {
+    use std::cmp::max ;
     use self::Step::* ;
+
     loop {
+      //    /\=======================================================/\
+      //   /!!\ Do not use `continue` in this loop. The `depth` map /!!\
+      //  /!!!!\          is updated at the end of it.             /!!!!\
+      // /======\=================================================/======\
 
       // Let-bind if possible with probability 30%.
       if self.below_let() && rand_bool(& mut self.rng, 30) {
         let (f_sym, f_term) = self.fresh() ;
-        self.insert_binding( (f_sym, term) ).unwrap() ;
+        self.insert_binding( (f_sym, term.clone()) ).unwrap() ;
         term = f_term
       } else {
 
@@ -419,22 +514,32 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
             Ite0(typ) => {
               assert_eq!(Type::Bool, self.typ) ;
               self.typ = typ ;
-              self.push( Ite1(term) ) ;
+              self.push( Ite1(depth, term) ) ;
               return None
             },
 
             // Term is the then of an if-then-else.
-            Ite1(cond) => {
-              self.push( Ite2(cond, term) ) ;
+            Ite1(old_depth, cond) => {
+              self.push(
+                Ite2(max(old_depth, depth), cond, term)
+              ) ;
               return None
             },
 
             // Term is the else of an if-the-else.
-            Ite2(cond, then) => self.factory.ite(cond, then, term),
+            Ite2(old_depth, cond, then) => {
+              let term = self.factory.ite(cond, then, term) ;
+              depth = max(old_depth, depth) ;
+              self.depth.insert( term.clone(), depth ) ;
+              term
+            },
 
             Let => {
               if let Some( (_, bindings) ) = self.bindings.pop() {
                 if ! bindings.is_empty() {
+                  for & (_, ref term) in bindings.iter() {
+                    depth = max( depth, self.depth_of(term) )
+                  } ;
                   self.factory.let_b(bindings, term)
                 } else {
                   term
@@ -446,12 +551,15 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
               }
             },
 
-            Op(op, typ, mut kids) => {
+            Op(op, typ, old_depth, mut kids) => {
               kids.push(term) ;
+              depth = max(old_depth, depth) ;
               match op.arity() {
                 None => if kids.len() == 1 || rand_bool(& mut self.rng, 10) {
                   // Extend with 10% chance.
-                  self.push( Op(op, typ, kids) ) ;
+                  self.push(
+                    Op(op, typ, depth, kids)
+                  ) ;
                   return None
                 } else {
                   // Otherwise go up.
@@ -460,7 +568,7 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
                 },
                 Some(n) if kids.len() < (n as usize) => {
                   // Not enough kids, going down.
-                  self.push( Op(op, typ, kids) ) ;
+                  self.push( Op(op, typ, depth, kids) ) ;
                   return None
                 },
                 Some(n) if kids.len() == (n as usize) => {
@@ -483,7 +591,9 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
           // At top, done.
           return Some(term)
         }
-      }
+      } ;
+      self.depth.insert(term.clone(), depth) ;
+      ()
     }
   }
 
