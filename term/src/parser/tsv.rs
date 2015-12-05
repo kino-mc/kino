@@ -287,7 +287,7 @@ named!{ pub id_parser<String>,
 
 pub fn var_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use var::VarMaker ;
   alt!(
@@ -318,7 +318,7 @@ pub fn var_parser<'a>(
 
 pub fn cst_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   use term::CstMaker ;
   map!(
     bytes,
@@ -329,7 +329,7 @@ pub fn cst_parser<'a>(
 
 pub fn op_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   use term::OpMaker ;
   chain!(
     bytes,
@@ -349,7 +349,7 @@ pub fn op_parser<'a>(
 
 pub fn quantified_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use term::BindMaker ;
   chain!(
@@ -360,7 +360,7 @@ pub fn quantified_parser<'a>(
     opt!(space_comment) ~
     char!('(') ~
     bindings: separated_list!(
-      opt!(space_comment),
+      space_comment,
       delimited!(
         char!('('),
         chain!(
@@ -392,7 +392,7 @@ pub fn quantified_parser<'a>(
 
 pub fn let_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use term::BindMaker ;
   chain!(
@@ -403,7 +403,7 @@ pub fn let_parser<'a>(
     opt!(space_comment) ~
     char!('(') ~
     bindings: separated_list!(
-      opt!(space_comment),
+      space_comment,
       delimited!(
         char!('('),
         chain!(
@@ -432,7 +432,7 @@ pub fn let_parser<'a>(
 
 fn app_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use term::AppMaker ;
   chain!(
@@ -456,7 +456,7 @@ fn app_parser<'a>(
 
 pub fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   alt!(
     bytes,
     apply!(cst_parser, f) |

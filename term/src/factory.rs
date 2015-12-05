@@ -92,7 +92,7 @@ impl Factory {
   }
 
   /** Parses a type. */
-  pub fn parse_type<'a>(bytes: & 'a [u8]) -> IResult<'a, & 'a [u8], Type> {
+  pub fn parse_type<'a>(bytes: & 'a [u8]) -> IResult<& 'a [u8], Type> {
     parser::type_parser(bytes)
   }
 
@@ -440,7 +440,7 @@ impl ParseSmt2 for Factory {
   type I = Offset2 ;
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], (Var, Option<Offset>)> {
+  ) -> IResult<& 'a [u8], (Var, Option<Offset>)> {
     map!(
       bytes,
       parser::smt2::id_parser,
@@ -457,17 +457,17 @@ impl ParseSmt2 for Factory {
   }
   fn parse_value<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Cst> {
+  ) -> IResult<& 'a [u8], Cst> {
     parser::cst_parser(bytes, self)
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8], off: & Offset2
-  ) -> IResult<'a, & 'a [u8], (Term, Smt2Offset)> {
+  ) -> IResult<& 'a [u8], (Term, Smt2Offset)> {
     parser::smt2::term_parser(bytes, self, off)
   }
   fn parse_proof<'a>(
     & self, _: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], ()> {
+  ) -> IResult<& 'a [u8], ()> {
     unimpl!()
   }
 }
@@ -484,15 +484,15 @@ pub trait ParseSts2 {
   /** Parses an identifier in TSV format. */
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Self::Ident> ;
+  ) -> IResult<& 'a [u8], Self::Ident> ;
   /** Parses an expression in TSV format. */
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Self::ExprRes> ;
+  ) -> IResult<& 'a [u8], Self::ExprRes> ;
   /** Parses a Type in TSV format. */
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Self::Type> ;
+  ) -> IResult<& 'a [u8], Self::Type> ;
 }
 
 impl ParseSts2 for Factory {
@@ -501,7 +501,7 @@ impl ParseSts2 for Factory {
   type Type = Type ;
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Sym> {
+  ) -> IResult<& 'a [u8], Sym> {
     map!(
       bytes,
       parser::tsv::id_parser,
@@ -510,12 +510,12 @@ impl ParseSts2 for Factory {
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], TermAndDep> {
+  ) -> IResult<& 'a [u8], TermAndDep> {
     parser::tsv::term_parser(bytes, self)
   }
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]
-  ) -> IResult<'a, & 'a [u8], Type> {
+  ) -> IResult<& 'a [u8], Type> {
     parser::type_parser(bytes)
   }
 }

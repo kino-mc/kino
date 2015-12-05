@@ -44,6 +44,11 @@ impl Master {
     let mut manager = KidManager::mk() ;
 
     // Launching BMC.
+    log.log(& Kino,
+      & format!(
+        "Launching BMC:\n{}", bmc::BmcConf::default().desc()
+      )
+    ) ;
     match manager.launch(
       bmc::Bmc, sys.clone(), props.clone(), c.factory()
     ) {

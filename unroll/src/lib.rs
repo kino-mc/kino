@@ -16,14 +16,44 @@ extern crate system as sys ;
 
 use std::collections::{ HashSet, HashMap } ;
 
-use term::* ;
+use term::{
+  Factory, Type, Sym, Var, Term, Offset, Offset2, STerm, real_term
+} ;
 use term::smt::* ;
 
-use sys::{ Prop } ;
+use sys::Prop ;
+
+/// Associates a key and a description to some type.
+#[derive(Clone)]
+pub struct Opt<T: Clone> {
+  /// The key.
+  pub key: (& 'static str, String),
+  /// The description.
+  pub bla: Vec<String>,
+  /// The value.
+  pub val: T,
+}
+impl<T: Clone> Opt<T> {
+  /// Creates a new option.
+  pub fn mk(
+    key: (& 'static str, String), bla: Vec<String>, val: T
+  ) -> Self {
+    Opt { key: key, bla: bla, val: val }
+  }
+  /// Append the lines describing an `Opt` to some String.
+  pub fn append(& self, s: & mut String, pref: & str) {
+    s.push_str(
+      & format!("{}{}{}", pref, self.key.0, self.key.1)
+    ) ;
+    for line in self.bla.iter() {
+      s.push_str( & format!("\n{}   {}", pref, line) )
+    }
+  }
+}
 
 /** Defines the init and trans predicates of a system. */
-fn define(
-  sys: & sys::Sys, solver: & mut Solver, o: & Offset2
+fn define<'a, S: Solver<'a, Factory>>(
+  sys: & sys::Sys, solver: & mut S, o: & Offset2
 ) -> UnitSmtRes {
   let init = sys.init() ;
   try!(
@@ -50,31 +80,38 @@ fn define(
 /** Provides helper functions for the unrolling of a transition system. */
 pub trait Unroller {
   /** Declares/defines UFs, functions, and system init/trans predicates. */
-  fn defclare_funs(& self, & mut Solver) -> UnitSmtRes ;
+  fn defclare_funs<
+    'a, S: Solver<'a, Factory>
+  >(& self, & mut S) -> UnitSmtRes ;
   /** Declares state variables at some offset. */
   #[inline(always)]
-  fn declare_svars(& self, & mut Solver, & Offset) -> UnitSmtRes ;
+  fn declare_svars<
+    'a, S: Solver<'a, Factory>
+  >(& self, & mut S, & Offset) -> UnitSmtRes ;
   /** Asserts the init predicate. **Declares** state variables in the current
   offset. */
   #[inline(always)]
-  fn assert_init(
-    & self, solver: & mut Solver, o: & Offset2
-  ) -> UnitSmtRes ;
+  fn assert_init<
+    'a, S: Solver<'a, Factory>
+  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes ;
   /** Unrolls the transition relation once. **Declares** state variables in
   the next offset if the offset is not reversed, in the current offset
   otherwise (for backward unrolling). */
   #[inline(always)]
-  fn unroll(
-    & self, solver: & mut Solver, o: & Offset2
-  ) -> UnitSmtRes ;
+  fn unroll<
+    'a, S: Solver<'a, Factory>
+  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes ;
 }
 impl Unroller for sys::Sys {
-  fn defclare_funs(& self, solver: & mut Solver) -> UnitSmtRes {
+  fn defclare_funs<
+    'a, S: Solver<'a, Factory>
+  >(& self, solver: & mut S) -> UnitSmtRes {
     use sys::real_sys::Callable::* ;
     // Will not really be used.
     let offset = Offset2::init() ;
 
     // Declaring UFs and defining functions.
+    // println!("declaring UFs, defining funs") ;
     for fun in self.calls() {
       match * * fun {
         Dec(ref fun) => try!(
@@ -89,17 +126,19 @@ impl Unroller for sys::Sys {
     } ;
 
     // Defining sub systems.
+    // println!("defining sub systems") ;
     for & (ref sub, _) in self.subsys() {
       try!( define(sub, solver, & offset) )
     } ;
 
     // Define current system.
+    // println!("defining top system") ;
     define(self, solver, & offset)
   }
 
-  fn declare_svars(
-    & self, solver: & mut Solver, o: & Offset
-  ) -> UnitSmtRes {
+  fn declare_svars<
+    'a, S: Solver<'a, Factory>
+  >(& self, solver: & mut S, o: & Offset) -> UnitSmtRes {
     for & (ref var, ref typ) in self.init().1.iter() {
       try!(
         solver.declare_fun(var, & vec![], typ, o)
@@ -108,17 +147,17 @@ impl Unroller for sys::Sys {
     Ok(())
   }
 
-  fn assert_init(
-    & self, solver: & mut Solver, o: & Offset2
-  ) -> UnitSmtRes {
+  fn assert_init<
+    'a, S: Solver<'a, Factory>
+  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes {
     try!(
       self.declare_svars(solver, o.curr())
     ) ;
     solver.assert(self.init_term(), o)
   }
-  fn unroll(
-    & self, solver: & mut Solver, o: & Offset2
-  ) -> UnitSmtRes {
+  fn unroll<
+    'a, S: Solver<'a, Factory>
+  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes {
     let off = if o.is_rev() { o.curr() } else { o.next() } ;
     try!(
       self.declare_svars(solver, off)
@@ -146,9 +185,9 @@ impl Actlit {
   }
 
   /** Creates a fresh actlit and declares it. */
-  pub fn mk_fresh_declare(
-    & mut self, solver: & mut Solver
-  ) -> SmtRes<::term::Var> {
+  pub fn mk_fresh_declare<
+    'a, S: Solver<'a, Factory>
+  >(& mut self, solver: & mut S) -> SmtRes<::term::Var> {
     use term::{ VarMaker, SymMaker } ;
     let fresh: Var = self.factory.var(
       self.factory.sym(format!("fresh_actlit_{}", self.count))
@@ -175,9 +214,9 @@ impl Actlit {
   }
 
   /** Deactivates an activation literal. */
-  pub fn deactivate(
-    & self, actlit: Var, solver: & mut Solver
-  ) -> UnitSmtRes {
+  pub fn deactivate<
+    'a, S: Solver<'a, Factory>
+  >(& self, actlit: Var, solver: & mut S) -> UnitSmtRes {
     solver.assert(
       & self.factory.not(self.factory.mk_var(actlit)), & self.offset
     )
@@ -204,9 +243,12 @@ pub struct PropManager {
 impl PropManager {
   /** Constructs a property manager. Creates and declares one positive
   activation literal per property. */
-  pub fn mk(
-    factory: Factory, props: Vec<Prop>, solver: & mut Solver
+  pub fn mk<
+    'a, S: Solver<'a, Factory>
+  >(
+    factory: Factory, props: Vec<Prop>, solver: & mut S
   ) -> SmtRes<Self> {
+    use term::{ VarMaker, SymMaker } ;
     let mut map_1 = HashMap::new() ;
     let mut map_2 = HashMap::new() ;
     let offset = Offset2::init() ;
@@ -260,8 +302,10 @@ impl PropManager {
   }
 
   /** Removes some properties from a manager. */
-  pub fn forget(
-    & mut self, solver: & mut Solver, props: & [Sym]
+  pub fn forget<
+    'a, S: Solver<'a, Factory>
+  >(
+    & mut self, solver: & mut S, props: & [Sym]
   ) -> UnitSmtRes {
     for prop in props {
       let actlit = match self.props_1.remove(& prop) {
@@ -285,8 +329,10 @@ impl PropManager {
   literals.
   That is, if the offset is `(0,1)` all one-state properties will be activated
   at `1`. */
-  pub fn activate_state(
-    & self, solver: & mut Solver, at: & Offset2
+  pub fn activate_state<
+    'a, S: Solver<'a, Factory>
+  >(
+    & self, solver: & mut S, at: & Offset2
   ) -> UnitSmtRes {
     for (_, & (_, _, ref act)) in self.props_1.iter() {
       try!( solver.assert(act, at) )
@@ -296,8 +342,10 @@ impl PropManager {
 
   /** Activates all the two-state properties, including inhibited ones, at a
   given offset by overloading their activation literals. */
-  pub fn activate_next(
-    & self, solver: & mut Solver, at: & Offset2
+  pub fn activate_next<
+    'a, S: Solver<'a, Factory>
+  >(
+    & self, solver: & mut S, at: & Offset2
   ) -> UnitSmtRes {
     for (_, & (_, _, ref act)) in self.props_2.iter() {
       try!( solver.assert(act, at) )
@@ -362,10 +410,11 @@ impl PropManager {
 
   /** Returns the list of non-inhibited one-state properties that evaluate to
   false in their state version for some offset in a solver. */
-  pub fn get_false_state(
-    & self, solver: & mut Solver, o: & Offset2
+  pub fn get_false_state<
+    'a, S: Solver<'a, Factory> + QueryExprInfo<'a, Factory, Term>
+  >(
+    & self, solver: & mut S, o: & Offset2
   ) -> SmtRes<Vec<Sym>> {
-    use term::smt::sync::SyncedExprPrint ;
     let mut terms = Vec::with_capacity(self.props_1.len()) ;
     let mut back_map = HashMap::with_capacity(self.props_1.len()) ;
     for (ref sym, & (ref prop, _, _)) in self.props_1.iter() {
@@ -400,10 +449,11 @@ impl PropManager {
 
   /** Returns the list of non-inhibited properties that evaluate to false in
   their next version for some offset in a solver. */
-  pub fn get_false_next(
-    & self, solver: & mut Solver, o: & Offset2
+  pub fn get_false_next<
+    'a, S: Solver<'a, Factory> + QueryExprInfo<'a, Factory, Term>
+  >(
+    & self, solver: & mut S, o: & Offset2
   ) -> SmtRes<Vec<Sym>> {
-    use term::smt::sync::SyncedExprPrint ;
     let mut terms = Vec::with_capacity(
       (self.props_1.len() * 2) + self.props_2.len()
     ) ;

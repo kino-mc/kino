@@ -74,11 +74,11 @@ named!{ pub type_parser<Type>,
 }
 
 named!{
-  comment,
+  comment<()>,
   chain!(
     char!(';') ~
     many0!(not_line_ending),
-    || & []
+    || ()
   )
 }
 
@@ -87,7 +87,7 @@ named!{
   map!(
     many0!(
       alt!(
-        comment | multispace
+        comment | map!( multispace, |_| () )
       )
     ),
     |_| ()
@@ -97,21 +97,8 @@ named!{
 
 named!{ pub bool_parser<Bool>,
   alt!(
-    chain!(
-      char!('t') ~
-      char!('r') ~
-      char!('u') ~
-      char!('e'),
-      || true
-    ) |
-    chain!(
-      char!('f') ~
-      char!('a') ~
-      char!('l') ~
-      char!('s') ~
-      char!('e'),
-      || false
-    )
+    map!( tag!("true"), |_| true ) |
+    map!( tag!("false"), |_| false )
   )
 }
 
@@ -144,7 +131,7 @@ named!{ pub rat_parser<Rat>,
 
 pub fn cst_parser<'a, F>(
   bytes: & 'a [u8], f: & F
-) -> IResult<'a, & 'a [u8], Cst>
+) -> IResult<& 'a [u8], Cst>
 where F: CstMaker<Bool, Cst> + CstMaker<Int, Cst> + CstMaker<Rat, Cst> {
   preceded!(
     bytes,

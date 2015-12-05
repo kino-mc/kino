@@ -159,16 +159,7 @@ pub use ::num::* ;
 pub mod smt {
   use ::std::process::Command ;
 
-  pub use ::rsmt2::{
-    SolverConf, Logic, SolverStyle, UnexSmtRes,
-    Expr2Smt, ParseSmt2, Sort2Smt, Sym2Smt,
-    ConfItem, IoRes, IoResBool, IoResUnit,
-    SmtParseResult, SmtRes, UnitSmtRes,
-    async, sync
-  } ;
-
-  /** Wraps an SMT solver. */
-  pub type Solver = ::rsmt2::Solver<::Factory> ;
+  pub use ::rsmt2::* ;
 
   /** The default z3 command. */
   #[inline(always)]

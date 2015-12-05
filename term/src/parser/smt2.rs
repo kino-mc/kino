@@ -256,7 +256,7 @@ named!{ pub id_parser< (String, Smt2Offset) >,
 
 fn cst_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   use term::CstMaker ;
   map!(
     bytes,
@@ -268,7 +268,7 @@ fn cst_parser<'a>(
 
 fn var_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   use var::VarMaker ;
   map!(
     bytes,
@@ -283,7 +283,7 @@ fn var_parser<'a>(
 
 fn op_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   chain!(
     bytes,
     char!('(') ~
@@ -306,7 +306,7 @@ fn op_parser<'a>(
 
 fn quantified_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   use sym::SymMaker ;
   chain!(
     bytes,
@@ -316,7 +316,7 @@ fn quantified_parser<'a>(
     opt!(multispace) ~
     char!('(') ~
     bindings: separated_list!(
-      opt!(multispace),
+      multispace,
       delimited!(
         char!('('),
         chain!(
@@ -353,7 +353,7 @@ fn quantified_parser<'a>(
 
 fn let_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   use sym::SymMaker ;
   chain!(
     bytes,
@@ -363,7 +363,7 @@ fn let_parser<'a>(
     opt!(multispace) ~
     char!('(') ~
     bindings: separated_list!(
-      opt!(multispace),
+      multispace,
       delimited!(
         char!('('),
         chain!(
@@ -398,7 +398,7 @@ fn let_parser<'a>(
 
 fn app_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   chain!(
     bytes,
     char!('(') ~
@@ -419,7 +419,7 @@ fn app_parser<'a>(
 
 pub fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
-) -> IResult<'a, & 'a [u8], ( Term, Smt2Offset )> {
+) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   alt!(
     bytes,
     apply!(cst_parser, f) |

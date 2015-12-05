@@ -51,7 +51,7 @@ named!{
     char!('(') ~
     opt!(space_comment) ~
     args: separated_list!(
-      opt!(space_comment),
+      space_comment,
       type_parser
     ) ~
     opt!(space_comment) ~
@@ -63,20 +63,20 @@ named!{
 /** Parses a symbol. */
 fn sym_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Sym> {
+) -> IResult<& 'a [u8], Sym> {
   f.parse_ident(bytes)
 }
 
 /** Parses some arguments. */
 fn args_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Args> {
+) -> IResult<& 'a [u8], Args> {
   chain!(
     bytes,
     char!('(') ~
     opt!(space_comment) ~
     args: separated_list!(
-      opt!(space_comment),
+      space_comment,
       delimited!(
         char!('('),
         chain!(
@@ -99,7 +99,7 @@ fn args_parser<'a>(
 /** Parses a function declaration. */
 fn fun_dec_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+) -> IResult<& 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
@@ -120,14 +120,14 @@ fn fun_dec_parser<'a>(
 /** Parses a term. */
 fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], TermAndDep> {
+) -> IResult<& 'a [u8], TermAndDep> {
   f.parse_expr(bytes)
 }
 
 /** Parses a function definition. */
 fn fun_def_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+) -> IResult<& 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
@@ -150,7 +150,7 @@ fn fun_def_parser<'a>(
 /** Parses a state property definition. */
 fn prop_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+) -> IResult<& 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
@@ -171,7 +171,7 @@ fn prop_parser<'a>(
 /** Parses a state relation definition. */
 fn rel_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+) -> IResult<& 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
@@ -191,7 +191,7 @@ fn rel_parser<'a>(
 
 fn sub_sys_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Vec<(Sym, Vec<TermAndDep>)>> {
+) -> IResult<& 'a [u8], Vec<(Sym, Vec<TermAndDep>)>> {
   delimited!(
     bytes,
     char!('('),
@@ -219,7 +219,7 @@ fn sub_sys_parser<'a>(
 /** Parses a local definitions. */
 fn locals_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
+) -> IResult<& 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
   delimited!(
     bytes,
     char!('('),
@@ -252,7 +252,7 @@ fn locals_parser<'a>(
 /** Parses a system definition. */
 fn sys_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+) -> IResult<& 'a [u8], Result<(), Error>> {
   chain!(
     bytes,
     char!('(') ~
@@ -279,7 +279,7 @@ fn sys_parser<'a>(
 /** Parses an item. */
 pub fn item_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
-) -> IResult<'a, & 'a [u8], Result<(), Error>> {
+) -> IResult<& 'a [u8], Result<(), Error>> {
   preceded!(
     bytes,
     opt!(multispace),
@@ -296,7 +296,7 @@ pub fn item_parser<'a>(
 /** Parses a check. */
 pub fn check_parser<'a>(
   bytes: & 'a [u8], c: & Context
-) -> IResult<'a, & 'a [u8], Result<Res, Error>> {
+) -> IResult<& 'a [u8], Result<Res, Error>> {
   chain!(
     bytes,
     opt!(space_comment) ~
@@ -327,7 +327,7 @@ pub fn check_parser<'a>(
 /** Parses an atom. */
 pub fn atom_parser<'a>(
   bytes: & 'a [u8], f: & Factory
-) -> IResult<'a, & 'a [u8], Atom> {
+) -> IResult<& 'a [u8], Atom> {
   alt!(
     bytes,
     map!( apply!(sym_parser, f), |sym| Atom::Pos(sym) ) |
@@ -347,7 +347,7 @@ pub fn atom_parser<'a>(
 /** Parses a check with assumptions. */
 pub fn check_assuming_parser<'a>(
   bytes: & 'a [u8], c: & Context
-) -> IResult<'a, & 'a [u8], Result<Res, Error>> {
+) -> IResult<& 'a [u8], Result<Res, Error>> {
   chain!(
     bytes,
     opt!(space_comment) ~
@@ -408,7 +408,7 @@ named!{
 /** Parses a check with assumptions. */
 pub fn check_exit_parser<'a>(
   bytes: & 'a [u8], c: & Context
-) -> IResult<'a, & 'a [u8], Result<Res, Error>> {
+) -> IResult<& 'a [u8], Result<Res, Error>> {
   alt!(
     bytes,
     apply!(check_parser, c) |

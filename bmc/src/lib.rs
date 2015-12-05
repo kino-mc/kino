@@ -24,7 +24,6 @@ extern crate unroll ;
 
 use term::Offset2 ;
 use term::smt::* ;
-use term::smt::sync::* ;
 
 use event::msg::{ Event, MsgDown, Info } ;
 
@@ -61,43 +60,186 @@ impl event::CanRun for Bmc {
     // event.log("creating solver") ;
 
     let conf = SolverConf::z3().print_success() ;
-    let factory = event.factory().clone() ;
-    let mut actlit = Actlit::mk(factory.clone()) ;
 
-    let mut k = Offset2::init() ;
+    let mut kid = match Kid::mk(conf) {
+      Ok(kid) => kid,
+      Err(e) => {
+        event.error( & format!("could not spawn solver kid\n{:?}", e) ) ;
+        return ()
+      },
+    } ;
 
-    match Solver::mk(z3_cmd(), conf, factory.clone()) {
-      Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
-      Ok(mut solver) => {
-
-        // event.log("declaring functions, init and trans") ;
-        try_error!(
-          sys.defclare_funs(& mut solver), event
-        ) ;
-
-        // event.log("declare svar@0 and assert init@0") ;
-        try_error!(
-          sys.assert_init(& mut solver, & k), event
-        ) ;
-
-        // event.log("creating manager, declaring actlits") ;
-        let mut props = try_error!(
-          PropManager::mk(factory.clone(), props, & mut solver),
-          event
-        ) ;
+    bmc(& mut kid, sys, props, & mut event) ;
+  }
+}
 
 
-        // Check for init is separate since only one-state properties must be
-        // checked.
+fn bmc(kid: & mut Kid, sys: Sys, props: Vec<Prop>, event: & mut Event) {
 
-        props.reset_inhibited() ;
+  let factory = event.factory().clone() ;
+  let mut actlit = Actlit::mk(factory.clone()) ;
+  let mut k = Offset2::init() ;
+
+  match solver(kid, factory.clone()) {
+    Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
+    Ok(solver) => {
+      let mut solver = solver ;
+
+      // event.log("declaring functions, init and trans") ;
+      try_error!(
+        sys.defclare_funs(& mut solver), event
+      ) ;
+
+      // event.log("declare svar@0 and assert init@0") ;
+      try_error!(
+        sys.assert_init(& mut solver, & k), event
+      ) ;
+
+      // event.log("creating manager, declaring actlits") ;
+      let mut props = try_error!(
+        PropManager::mk(factory.clone(), props, & mut solver),
+        event
+      ) ;
+
+
+      // Check for init is separate since only one-state properties must be
+      // checked.
+
+      props.reset_inhibited() ;
+
+      if props.none_left() {
+        event.done_at(k.curr()) ;
+        return ()
+      }
+
+      if let Some(one_prop_false) = props.one_false_state() {
+
+        let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+        // event.log(
+        //   & format!(
+        //     "defining actlit {}\nto imply {} at {}",
+        //     lit, one_prop_false, k
+        //   )
+        // ) ;
+        let check = actlit.mk_impl(& lit, one_prop_false) ;
+
+        try_error!(solver.assert(& check, & k), event) ;
+
+        let mut actlits = props.actlits() ;
+        actlits.push(lit) ;
+
+        match solver.check_sat() {
+          Ok(true) => (),
+          Ok(false) => {
+            // No more transitions can be taken, all remaining properties
+            // hold.
+            event.proved_at( props.not_inhibited(), k.curr() ) ;
+            event.warning("no more reachable state") ;
+            event.done_at(k.curr()) ;
+            return ()
+          },
+          Err(e) => {
+            event.error(
+              & format!("could not perform check-sat\n{:?}", e)
+            ) ;
+            return ()
+          },
+        } ;
+
+        // event.log(
+        //   & format!(
+        //     "checking {} properties @{}",
+        //     props.len(),
+        //     k.curr()
+        //   )
+        // ) ;
+
+        match solver.check_sat_assuming( & actlits, k.next() ) {
+          Ok(true) => {
+            // event.log("sat, getting falsified properties") ;
+            match props.get_false_state(& mut solver, & k) {
+              Ok(falsified) => {
+                // let mut s = "falsified:".to_string() ;
+                // for sym in falsified.iter() {
+                //   s = format!("{}\n  {}", s, sym)
+                // } ;
+                // event.log(& s) ;
+
+                match solver.get_model() {
+                  Ok(model) => {
+                    try_error!(
+                      props.forget(& mut solver, & falsified), event
+                    ) ;
+                    event.disproved_at(model, falsified, k.curr())
+                  },
+                  Err(e) => {
+                    event.error(
+                      & format!("could not get model:\n{:?}", e)
+                    ) ;
+                    event.done(Info::Error) ;
+                    return ()
+                  },
+                } ;
+              },
+              Err(e) => {
+                event.error(
+                  & format!("could not get falsifieds\n{:?}", e)
+                ) ;
+                return ()
+              },
+            }
+          },
+          Ok(false) => {
+            event.k_true(props.not_inhibited(), k.curr())
+          },
+          Err(e) => {
+            event.error(
+              & format!("could not perform check-sat-assuming\n{:?}", e)
+            ) ;
+            return ()
+          },
+        } ;
 
         if props.none_left() {
           event.done_at(k.curr()) ;
           return ()
         }
+      } ;
 
-        if let Some(one_prop_false) = props.one_false_state() {
+      try_error!( sys.unroll(& mut solver, & k), event ) ;
+
+      k = k.nxt() ;
+
+
+      loop {
+
+        props.reset_inhibited() ;
+
+        match event.recv() {
+          None => break,
+          Some(msgs) => for msg in msgs {
+            match msg {
+              MsgDown::Forget(ps) => try_error!(
+                props.forget(& mut solver, & ps),
+                event
+              ),
+              MsgDown::Invariants(_,_) => event.log(
+                "received invariants, skipping"
+              ),
+              _ => event.error("unknown message")
+            }
+          },
+        } ;
+
+        if props.none_left() {
+          event.done_at(k.curr()) ;
+          break
+        }
+
+        // event.log( & format!("unrolling at {}", k) ) ;
+        try_error!( sys.unroll(& mut solver, & k), event ) ;
+
+        if let Some(one_prop_false) = props.one_false_next() {
 
           let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
           // event.log(
@@ -110,6 +252,8 @@ impl event::CanRun for Bmc {
 
           try_error!(solver.assert(& check, & k), event) ;
 
+          // event.log(& format!("check-sat assuming {}", lit)) ;
+
           let mut actlits = props.actlits() ;
           actlits.push(lit) ;
 
@@ -118,31 +262,31 @@ impl event::CanRun for Bmc {
             Ok(false) => {
               // No more transitions can be taken, all remaining properties
               // hold.
-              event.proved_at( props.not_inhibited(), k.curr() ) ;
+              event.proved_at( props.not_inhibited(), k.next() ) ;
               event.warning("no more reachable state") ;
-              event.done_at(k.curr()) ;
-              return ()
+              event.done_at( k.next() ) ;
+              break
             },
             Err(e) => {
               event.error(
                 & format!("could not perform check-sat\n{:?}", e)
               ) ;
-              return ()
+              break
             },
           } ;
 
-          event.log(
-            & format!(
-              "checking {} properties @{}",
-              props.len(),
-              k.curr()
-            )
-          ) ;
+          // event.log(
+          //   & format!(
+          //     "checking {} properties @{}",
+          //     props.len(),
+          //     k.curr()
+          //   )
+          // ) ;
 
           match solver.check_sat_assuming( & actlits, k.next() ) {
             Ok(true) => {
               // event.log("sat, getting falsified properties") ;
-              match props.get_false_state(& mut solver, & k) {
+              match props.get_false_next(& mut solver, & k) {
                 Ok(falsified) => {
                   // let mut s = "falsified:".to_string() ;
                   // for sym in falsified.iter() {
@@ -150,11 +294,14 @@ impl event::CanRun for Bmc {
                   // } ;
                   // event.log(& s) ;
 
+                  // event.log("getting model") ;
                   match solver.get_model() {
                     Ok(model) => {
+                      // event.log("got model") ;
                       try_error!(
                         props.forget(& mut solver, & falsified), event
                       ) ;
+                      // event.log("communicating model") ;
                       event.disproved_at(model, falsified, k.curr())
                     },
                     Err(e) => {
@@ -162,7 +309,7 @@ impl event::CanRun for Bmc {
                         & format!("could not get model:\n{:?}", e)
                       ) ;
                       event.done(Info::Error) ;
-                      return ()
+                      break
                     },
                   } ;
                 },
@@ -170,49 +317,19 @@ impl event::CanRun for Bmc {
                   event.error(
                     & format!("could not get falsifieds\n{:?}", e)
                   ) ;
-                  return ()
+                  break
                 },
               }
             },
             Ok(false) => {
+              // event.log("unsat") ;
               event.k_true(props.not_inhibited(), k.curr())
             },
             Err(e) => {
               event.error(
                 & format!("could not perform check-sat-assuming\n{:?}", e)
               ) ;
-              return ()
-            },
-          } ;
-
-          if props.none_left() {
-            event.done_at(k.curr()) ;
-            return ()
-          }
-        } ;
-
-        try_error!( sys.unroll(& mut solver, & k), event ) ;
-
-        k = k.nxt() ;
-
-
-        loop {
-
-          props.reset_inhibited() ;
-
-          match event.recv() {
-            None => return (),
-            Some(msgs) => for msg in msgs {
-              match msg {
-                MsgDown::Forget(ps) => try_error!(
-                  props.forget(& mut solver, & ps),
-                  event
-                ),
-                MsgDown::Invariants(_,_) => event.log(
-                  "received invariants, skipping"
-                ),
-                _ => event.error("unknown message")
-              }
+              break
             },
           } ;
 
@@ -220,155 +337,78 @@ impl event::CanRun for Bmc {
             event.done_at(k.curr()) ;
             break
           }
+        }
 
-          event.log( & format!("unrolling at {}", k) ) ;
-          try_error!( sys.unroll(& mut solver, & k), event ) ;
+        k = k.nxt()
 
-          if let Some(one_prop_false) = props.one_false_next() {
-
-            let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
-            // event.log(
-            //   & format!(
-            //     "defining actlit {}\nto imply {} at {}",
-            //     lit, one_prop_false, k
-            //   )
-            // ) ;
-            let check = actlit.mk_impl(& lit, one_prop_false) ;
-
-            try_error!(solver.assert(& check, & k), event) ;
-
-            // event.log(& format!("check-sat assuming {}", lit)) ;
-
-            let mut actlits = props.actlits() ;
-            actlits.push(lit) ;
-
-            match solver.check_sat() {
-              Ok(true) => (),
-              Ok(false) => {
-                // No more transitions can be taken, all remaining properties
-                // hold.
-                event.proved_at( props.not_inhibited(), k.next() ) ;
-                event.warning("no more reachable state") ;
-                event.done_at( k.next() ) ;
-                return ()
-              },
-              Err(e) => {
-                event.error(
-                  & format!("could not perform check-sat\n{:?}", e)
-                ) ;
-                return ()
-              },
-            } ;
-
-            event.log(
-              & format!(
-                "checking {} properties @{}",
-                props.len(),
-                k.curr()
-              )
-            ) ;
-
-            match solver.check_sat_assuming( & actlits, k.next() ) {
-              Ok(true) => {
-                event.log("sat, getting falsified properties") ;
-                match props.get_false_next(& mut solver, & k) {
-                  Ok(falsified) => {
-                    let mut s = "falsified:".to_string() ;
-                    for sym in falsified.iter() {
-                      s = format!("{}\n  {}", s, sym)
-                    } ;
-                    event.log(& s) ;
-
-                    event.log("getting model") ;
-                    match solver.get_model() {
-                      Ok(model) => {
-                        event.log("got model") ;
-                        try_error!(
-                          props.forget(& mut solver, & falsified), event
-                        ) ;
-                        event.log("communicating model") ;
-                        event.disproved_at(model, falsified, k.curr())
-                      },
-                      Err(e) => {
-                        event.error(
-                          & format!("could not get model:\n{:?}", e)
-                        ) ;
-                        event.done(Info::Error) ;
-                        break
-                      },
-                    } ;
-                  },
-                  Err(e) => {
-                    event.error(
-                      & format!("could not get falsifieds\n{:?}", e)
-                    ) ;
-                    break
-                  },
-                }
-              },
-              Ok(false) => {
-                event.log("unsat") ;
-                event.k_true(props.not_inhibited(), k.curr())
-              },
-              Err(e) => {
-                event.error(
-                  & format!("could not perform check-sat-assuming\n{:?}", e)
-                ) ;
-                break
-              },
-            } ;
-
-            if props.none_left() {
-              event.done_at(k.curr()) ;
-              break
-            }
-          }
-
-          k = k.nxt()
-
-        } ;
-      },
-    }
+      } ;
+    },
   }
 }
 
-
-/** Configuration for BMC. */
+/// Configuration for BMC.
 #[derive(Clone)]
 pub struct BmcConf {
-  max: Option<usize>,
-  solver: term::smt::SolverStyle,
+  /// Max number of unrolling.
+  max: Opt< Option<usize> >,
+  /// Solver to use.
+  solver: Opt< term::smt::SolverStyle >,
+  /// Optional file path to log the smt trace to.
+  smt_trace: Opt< Option<String> >,
 }
 
 impl BmcConf {
   /** Creates a default bmc configuration.
-  Default is no max `k`, use z3. */
+  Default is no max `k`, use z3, no smt trace. */
   #[inline(always)]
   pub fn default() -> Self {
+    // Building the list of acceptable solver styles.
+    let keys = SolverStyle::str_keys() ;
+    let mut keys = keys.iter() ;
+    let keys = if let Some(key) = keys.next() {
+      keys.fold(
+        key.to_string(),
+        |s, key| format!("{}|{}", s, key)
+      )
+    } else { "".to_string() } ;
+
+    // Building the actual conf.
     BmcConf {
-      max: None, solver: term::smt::SolverStyle::Z3
+      max: Opt::mk(
+        ("max", ": <int> (none)".to_string()),
+        vec![
+          "Maximum number of unrollings in BMC.".to_string(),
+        ],
+        None
+      ),
+      solver: Opt::mk(
+        ("solver", format!(": {} (z3)", keys)),
+        vec![
+          "Kind of solver BMC should use.".to_string(),
+
+        ],
+        term::smt::SolverStyle::Z3
+      ),
+      smt_trace: Opt::mk(
+        ("smt_trace", ": <file> (none)".to_string()),
+        vec![
+          "File the SMT trace should be logged to.".to_string(),
+        ],
+        None
+      ),
     }
   }
 
-  /** Sets the max `k`. */
-  #[inline(always)]
-  pub fn set_max(& mut self, k: usize) {
-    self.max = Some(k)
-  }
-  /** Sets the solver style. */
-  #[inline(always)]
-  pub fn set_solver(& mut self, s: term::smt::SolverStyle) {
-    self.solver = s
-  }
-
-  /** The max `k`. */
-  #[inline(always)]
-  pub fn max(& self) -> & Option<usize> {
-    & self.max
-  }
-  /** The solver style. */
-  #[inline(always)]
-  pub fn solver(& self) -> & term::smt::SolverStyle {
-    & self.solver
+  /// Description of the BMC options.
+  pub fn desc(& self) -> String {
+    let mut s = "|===| Bounded model checking (BMC) options.\n".to_string() ;
+    let pref = "| " ;
+    self.max.append(& mut s, pref) ;
+    s.push('\n') ;
+    self.solver.append(& mut s, pref) ;
+    s.push('\n') ;
+    self.smt_trace.append(& mut s, pref) ;
+    s.push_str("\n|===|") ;
+    s
   }
 }
