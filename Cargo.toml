@@ -13,6 +13,5 @@ term = { path = "term" }
 system = { path = "system" }
 unroll = { path = "unroll" }
 common = { path = "common" }
-conf = { path = "conf" }
 kind = { path = "kind" }
 bmc = { path = "bmc" }
