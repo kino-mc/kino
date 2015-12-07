@@ -20,14 +20,16 @@ write stuff here
 extern crate nom ;
 extern crate term ;
 extern crate system ;
-extern crate event ;
+extern crate common ;
 extern crate bmc ;
 extern crate kind ;
 
+use std::process::exit ;
+
 use system::ctxt::* ;
 
-use event::Technique::Kino ;
-use event::log::{ MasterLog, Formatter, Styler } ;
+use common::Tek::Kino ;
+use common::log::{ MasterLog, Formatter, Styler } ;
 
 pub mod master ;
 
@@ -42,10 +44,20 @@ fn main() {
   log.sep() ;
   log.sep() ;
 
-  let mut args = args() ;
-  args.next().unwrap() ;
+  let (conf, file) = match common::conf::Master::mk(& log) {
+    Ok(conf) => conf,
+    Err(e) => {
+      log.title("CLA parsing") ;
+      log.nl() ;
+      log.bad(& Kino, & e) ;
+      log.trail() ;
+      log.sep() ;
+      log.sep() ;
+      exit(2)
+    },
+  } ;
 
-  for file in args {
+  for file in vec![file] {
     let factory = term::Factory::mk() ;
     let mut context = Context::mk(factory, 10000) ;
 

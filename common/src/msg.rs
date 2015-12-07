@@ -21,7 +21,7 @@ use term::{
 
 use sys::{ Prop, Sys } ;
 
-use ::{ Technique, CanRun } ;
+use ::{ Tek, CanRun } ;
 
 /** Wrapper around master and kids receive and send channels. */
 pub struct KidManager {
@@ -30,7 +30,7 @@ pub struct KidManager {
   /** Sends messages to master. */
   s: mpsc::Sender<MsgUp>,
   /** Senders to running techniques. */
-  senders: HashMap<Technique, mpsc::Sender<MsgDown>>,
+  senders: HashMap<Tek, mpsc::Sender<MsgDown>>,
 }
 impl KidManager {
   /** Constructs a kid manager. */
@@ -83,7 +83,7 @@ impl KidManager {
   }
   /** Forget a kid. */
   #[inline(always)]
-  pub fn forget(& mut self, t: & Technique) {
+  pub fn forget(& mut self, t: & Tek) {
     match self.senders.remove(t) {
       Some(_) => (),
       None => panic!("[kid_manager.forget] did not know {}", t.to_str()),
@@ -131,19 +131,19 @@ pub enum MsgUp {
   /** Not implemented. */
   Unimplemented,
   /** Log message. */
-  Bla(Technique, String),
+  Bla(Tek, String),
   /** Warning message. */
-  Warning(Technique, String),
+  Warning(Tek, String),
   /** Error message. */
-  Error(Technique, String),
-  /** Technique is done. */
-  Done(Technique, Info),
+  Error(Tek, String),
+  /** Tek is done. */
+  Done(Tek, Info),
   /** KTrue. */
-  KTrue(Vec<Sym>, Technique, Offset),
+  KTrue(Vec<Sym>, Tek, Offset),
   /** Some properties were proved. */
-  Proved(Vec<Sym>, Technique, Info),
+  Proved(Vec<Sym>, Tek, Info),
   /** Some properties were falsified. */
-  Disproved(Model, Vec<Sym>, Technique, Info),
+  Disproved(Model, Vec<Sym>, Tek, Info),
 }
 impl fmt::Display for MsgUp {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -169,7 +169,7 @@ pub struct Event {
   /** Receiver from kino. */
   r: Receiver<MsgDown>,
   /** Identifier of the technique. */
-  t: Technique,
+  t: Tek,
   /** Term factory. */
   f: Factory,
   /** K-true properties. */
@@ -179,7 +179,7 @@ impl Event {
   /** Creates a new `Event`. */
   pub fn mk(
     s: Sender<MsgUp>, r: Receiver<MsgDown>,
-    t: Technique, f: Factory, props: & [Prop]
+    t: Tek, f: Factory, props: & [Prop]
   ) -> Self {
     let mut k_true = HashMap::with_capacity(props.len()) ;
     for prop in props {

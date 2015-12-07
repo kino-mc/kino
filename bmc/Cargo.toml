@@ -6,6 +6,6 @@ authors = ["Adrien Champion <adrien.champion@mail.com>"]
 [dependencies]
 nom = "1.0.1"
 term = { path = "../term" }
-event = { path = "../event" }
+common = { path = "../common" }
 system = { path = "../system" }
 unroll = { path = "../unroll" }

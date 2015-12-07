@@ -11,7 +11,7 @@
 
 /*! Handles all the configuration aspects of kino, including CLAP. */
 
-extern crate event ;
+extern crate common ;
 extern crate bmc ;
 extern crate kind ;
 

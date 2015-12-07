@@ -4,6 +4,6 @@ version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@mail.com>"]
 
 [dependencies]
-event = { path = "../event" }
+common = { path = "../common" }
 bmc = { path = "../bmc" }
 kind = { path = "../kind" }

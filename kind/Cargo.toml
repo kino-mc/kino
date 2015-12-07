@@ -5,7 +5,7 @@ authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
 term = { path = "../term" }
-event = { path = "../event" }
+common = { path = "../common" }
 system = { path = "../system" }
 unroll = { path = "../unroll" }
 

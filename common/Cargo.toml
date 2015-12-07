@@ -1,9 +1,10 @@
 [package]
-name = "event"
+name = "common"
 version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
 ansi_term = "0.7.0"
+nom = "1.0.1"
 term = { path = "../term" }
 system = { path = "../system" }

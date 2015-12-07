@@ -15,18 +15,16 @@
 extern crate term ;
 extern crate system ;
 extern crate unroll ;
-extern crate event ;
+extern crate common ;
 extern crate bmc ;
 extern crate kind ;
-extern crate conf ;
 
 mod master ;
 
 pub use term::* ;
 pub use system::* ;
-pub use event::* ;
 pub use unroll::* ;
-pub use conf::* ;
+pub use common::* ;
 
 /** The techniques provided by kino. */
 pub mod teks {

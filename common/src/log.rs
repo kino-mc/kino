@@ -142,6 +142,12 @@ pub struct MasterLog<F, S> {
 impl<F, S: Clone> MasterLog<F, S> {
   /** A clone of the styler of a log. */
   pub fn styler(& self) -> S { self.stl.clone() }
+  /** The formatter. */
+  #[inline(always)]
+  pub fn fmt(& self) -> & F { & self.fmt }
+  /** The styler. */
+  #[inline(always)]
+  pub fn stl(& self) -> & S { & self.stl }
 }
 
 impl MasterLog<Format, Style> {
@@ -208,7 +214,7 @@ impl<
 
   /** Logs something with a prefix. */
   fn pref_log(
-    & self, pref: & str, title: & super::Technique, bla: & str
+    & self, pref: & str, title: & super::Tek, bla: & str
   ) {
     println!("{} {}", pref, self.emph(title.to_str())) ;
     for line in bla.lines() {
@@ -217,32 +223,32 @@ impl<
   }
 
   /** Logs some text line by line. */
-  pub fn log(& self, t: & super::Technique, bla: & str) {
+  pub fn log(& self, t: & super::Tek, bla: & str) {
     self.pref_log(self.fmt.pref(), t, bla) ;
     self.nl()
   }
 
   /** Prints some happy text line by line. */
-  pub fn happy(& self, t: & super::Technique, bla: & str) {
+  pub fn happy(& self, t: & super::Tek, bla: & str) {
     self.pref_log( & self.mk_happy( self.fmt.pref() ), t, bla ) ;
     self.nl()
   }
 
   /** Prints some sad text line by line. */
-  pub fn sad(& self, t: & super::Technique, bla: & str) {
+  pub fn sad(& self, t: & super::Tek, bla: & str) {
     self.pref_log( & self.mk_sad( self.fmt.pref() ), t, bla ) ;
     self.nl()
   }
 
   /** Prints some bad text line by line. */
-  pub fn bad(& self, t: & super::Technique, bla: & str) {
+  pub fn bad(& self, t: & super::Tek, bla: & str) {
     self.pref_log( & self.mk_bad( self.fmt.pref() ), t, bla ) ;
     self.nl()
   }
 
   /** Logs the fact that a property proved some techniques. */
   pub fn log_proved(
-    & self, t: & super::Technique, props: & [Sym], info: & ::msg::Info
+    & self, t: & super::Tek, props: & [Sym], info: & ::msg::Info
   ) {
     let pref = self.mk_happy(self.fmt.pref()) ;
     println!(
@@ -257,7 +263,7 @@ impl<
 
   /** Logs a cex for some properties. */
   pub fn log_cex(
-    & self, t: & super::Technique, cex: & Cex, props: & [Sym]
+    & self, t: & super::Tek, cex: & Cex, props: & [Sym]
   ) {
     let pref = self.mk_bad(self.fmt.pref()) ;
     println!(

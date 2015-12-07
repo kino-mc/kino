@@ -19,10 +19,11 @@ use term::{ Sym, Term } ;
 use system::{ Prop, Sys } ;
 use system::ctxt::* ;
 
-use event::Technique::Kino ;
-use event::msg::MsgUp::* ;
-use event::msg::{ KidManager, MsgDown, Info } ;
-use event::log::{ MasterLog, Formatter, Styler } ;
+use common::Tek::Kino ;
+use common::msg::MsgUp::* ;
+use common::conf ;
+use common::msg::{ KidManager, MsgDown, Info } ;
+use common::log::{ MasterLog, Formatter, Styler } ;
 
 use bmc ;
 use kind ;
@@ -44,11 +45,10 @@ impl Master {
     let mut manager = KidManager::mk() ;
 
     // Launching BMC.
-    log.log(& Kino,
-      & format!(
-        "Launching BMC:\n{}", bmc::BmcConf::default().desc()
-      )
-    ) ;
+    for line in conf::Bmc::lines(log.fmt(), log.stl()) {
+      println!("{}", line)
+    }
+    log.nl() ;
     match manager.launch(
       bmc::Bmc, sys.clone(), props.clone(), c.factory()
     ) {
@@ -57,6 +57,10 @@ impl Master {
     }
 
     // Launching k-induction.
+    for line in conf::Kind::lines(log.fmt(), log.stl()) {
+      println!("{}", line)
+    }
+    log.nl() ;
     match manager.launch(
       kind::KInd, sys.clone(), props.clone(), c.factory()
     ) {

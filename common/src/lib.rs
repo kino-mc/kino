@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Messages, structures for receiving and sending messages.
+/*! Stuff common to all techniques.
 
 # To do
 
@@ -17,6 +17,8 @@
 */
 
 extern crate ansi_term as ansi ;
+#[macro_use]
+extern crate nom ;
 extern crate term ;
 extern crate system as sys ;
 
@@ -26,19 +28,20 @@ use sys::{ Prop, Sys } ;
 
 pub mod msg ;
 pub mod log ;
+pub mod conf ;
 
 /** Trait the techniques should implement so that kino can call them in a
 generic way. */
 pub trait CanRun {
   /** The identifier of the technique. */
-  fn id(& self) -> Technique ;
+  fn id(& self) -> Tek ;
   /** Runs the technique. */
   fn run(& self, sys: Sys, props: Vec<Prop>, event: msg::Event) ;
 }
 
 /** Enumeration of the techniques. */
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Technique {
+pub enum Tek {
   /** Master. */
   Kino,
   /** Bounded model checking. */
@@ -50,16 +53,16 @@ pub enum Technique {
   Second is an arbitrarily long description. */
   Tec(& 'static str, & 'static str),
 }
-impl fmt::Display for Technique {
+impl fmt::Display for Tek {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     write!(fmt, "{}", self.to_str())
   }
 }
-impl Technique {
+impl Tek {
   /** A short string representation of a technique. */
   #[inline(always)]
   pub fn to_str(& self) -> & str {
-    use Technique::* ;
+    use Tek::* ;
     match * self {
       Kino => "master",
       Bmc => "bmc",
@@ -70,7 +73,7 @@ impl Technique {
   /** A description of a technique. */
   #[inline(always)]
   pub fn desc(& self) -> & str {
-    use Technique::* ;
+    use Tek::* ;
     match * self {
       Kino => "supervisor",
       Bmc => "bounded model checking",
@@ -81,7 +84,7 @@ impl Technique {
   /** Thread name for techniques. */
   #[inline(always)]
   pub fn thread_name(& self) -> String {
-    use Technique::* ;
+    use Tek::* ;
     match * self {
       Kino => panic!("thread name of supervisor requested"),
       Bmc => "kino_bmc".to_string(),
@@ -90,14 +93,3 @@ impl Technique {
     }
   }
 }
-
-
-
-// pub struct EventBuilder {
-//   r: Sender<MsgUp>,
-// }
-// impl EventBuilder {
-//   pub fn mk(r: Sender<MsgUp>) -> Self { EventBuilder { r: r } }
-//   pub fn event(self, t: Technique) -> Event { Event::mk(self.r, t) }
-// }
-

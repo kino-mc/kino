@@ -15,7 +15,7 @@ Unrolls backwards.
 
 extern crate term ;
 extern crate system ;
-extern crate event ;
+extern crate common ;
 extern crate unroll ;
 
 use std::thread::sleep_ms ;
@@ -23,7 +23,7 @@ use std::thread::sleep_ms ;
 use term::Offset2 ;
 use term::smt::* ;
 
-use event::msg::{ Info, Event, MsgDown} ;
+use common::msg::{ Info, Event, MsgDown} ;
 
 use system::{ Sys, Prop } ;
 
@@ -45,8 +45,8 @@ macro_rules! try_error {
 /** K-induction. */
 pub struct KInd ;
 unsafe impl Send for KInd {}
-impl event::CanRun for KInd {
-  fn id(& self) -> event::Technique { event::Technique::KInd }
+impl common::CanRun for KInd {
+  fn id(& self) -> common::Tek { common::Tek::KInd }
 
   fn run(
     & self, sys: Sys, props: Vec<Prop>, mut event: Event

@@ -421,7 +421,7 @@ impl Context {
     loop {
       let mut new_things = false ;
 
-      println!("  entering lines loop") ;
+      // println!("  entering lines loop") ;
       loop {
         match lines.next() {
           Some(Ok(line)) => {
@@ -454,7 +454,7 @@ impl Context {
         }
       }
 
-      println!("  entering parse loop") ;
+      // println!("  entering parse loop") ;
       loop {
         // println!("  updating") ;
         buffer.clear() ;

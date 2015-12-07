@@ -19,13 +19,13 @@
 
 extern crate term ;
 extern crate system ;
-extern crate event ;
+extern crate common ;
 extern crate unroll ;
 
 use term::Offset2 ;
 use term::smt::* ;
 
-use event::msg::{ Event, MsgDown, Info } ;
+use common::msg::{ Event, MsgDown, Info } ;
 
 use system::{ Sys, Prop } ;
 
@@ -47,8 +47,8 @@ macro_rules! try_error {
 /** Bounded model-checking. */
 pub struct Bmc ;
 unsafe impl Send for Bmc {}
-impl event::CanRun for Bmc {
-  fn id(& self) -> event::Technique { event::Technique::Bmc }
+impl common::CanRun for Bmc {
+  fn id(& self) -> common::Tek { common::Tek::Bmc }
 
   fn run(
     & self, sys: Sys, props: Vec<Prop>, mut event: Event
