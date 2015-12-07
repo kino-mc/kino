@@ -18,11 +18,13 @@ extern crate system ;
 extern crate common ;
 extern crate unroll ;
 
+use std::sync::Arc ;
 use std::thread::sleep_ms ;
 
 use term::Offset2 ;
 use term::smt::* ;
 
+use common::conf ;
 use common::msg::{ Info, Event, MsgDown} ;
 
 use system::{ Sys, Prop } ;
@@ -45,11 +47,11 @@ macro_rules! try_error {
 /** K-induction. */
 pub struct KInd ;
 unsafe impl Send for KInd {}
-impl common::CanRun for KInd {
+impl common::CanRun<conf::Kind> for KInd {
   fn id(& self) -> common::Tek { common::Tek::KInd }
 
   fn run(
-    & self, sys: Sys, props: Vec<Prop>, mut event: Event
+    & self, conf: Arc<conf::Kind>, sys: Sys, props: Vec<Prop>, mut event: Event
   ) {
     // event.log(
     //   & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
@@ -57,9 +59,13 @@ impl common::CanRun for KInd {
 
     // event.log("creating solver") ;
 
-    let conf = SolverConf::z3().print_success() ;
+    let mut solver_conf = conf.solver().clone().default().print_success() ;
+    match * conf.solver_cmd() {
+      None => (),
+      Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
+    } ;
 
-    let mut kid = match Kid::mk(conf) {
+    let mut kid = match Kid::mk(solver_conf) {
       Ok(kid) => kid,
       Err(e) => {
         event.error( & format!("could not spawn solver kid\n{:?}", e) ) ;
@@ -67,11 +73,19 @@ impl common::CanRun for KInd {
       },
     } ;
 
-    kind(& mut kid, sys, props, & mut event) ;
+    kind(& mut kid, sys, props, & mut event, conf.smt_log()) ;
   }
 }
 
-fn kind(kid: & mut Kid, sys: Sys, props: Vec<Prop>, event: & mut Event) {
+fn kind(
+  kid: & mut Kid, sys: Sys, props: Vec<Prop>,
+  event: & mut Event, _smt_log: & Option<String>
+) {
+  match * _smt_log {
+    None => (),
+    Some(_) => event.warning("smt_log is not implemented")
+  } ;
+
   let factory = event.factory().clone() ;
   let mut actlit = Actlit::mk(factory.clone()) ;
 
@@ -120,7 +134,7 @@ fn kind(kid: & mut Kid, sys: Sys, props: Vec<Prop>, event: & mut Event) {
                 props.forget(& mut solver, & ps),
                 event
               ),
-              MsgDown::Invariants(_,_) => event.log(
+              MsgDown::Invariants(_,_) => event.warning(
                 "received invariants, skipping"
               ),
               _ => event.error("unknown message")

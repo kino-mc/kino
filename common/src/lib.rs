@@ -23,6 +23,7 @@ extern crate term ;
 extern crate system as sys ;
 
 use std::fmt ;
+use std::sync::Arc ;
 
 use sys::{ Prop, Sys } ;
 
@@ -32,11 +33,11 @@ pub mod conf ;
 
 /** Trait the techniques should implement so that kino can call them in a
 generic way. */
-pub trait CanRun {
+pub trait CanRun<Conf> {
   /** The identifier of the technique. */
   fn id(& self) -> Tek ;
   /** Runs the technique. */
-  fn run(& self, sys: Sys, props: Vec<Prop>, event: msg::Event) ;
+  fn run(& self, Arc<Conf>, Sys, Vec<Prop>, msg::Event) ;
 }
 
 /** Enumeration of the techniques. */

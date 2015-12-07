@@ -22,9 +22,12 @@ extern crate system ;
 extern crate common ;
 extern crate unroll ;
 
+use std::sync::Arc ;
+
 use term::Offset2 ;
 use term::smt::* ;
 
+use common::conf ;
 use common::msg::{ Event, MsgDown, Info } ;
 
 use system::{ Sys, Prop } ;
@@ -47,11 +50,11 @@ macro_rules! try_error {
 /** Bounded model-checking. */
 pub struct Bmc ;
 unsafe impl Send for Bmc {}
-impl common::CanRun for Bmc {
+impl common::CanRun<conf::Bmc> for Bmc {
   fn id(& self) -> common::Tek { common::Tek::Bmc }
 
   fn run(
-    & self, sys: Sys, props: Vec<Prop>, mut event: Event
+    & self, conf: Arc<conf::Bmc>, sys: Sys, props: Vec<Prop>, mut event: Event
   ) {
     // event.log(
     //   & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
@@ -59,9 +62,13 @@ impl common::CanRun for Bmc {
 
     // event.log("creating solver") ;
 
-    let conf = SolverConf::z3().print_success() ;
+    let mut solver_conf = conf.solver().clone().default().print_success() ;
+    match * conf.solver_cmd() {
+      None => (),
+      Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
+    } ;
 
-    let mut kid = match Kid::mk(conf) {
+    let mut kid = match Kid::mk(solver_conf) {
       Ok(kid) => kid,
       Err(e) => {
         event.error( & format!("could not spawn solver kid\n{:?}", e) ) ;
@@ -69,12 +76,21 @@ impl common::CanRun for Bmc {
       },
     } ;
 
-    bmc(& mut kid, sys, props, & mut event) ;
+    bmc(& mut kid, sys, props, & mut event, conf.smt_log()) ;
   }
 }
 
 
-fn bmc(kid: & mut Kid, sys: Sys, props: Vec<Prop>, event: & mut Event) {
+fn bmc(
+  kid: & mut Kid, sys: Sys, props: Vec<Prop>,
+  event: & mut Event, _smt_log: & Option<String>
+) {
+  // use std::fs::OpenOptions ;
+
+  match * _smt_log {
+    None => (),
+    Some(_) => event.warning("smt_log is not implemented")
+  } ;
 
   let factory = event.factory().clone() ;
   let mut actlit = Actlit::mk(factory.clone()) ;
@@ -82,8 +98,7 @@ fn bmc(kid: & mut Kid, sys: Sys, props: Vec<Prop>, event: & mut Event) {
 
   match solver(kid, factory.clone()) {
     Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
-    Ok(solver) => {
-      let mut solver = solver ;
+    Ok(mut solver) => {
 
       // event.log("declaring functions, init and trans") ;
       try_error!(
@@ -223,7 +238,7 @@ fn bmc(kid: & mut Kid, sys: Sys, props: Vec<Prop>, event: & mut Event) {
                 props.forget(& mut solver, & ps),
                 event
               ),
-              MsgDown::Invariants(_,_) => event.log(
+              MsgDown::Invariants(_,_) => event.warning(
                 "received invariants, skipping"
               ),
               _ => event.error("unknown message")

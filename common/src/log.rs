@@ -213,7 +213,7 @@ impl<
   }
 
   /** Logs something with a prefix. */
-  fn pref_log(
+  pub fn pref_log(
     & self, pref: & str, title: & super::Tek, bla: & str
   ) {
     println!("{} {}", pref, self.emph(title.to_str())) ;

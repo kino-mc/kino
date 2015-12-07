@@ -258,6 +258,13 @@ conf!{
       SolverStyle::Z3,
       val => SolverStyle::of(val)
     ),
+    solver_cmd (
+      Option<String>,
+      "solver_cmd", "<cmd>".to_string(),
+      "Command to run the solver with.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    ),
     smt_log (
       Option<String>,
       "smt_log", "<file>".to_string(),
@@ -284,6 +291,13 @@ conf!{
       "Kind of solver to use.".to_string(),
       SolverStyle::Z3,
       val => SolverStyle::of(val)
+    ),
+    solver_cmd (
+      Option<String>,
+      "solver_cmd", "<cmd>".to_string(),
+      "Command to run the solver with.".to_string(),
+      None,
+      val => Option::<String>::of(val)
     ),
     smt_log (
       Option<String>,
@@ -373,9 +387,9 @@ pub struct Master {
   /// All the technique scopes.
   scopes: Vec<& 'static str>,
   /// Optional BMC configuration.
-  bmc: Option<Bmc>,
+  pub bmc: Option<Bmc>,
   /// Optional Kind configuration.
-  kind: Option<Kind>,
+  pub kind: Option<Kind>,
 }
 impl Master {
   /// The scope to technique mapping.
@@ -520,6 +534,7 @@ impl Master {
   >(
     scope: & str, log: & MasterLog<F,S>
   ) {
+
     match scope {
       "bmc" => for line in Bmc::lines(log.fmt(), log.stl()) {
         println!("{}", line)
@@ -527,7 +542,7 @@ impl Master {
       "kind" => for line in Kind::lines(log.fmt(), log.stl()) {
         println!("{}", line)
       },
-      _ => {
+      "all" => {
         let mut fst = true ;
         for scope in Master::default().scopes {
           if fst {
@@ -538,6 +553,45 @@ impl Master {
           Master::help(scope, log) ;
         }
       },
+      _ => {
+
+        let scopes = Master::default().scopes.into_iter().fold(
+          String::new(),
+          |s, scope| format!(
+            "{}{}{}",
+            s, if s.is_empty() { "" } else { ", " }, log.mk_emph(scope)
+          )
+        ) ;
+
+        log.title("Usage:") ;
+        log.nl() ;
+        log.pref_log(
+          log.fmt().pref(),
+          & super::Tek::Tec("> kino [option]* file", ""),
+          & format!("\
+where [option] can be
+  {} [module]
+      Displays this message if no module is specified. Otherwise displays the
+      help of the module specified, among
+      > {}
+  {} \"[ <opt>: <val> | <mdl>([<opt>: <val>],+) ],+\"
+      Sets some options globally (first version) or for a specific module
+      (second version). Check the options of each module for more details.
+      {}:
+      > kino -o \"smt_log: path/to/log, bmc(max: 7, solver: cvc4)\"
+      Activates log of the solver's trace for all modules, and options `max`
+      (`solver`) in the `bmc` module to `7` (`cvc4`).\
+            ",
+            log.mk_emph("-h / --help"),
+            scopes,
+            log.mk_emph("-o"),
+            log.mk_emph("Example")
+          )
+        ) ;
+        log.nl() ;
+        log.trail()
+
+      }
     }
   }
 }

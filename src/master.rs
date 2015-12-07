@@ -11,6 +11,7 @@
 
 It runs on a system and tries to prove some properties. */
 
+use std::sync::Arc ;
 use std::io::Write ;
 use std::collections::HashMap ;
 
@@ -20,6 +21,7 @@ use system::{ Prop, Sys } ;
 use system::ctxt::* ;
 
 use common::Tek::Kino ;
+use common::conf ;
 use common::msg::MsgUp::* ;
 use common::msg::{ KidManager, MsgDown, Info } ;
 use common::log::{ MasterLog, Formatter, Styler } ;
@@ -34,7 +36,9 @@ impl Master {
   `props` are invariants for `sys`.*/
   pub fn launch<F: Formatter, S: Styler>(
     log: & MasterLog<F,S>, c: & Context,
-    sys: Sys, props: Vec<Prop>, _assumptions: Option<Vec<Term>>
+    sys: Sys, props: Vec<Prop>,
+    _assumptions: Option<Vec<Term>>,
+    conf: conf::Master
   ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
 
     log.title( & format!("Running on {}", sys.sym().sym()) ) ;
@@ -44,20 +48,26 @@ impl Master {
     let mut manager = KidManager::mk() ;
 
     // Launching BMC.
-    match manager.launch(
-      bmc::Bmc, sys.clone(), props.clone(), c.factory()
-    ) {
-      Ok(()) => (),
-      Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
-    }
+    match conf.bmc {
+      None => (),
+      Some(conf) => match manager.launch(
+        bmc::Bmc, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
+      ) {
+        Ok(()) => (),
+        Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+      },
+    } ;
 
     // Launching k-induction.
-    match manager.launch(
-      kind::KInd, sys.clone(), props.clone(), c.factory()
-    ) {
-      Ok(()) => (),
-      Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
-    }
+    match conf.kind {
+      None => (),
+      Some(conf) => match manager.launch(
+        kind::KInd, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
+      ) {
+        Ok(()) => (),
+        Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+      },
+    } ;
 
     // Entering message loop.
     loop {

@@ -15,6 +15,8 @@ use std::sync::mpsc ;
 use std::sync::mpsc::{ Sender, Receiver, TryRecvError } ;
 use std::collections::HashMap ;
 
+use std::sync::Arc ;
+
 use term::{
   Offset, Sym, Factory, Model, STerm
 } ;
@@ -39,8 +41,8 @@ impl KidManager {
     KidManager { r: receiver, s: sender, senders: HashMap::new() }
   }
   /** Launches a technique. */
-  pub fn launch<T: CanRun + Send + 'static>(
-    & mut self, t: T, sys: Sys, props: Vec<Prop>, f: & Factory
+  pub fn launch<Conf: 'static + Sync + Send, T: CanRun<Conf> + Send + 'static>(
+    & mut self, t: T, sys: Sys, props: Vec<Prop>, f: & Factory, conf: Arc<Conf>
   ) -> Result<(), String> {
     let (s,r) = mpsc::channel() ;
     let id = t.id().clone() ;
@@ -48,7 +50,7 @@ impl KidManager {
       self.s.clone(), r, t.id().clone(), f.clone(), & props
     ) ;
     match thread::Builder::new().name(id.thread_name()).spawn(
-      move || t.run(sys, props, event)
+      move || t.run(conf, sys, props, event)
     ) {
       Ok(_) => (),
       Err(e) => return Err(

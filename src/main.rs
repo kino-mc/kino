@@ -56,58 +56,62 @@ fn main() {
     },
   } ;
 
-  for file in vec![file] {
-    let factory = term::Factory::mk() ;
-    let mut context = Context::mk(factory, 10000) ;
+  let factory = term::Factory::mk() ;
+  let mut context = Context::mk(factory, 10000) ;
 
-    log.title( & format!("opening \"{}\"", file) ) ;
-    match File::open(& file) {
-      Ok(mut f) => {
-        log.print( & log.mk_happy("success") ) ;
-        log.title("parsing") ;
-        match context.read(& mut f) {
-          Ok(res) => {
-            log.print( & log.mk_happy("success") ) ;
+  log.title( & format!("opening \"{}\"", file) ) ;
+  match File::open(& file) {
+    Ok(mut f) => {
+      log.print( & log.mk_happy("success") ) ;
+      log.title("parsing") ;
+      match context.read(& mut f) {
+        Ok(res) => {
+          log.print( & log.mk_happy("success") ) ;
 
-            log.title("Context") ;
-            for line in context.lines().lines() {
-              log.print(line)
-            } ;
+          log.title("Context") ;
+          for line in context.lines().lines() {
+            log.print(line)
+          } ;
 
-            log.title("Query") ;
-            for line in res.lines().lines() {
-              log.print(line)
-            } ;
+          log.title("Query") ;
+          for line in res.lines().lines() {
+            log.print(line)
+          } ;
 
-            match res {
-              Res::Exit => (),
-              Res::Check(sys, props) => {
-                log.trail() ;
-                let _ = Master::launch(& log, & context, sys, props, None) ;
-              },
-              Res::CheckAss(_, _, _) => {
-                log.bad(
-                  & Kino, "verify with assumption is not supported"
-                ) ;
-                log.trail()
-              },
-            }
-          },
-          Err( e ) => {
-            log.nl() ;
-            log.bad( & Kino, & format!("{}", e) ) ;
-            log.trail()
-          },
-        }
-      },
-      Err(e) => {
-        log.nl() ;
-        log.bad( & Kino, & format!("{}", e) ) ;
-        log.trail()
-      },
-    } ;
+          match res {
+            Res::Exit => (),
+            Res::Check(sys, props) => {
+              log.trail() ;
+              let _ = Master::launch(
+                & log, & context, sys, props, None, conf
+              ) ;
+            },
+            Res::CheckAss(_, _, _) => {
+              log.bad(
+                & Kino, "verify with assumption is not supported"
+              ) ;
+              log.trail()
+            },
+          }
+        },
+        Err(e) => {
+          log.nl() ;
+          log.bad( & Kino, & format!("{}", e) ) ;
+          log.trail()
+        },
+      }
+    },
+    Err(e) => {
+      log.nl() ;
+      log.bad(
+        & Kino,
+        & format!(
+          "could not open file \"{}\":\n> {}", file, e
+        )
+      ) ;
+      log.trail()
+    },
+  } ;
 
-    log.sep()
-  }
-  ()
+  log.sep()
 }
