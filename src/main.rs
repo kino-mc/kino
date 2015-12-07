@@ -37,7 +37,6 @@ use master::Master ;
 
 fn main() {
   use std::fs::File ;
-  use std::env::args ;
 
   let log = MasterLog::default() ;
 

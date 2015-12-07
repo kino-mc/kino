@@ -528,9 +528,15 @@ impl Master {
         println!("{}", line)
       },
       _ => {
-        Master::help("bmc", log) ;
-        log.nl() ;
-        Master::help("kind", log) ;
+        let mut fst = true ;
+        for scope in Master::default().scopes {
+          if fst {
+            fst = false
+          } else {
+            log.sep()
+          } ;
+          Master::help(scope, log) ;
+        }
       },
     }
   }
