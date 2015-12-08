@@ -59,8 +59,8 @@ impl common::CanRun<conf::Kind> for KInd {
 
     // event.log("creating solver") ;
 
-    let mut solver_conf = conf.solver().clone().default().print_success() ;
-    match * conf.solver_cmd() {
+    let mut solver_conf = conf.smt().clone().default().print_success() ;
+    match * conf.smt_cmd() {
       None => (),
       Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
     } ;

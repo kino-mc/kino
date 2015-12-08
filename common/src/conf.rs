@@ -251,16 +251,16 @@ conf!{
       None,
       val => Option::<usize>::of(val)
     ),
-    solver (
+    smt (
       SolverStyle,
-      "solver", solver_keys(),
+      "smt", solver_keys(),
       "Kind of solver to use.".to_string(),
       SolverStyle::Z3,
       val => SolverStyle::of(val)
     ),
-    solver_cmd (
+    smt_cmd (
       Option<String>,
-      "solver_cmd", "<cmd>".to_string(),
+      "smt_cmd", "<cmd>".to_string(),
       "Command to run the solver with.".to_string(),
       None,
       val => Option::<String>::of(val)
@@ -285,16 +285,16 @@ conf!{
       None,
       val => Option::<usize>::of(val)
     ),
-    solver (
+    smt (
       SolverStyle,
-      "solver", solver_keys(),
+      "smt", solver_keys(),
       "Kind of solver to use.".to_string(),
       SolverStyle::Z3,
       val => SolverStyle::of(val)
     ),
-    solver_cmd (
+    smt_cmd (
       Option<String>,
-      "solver_cmd", "<cmd>".to_string(),
+      "smt_cmd", "<cmd>".to_string(),
       "Command to run the solver with.".to_string(),
       None,
       val => Option::<String>::of(val)
@@ -579,7 +579,7 @@ where [option] can be
       (second version). Check the options of each module for more details.
       {}:
       > kino -o \"smt_log: path/to/log, bmc(max: 7, solver: cvc4)\"
-      Activates log of the solver's trace for all modules, and options `max`
+      Activates log of the solver's trace for all modules, and option `max`
       (`solver`) in the `bmc` module to `7` (`cvc4`).\
             ",
             log.mk_emph("-h / --help"),
