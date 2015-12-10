@@ -1,0 +1,19 @@
+(define-sys sys
+  ( (out Int) )
+  (= (_ curr out) 0)
+  (and
+    (< (_ curr out) 42)
+    (= (_ next out) (+ (_ curr out) 1))
+  )
+  ()
+)
+
+(define-prop out_le_42 sys
+  (<= (_ curr out) 42)
+)
+
+(define-rel out_inc sys
+  (>= (_ next out) (_ curr out))
+)
+
+( verify sys ( out_le_42 out_inc ) )

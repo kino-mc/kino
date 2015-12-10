@@ -217,7 +217,7 @@ fn sub_sys_parser<'a>(
 }
 
 /** Parses a local definitions. */
-fn locals_parser<'a>(
+fn _locals_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
   delimited!(
@@ -262,8 +262,8 @@ fn sys_parser<'a>(
     sym: apply!(sym_parser, c.factory()) ~
     opt!(space_comment) ~
     state: apply!(args_parser, c.factory()) ~
-    opt!(space_comment) ~
-    locals: apply!(locals_parser, c.factory()) ~
+    // opt!(space_comment) ~
+    // locals: apply!(locals_parser, c.factory()) ~
     opt!(space_comment) ~
     init: apply!(term_parser, c.factory()) ~
     space_comment ~
@@ -272,7 +272,7 @@ fn sys_parser<'a>(
     sub_syss: apply!(sub_sys_parser, c.factory()) ~
     opt!(space_comment) ~
     char!(')'),
-    || c.add_sys(sym, state, locals, init, trans, sub_syss)
+    || c.add_sys(sym, state, vec![], init, trans, sub_syss)
   )
 }
 

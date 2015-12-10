@@ -34,10 +34,10 @@ pub enum State {
   Next,
 }
 
-/** Printable in the TSV standard. */
-pub trait PrintTsv {
-  /** Prints something in TSV in a `Write`. */
-  fn to_tsv(& self, & mut io::Write) -> io::Result<()> ;
+/** Printable in the VMT-LIB standard. */
+pub trait PrintVmt {
+  /** Prints something in VMT-LIB in a `Write`. */
+  fn to_vmt(& self, & mut io::Write) -> io::Result<()> ;
 }
 
 /** Printable in the SMT Lib 2 standard, given an offset. */
@@ -233,7 +233,7 @@ impl<Sym: SymWritable> SVarWriter<Sym> for () {
     v: & Sym, st: & State, style: SymPrintStyle
   ) -> io::Result<()> {
     match * st {
-      State::Curr => try!( write!(writer, "(_ state |") ),
+      State::Curr => try!( write!(writer, "(_ curr |") ),
       State::Next => try!( write!(writer, "(_ next |") ),
     } ;
     try!( v.write(writer, style) ) ;

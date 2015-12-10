@@ -102,7 +102,7 @@ macro_rules! unimpl {
 
 mod base ;
 pub use base::{
-  State, PrintSmt2, PrintTsv, Offset, Offset2, Smt2Offset
+  State, PrintSmt2, PrintVmt, Offset, Offset2, Smt2Offset
 } ;
 mod typ ;
 pub use typ::{ Type, Bool, Int, Rat } ;
@@ -117,7 +117,7 @@ pub use term::{
   Operator, Term, STerm, CstMaker, BindMaker, AppMaker, OpMaker
 } ;
 mod parser ;
-pub use parser::tsv::TermAndDep ;
+pub use parser::vmt::TermAndDep ;
 mod factory ;
 pub use factory::{ Factory, ParseSts2, UnTermOps } ;
 pub mod gen ;

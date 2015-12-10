@@ -12,15 +12,13 @@
 (define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
-  ;; Local definitions.
-  ()
   ;; Init.
-  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
+  (ite (_ curr in) (= (_ curr out) 1) (= (_ curr out) 0))
   ;; Trans.
   (ite
     (_ next in)
-    (= (_ next out) (+ (_ state out) 1))
-    (= (_ next out) (_ state out))
+    (= (_ next out) (+ (_ curr out) 1))
+    (= (_ next out) (_ curr out))
   )
   ;; Composition.
   ()
@@ -28,7 +26,7 @@
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (>= (_ state out) 0)
+  (>= (_ curr out) 0)
 )
 
 (define-fun act () Bool true)

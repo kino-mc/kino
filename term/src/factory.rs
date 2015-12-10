@@ -24,7 +24,7 @@ use term::{
   bump
 } ;
 use parser ;
-use parser::tsv::TermAndDep ;
+use parser::vmt::TermAndDep ;
 
 macro_rules! try_parse {
   ($fun:expr, $arg: expr, $res:pat => $b:block) => (
@@ -504,14 +504,14 @@ impl ParseSts2 for Factory {
   ) -> IResult<& 'a [u8], Sym> {
     map!(
       bytes,
-      parser::tsv::id_parser,
+      parser::vmt::id_parser,
       |sym| self.sym(sym)
     )
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], TermAndDep> {
-    parser::tsv::term_parser(bytes, self)
+    parser::vmt::term_parser(bytes, self)
   }
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]

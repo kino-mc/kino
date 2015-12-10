@@ -12,15 +12,13 @@
 (define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
-  ;; Local definitions.
-  ()
   ;; Init.
-  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
+  (ite (_ curr in) (= (_ curr out) 1) (= (_ curr out) 0))
   ;; Trans.
   (ite
     (_ next in)
-    (= (_ next out) (+ (_ state out) 1))
-    (= (_ next out) (_ state out))
+    (= (_ next out) (+ (_ curr out) 1))
+    (= (_ next out) (_ curr out))
   )
   ;; Composition.
   ()
@@ -28,7 +26,7 @@
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (>= (_ state out) 0)
+  (>= (_ curr out) 0)
 )
 
 
@@ -62,19 +60,17 @@
     (|pre(input(b,deact))| Bool)
     (      |output(b,out)| Int )
   )
-  ;; Local variables.
-  ( )
   ;; Init. Gives sense to the `pre deact`.
-  (= (_ state |pre(input(b,deact))|) oracle)
+  (= (_ curr |pre(input(b,deact))|) oracle)
   ;; Trans. Gives sense to the `pre deact`.
-  (= (_ next |pre(input(b,deact))|) (_ state |input(b,deact)|))
+  (= (_ next |pre(input(b,deact))|) (_ curr |input(b,deact)|))
   ;; Compose with
   (
     (sys_a
       ;; Actual parameter for the first svar of sys_a (unguarded `pre deact`).
-      (and (_ state |input(b,act)|) (not (_ state |pre(input(b,deact))|)))
+      (and (_ curr |input(b,act)|) (not (_ curr |pre(input(b,deact))|)))
       ;; Actual paramater for the second svar of sys_a. Output of `b`.
-      (_ state |output(b,out)|)
+      (_ curr |output(b,out)|)
     )
   )
 )
@@ -85,7 +81,7 @@
 (define-rel |prop(b,1)| sys_b
   (=>
     ( and (_ next |input(b,act)|) (not (_ next |input(b,deact)|)) )
-    ( = (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1) )
+    ( = (_ next |output(b,out)|) (+ (_ curr |output(b,out)|) 1) )
   )
 )
 
@@ -94,8 +90,8 @@
 ;;     --%PROPERTY (act and pre not deact) => ( out = pre out + 1 ) ;
 (define-rel |prop(b,2)| sys_b
   (=>
-    ( and (_ next |input(b,act)|) (not (_ state |input(b,deact)|)) )
-    ( = (_ next |output(b,out)|) (+ (_ state |output(b,out)|) 1) )
+    ( and (_ next |input(b,act)|) (not (_ curr |input(b,deact)|)) )
+    ( = (_ next |output(b,out)|) (+ (_ curr |output(b,out)|) 1) )
   )
 )
 
@@ -103,13 +99,13 @@
 ;;     --Property holds.
 ;;     --%PROPERTY out >= 0 ;
 (define-prop |prop(b,3)| sys_b
-  (>= (_ state |output(b,out)|) 0)
+  (>= (_ curr |output(b,out)|) 0)
 )
 
 ;;     --Property does not hold.
 ;;     --%PROPERTY out < 10 ;
 (define-prop |prop(b,4)| sys_b
-  (< (_ state |output(b,out)|) 10)
+  (< (_ curr |output(b,out)|) 10)
 )
 
 ;; ( verify sys_b (|prop(b,1)| |prop(b,2)|) )

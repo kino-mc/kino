@@ -37,16 +37,15 @@
 
 (define-sys sat_deriv
   ( (in Real) (out Real) )
-  ()
-  (= (_ state out) (_ state in))
+  (= (_ curr out) (_ curr in))
   (= (_ next out)
-    (ite (< (_ next in) (_ state out))
-      (ite (> (- (_ state out) (_ next in)) max_deriv)
-        (- (_ state out) max_deriv)
+    (ite (< (_ next in) (_ curr out))
+      (ite (> (- (_ curr out) (_ next in)) max_deriv)
+        (- (_ curr out) max_deriv)
         (_ next in)
       )
-      (ite (> (- (_ next in) (_ state out)) max_deriv)
-        (+ (_ state out) max_deriv)
+      (ite (> (- (_ next in) (_ curr out)) max_deriv)
+        (+ (_ curr out) max_deriv)
         (_ next in)
       )
     )
@@ -93,28 +92,26 @@
     ;; Output error flag.
     (err_out Bool)
   )
-  ;; Local state.
-  ()
   ;; Init.
   (and
-    (= (_ state cnt) (ite (_ state err_in) 1 0))
-    (= (_ state err_out) (>= (_ state cnt) err_thres))
-    (= (_ state last_legal)
-      (ite (_ state err_in) default (_ state in))
+    (= (_ curr cnt) (ite (_ curr err_in) 1 0))
+    (= (_ curr err_out) (>= (_ curr cnt) err_thres))
+    (= (_ curr last_legal)
+      (ite (_ curr err_in) default (_ curr in))
     )
-    (= (_ state out) (ite (_ state err_out) default (_ state out_sub)))
+    (= (_ curr out) (ite (_ curr err_out) default (_ curr out_sub)))
   )
   ;; Trans.
   (and
-    (= (_ next cnt) (+ (ite (_ state err_in) 1 0)) (_ state cnt))
+    (= (_ next cnt) (+ (ite (_ curr err_in) 1 0)) (_ curr cnt))
     (= (_ next err_out) (>= (_ next cnt) err_thres))
     (= (_ next last_legal)
-      (ite (_ next err_in) (_ state last_legal) (_ next in))
+      (ite (_ next err_in) (_ curr last_legal) (_ next in))
     )
     (= (_ next out) (ite (_ next err_out) default (_ next out_sub)))
   )
   ;; Parallel composition with `sat_deriv`.
-  ( (sat_deriv (_ state last_legal) (_ state out_sub)) )
+  ( (sat_deriv (_ curr last_legal) (_ curr out_sub)) )
 )
 
 
@@ -122,11 +119,11 @@
 (define-prop prop_1 fault_conf
   (=>
     (and
-      (<= (- (_ state in) (_ state out)) max_deriv)
-      (<= (- (_ state out) (_ state in)) max_deriv)
-      (not (_ state err_in))
+      (<= (- (_ curr in) (_ curr out)) max_deriv)
+      (<= (- (_ curr out) (_ curr in)) max_deriv)
+      (not (_ curr err_in))
     )
-    (= (_ state out) (_ state in))
+    (= (_ curr out) (_ curr in))
   )
 )
 
@@ -136,13 +133,13 @@
 (define-prop prop_2 fault_conf
   (=>
     (and
-      (<= (- (_ state in) (_ state out)) max_deriv)
-      (<= (- (_ state out) (_ state in)) max_deriv)
-      (not (_ state err_in))
+      (<= (- (_ curr in) (_ curr out)) max_deriv)
+      (<= (- (_ curr out) (_ curr in)) max_deriv)
+      (not (_ curr err_in))
     )
-    (ite (_ state err_out)
-      (= (_ state out) default)
-      (= (_ state out) (_ state in))
+    (ite (_ curr err_out)
+      (= (_ curr out) default)
+      (= (_ curr out) (_ curr in))
     )
   )
 )

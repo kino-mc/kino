@@ -5,19 +5,17 @@
 (define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
-  ;; Local definitions.
-  ( (loc Bool (bla (_ state out))) )
   ;; Init.
   (and
-    (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
-    loc
+    (ite (_ curr in) (= (_ curr out) 1) (= (_ curr out) 0))
+    (bla (_ curr out))
   )
   ;; Trans.
   (and
     (ite
       (_ next in)
-      (= (_ next out) (+ (_ state out) 1))
-      (= (_ next out) (_ state out))
+      (= (_ next out) (+ (_ curr out) 1))
+      (= (_ next out) (_ curr out))
     )
     var
   )
@@ -27,10 +25,10 @@
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (>= (_ state out) 0)
+  (>= (_ curr out) 0)
 )
 (define-prop out_le_10 sys_a
-  (<= (_ state out) 10)
+  (<= (_ curr out) 10)
 )
 
 ;; Check.

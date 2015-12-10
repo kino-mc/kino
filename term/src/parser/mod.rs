@@ -33,7 +33,7 @@ macro_rules! try_parse {
         ::nom::IResult::Error(
           ::nom::Err::Position(pos,txt)
         ) => panic!(
-          "position error at {}: {}",
+          "position error at {:?}: {}",
           pos, ::std::str::from_utf8(txt).unwrap()
         ),
         ::nom::IResult::Error(e) => panic!("error: {:?}", e),
@@ -62,7 +62,7 @@ macro_rules! try_parse {
   ) ;
 }
 
-pub mod tsv ;
+pub mod vmt ;
 pub mod smt2 ;
 
 named!{ pub type_parser<Type>,

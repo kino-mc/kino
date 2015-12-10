@@ -5,22 +5,21 @@
 ;;  ) -> (
 ;;    if in then pre out + 1 else pre out
 ;;  ) ;
-;;  --%PROPERTY out <= 10 ;
+;;  --%PROPERTY out >= 0 ;
+;;  --%PROPERTY (out = pre out + 1) => in ;
 ;; tel
 
 ;; Defines a transition system from some initial and transition predicates.
 (define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
-  ;; Local definitions.
-  ()
   ;; Init.
-  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
+  (ite (_ curr in) (= (_ curr out) 1) (= (_ curr out) 0))
   ;; Trans.
   (ite
-    (not (= (_ next in) (_ state in)))
-    (= (_ next out) (+ (_ state out) 1))
-    (= (_ next out) (_ state out))
+    (_ next in)
+    (= (_ next out) (+ (_ curr out) 1))
+    (= (_ next out) (_ curr out))
   )
   ;; Composition.
   ()
@@ -28,9 +27,17 @@
 
 ;; Defines a property over a state.
 (define-prop out_positive sys_a
-  (<= (_ state out) 10)
+  (>= (_ curr out) 0)
+)
+
+;; Defines a relation between two state.
+(define-rel out_inc sys_a
+  (=>
+    (= (_ next out) (+ (_ curr out) 1))
+    (_ next in)
+  )
 )
 
 ;; Check.
-( verify sys_a (out_positive) )
+( verify sys_a (out_positive out_inc) )
 

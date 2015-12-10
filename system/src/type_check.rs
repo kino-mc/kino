@@ -238,7 +238,7 @@ pub mod test {
     use std::fs::File ;
     use std::collections::HashMap ;
 
-    let file = "rsc/tsv/fault_conf.tsv" ;
+    let file = "rsc/vmt/fault_conf.vmt" ;
     let factory = Factory::mk() ;
     let mut context = Context::mk(factory.clone(), 1000) ;
 

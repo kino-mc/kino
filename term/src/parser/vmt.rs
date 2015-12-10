@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Parsers for the `tsv` format. */
+/*! Parsers for the `vmt` format. */
 
 use std::str ;
 use std::collections::HashSet ;
@@ -252,7 +252,7 @@ named!{ state<State>,
     char!('_') ~
     space_comment ~
     state: alt!(
-      map!( tag!("state"), |_| State::Curr ) |
+      map!( tag!("curr"), |_| State::Curr ) |
       map!( tag!("next"), |_| State::Next  )
     ),
     || state
@@ -496,7 +496,7 @@ macro_rules! try_parse_term {
 
 #[cfg(test)]
 mod terms {
-  use base::{ State, PrintTsv } ;
+  use base::{ State, PrintVmt } ;
   use sym::* ;
   use var::* ;
   use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
@@ -546,25 +546,25 @@ mod terms {
     let res = factory.var( factory.sym("bla") ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"bla",
+      b"|bla|",
       res
     ) ;
     let res = factory.var( factory.sym("bly.bla") ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"bly.bla",
+      b"|bly.bla|",
       res
     ) ;
     let res = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"(_ state bla)",
+      b"(_ curr |bla|)",
       res
     ) ;
     let res = factory.svar( factory.sym("bla"), State::Next ) ;
     try_parse_term!(
       term_parser, & factory,
-      b"(_ next bla)",
+      b"(_ next |bla|)",
       res
     ) ;
   }
@@ -581,7 +581,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    bla_plus_7.to_tsv(& mut s).unwrap() ;
+    bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -595,7 +595,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -609,7 +609,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -623,7 +623,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -648,7 +648,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -668,7 +668,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    bla_plus_7.to_tsv(& mut s).unwrap() ;
+    bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -682,7 +682,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -696,7 +696,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
@@ -710,7 +710,7 @@ mod terms {
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
-    nested.to_tsv(& mut s).unwrap() ;
+    nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
       term_parser, & factory,
       & s,
