@@ -208,10 +208,10 @@ impl Cex {
     let mut offset = Offset::zero() ;
     s = format!("{}  {}", s, sys_name) ;
     let mut sep = String::new() ;
-    for _ in (0..(offset_len - sys_name.len())) {
+    for _ in 0..(offset_len - sys_name.len()) {
       s.push(' ')
     } ;
-    for _ in (0..offset_len) {
+    for _ in 0..offset_len {
       sep.push('-')
     } ;
     for & (ref sym, _) in args {
@@ -221,11 +221,11 @@ impl Cex {
       s = format!("{}{}", s, fmt) ;
       let width = cst_lens.get(sym).unwrap() ;
       if width > & fmt.len() {
-        for _ in (0..(width - fmt.len())) {
+        for _ in 0..(width - fmt.len()) {
           s.push(' ')
         } ;
       }
-      for _ in (0..(* width)) {
+      for _ in 0..(* width) {
         sep.push('-')
       } ;
     } ;
@@ -236,7 +236,7 @@ impl Cex {
           s = format!("{}\n  ", s) ;
           let fmt = format!("{}", offset) ;
           if offset_len > fmt.len() {
-            for _ in (0..(offset_len - fmt.len())) {
+            for _ in 0..(offset_len - fmt.len()) {
               s.push(' ')
             } ;
           }
@@ -249,7 +249,7 @@ impl Cex {
               None => "-".to_string(),
             } ;
             if width > & fmt.len() {
-              for _ in (0..(width - fmt.len())) {
+              for _ in 0..(width - fmt.len()) {
                 s.push(' ')
               } ;
             }

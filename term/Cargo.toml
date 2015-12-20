@@ -8,4 +8,4 @@ num = "*"
 nom = "1.0.1"
 rand = "0.3"
 hashconsing = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git", rev = "1c5b9b0" }
-rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git", rev = "fa5ad57" }
+rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git", rev = "f119d95" }

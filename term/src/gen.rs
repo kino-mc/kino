@@ -99,7 +99,7 @@ impl<Rand: Rng> TermGen<Rand> {
       typ, & mut self.generated, & mut self.rng, & self.factory
     ) ;
     let mut terms = TermSet::with_capacity(n) ;
-    for _ in (0..n) {
+    for _ in 0..n {
       terms.insert(
         constructor.build(max_depth)
       ) ;
