@@ -362,6 +362,7 @@ fn let_parser<'a>(
     tag!("let") ~
     opt!(multispace) ~
     char!('(') ~
+    opt!(multispace) ~
     bindings: separated_list!(
       multispace,
       delimited!(
@@ -378,8 +379,7 @@ fn let_parser<'a>(
             }
           ) ~
           multispace ~
-          term: apply!(term_parser, f, off) ~
-          opt!(multispace),
+          term: apply!(term_parser, f, off),
           || (sym, term)
         ),
         char!(')')

@@ -20,13 +20,9 @@
 ;; const max_deriv: real = 1.0 ;
 ;; const default:   real = 0.0 ;
 
-;; (define-fun err_thres () Int 7)
-;; (define-fun max_deriv () Real (/ 1 1))
-;; (define-fun default () Real (/ 0 1))
-
-(declare-fun err_thres () Int)
-(declare-fun max_deriv () Real)
-(declare-fun default () Real)
+(define-fun err_thres () Int 7)
+(define-fun max_deriv () Real (/ 1 1))
+(define-fun default () Real (/ 0 1))
 
 (define-fun clamp ( (in Real) ) Real
   (ite (< in (- max_deriv))
@@ -36,21 +32,6 @@
       in
     )
   )
-)
-
-;; node count(in: bool) returns (out: int) ;
-;; let
-;;   out = (0 -> pre out) + (if in then 1 else 0) ;
-;; tel
-(define-sys count
-  ( (in Bool) (out Int) )
-  (= (_ curr out)
-    (ite (_ curr in) 1 0)
-  )
-  (= (_ next out)
-    (+ (_ curr out) (ite (_ next in) 1 0))
-  )
-  ()
 )
 
 ;; node sat_deriv(in: real) returns (out: real) ;
@@ -63,6 +44,7 @@
 ;;     )
 ;;   ) ;
 ;; tel
+
 (define-sys sat_deriv
   ( (in Real) (out Real) )
   (= (_ curr out) (_ curr in))
@@ -87,6 +69,13 @@
 ;;   last_legal = if err_in then (default -> pre last_legal) else in ;
 ;;   ;; Output signal follows the last legal value, or is default.
 ;;   out = if err_out then default else sat_deriv(last_legal) ;
+;;
+;;   ;; Does not hold, when error confirmed `out` takes the default value.
+;;   (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => out = in ; *)
+;;   (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => (
+;;     if err_out then out = default else out = in)
+;;   ) ; *)
+;;
 ;; tel
 
 (define-sys fault_conf
@@ -96,10 +85,12 @@
     (in Real)
     ;; Input error flag.
     (err_in Bool)
-    ;; Last legal input value.
-    (target Real)
     ;; Memory counting the number of errors that occured.
-    (errs Int)
+    (cnt Int)
+    ;; Last legal input value.
+    (last_legal Real)
+    ;; Output of `sat_deriv`.
+    (out_sub Real)
     ;; Output signal.
     (out Real)
     ;; Output error flag.
@@ -107,33 +98,53 @@
   )
   ;; Init.
   (and
-    (= (_ curr err_out) (>= (_ curr errs) err_thres))
-    (= (_ curr target)
-      (ite
-        (or (_ curr err_in) (_ curr err_out))
-        default
-        (_ curr in)
-      )
+    (= (_ curr cnt) (ite (_ curr err_in) 1 0))
+    (= (_ curr err_out) (>= (_ curr cnt) err_thres))
+    (= (_ curr last_legal)
+      (ite (_ curr err_in) default (_ curr in))
     )
+    (= (_ curr out) (ite (_ curr err_out) default (_ curr out_sub)))
   )
   ;; Trans.
   (and
-    (= (_ next err_out) (>= (_ next errs) err_thres))
-    (= (_ next target)
-      (ite (_ next err_out)
-        default
-        (ite (_ next err_in)
-          (_ curr target)
-          (_ next in)
-        )
-      )
+    (= (_ next cnt) (+ (ite (_ curr err_in) 1 0)) (_ curr cnt))
+    (= (_ next err_out) (>= (_ next cnt) err_thres))
+    (= (_ next last_legal)
+      (ite (_ next err_in) (_ curr last_legal) (_ next in))
     )
+    (= (_ next out) (ite (_ next err_out) default (_ next out_sub)))
   )
-  (
-    ;; Count errors.
-    (count (_ curr err_in) (_ curr errs))
-    ;; Parallel composition with `sat_deriv`.
-    (sat_deriv (_ curr target) (_ curr out))
+  ;; Parallel composition with `sat_deriv`.
+  ( (sat_deriv (_ curr last_legal) (_ curr out_sub)) )
+)
+
+
+;; (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => out = in ; *)
+(define-prop prop_1 fault_conf
+  (=>
+    (and
+      (<= (- (_ curr in) (_ curr out)) max_deriv)
+      (<= (- (_ curr out) (_ curr in)) max_deriv)
+      (not (_ curr err_in))
+    )
+    (= (_ curr out) (_ curr in))
+  )
+)
+
+;; (*%PROPERTY ( (in - out >= max_deriv) and (not err_in) ) => (
+;;   if err_out then out = default else out = in)
+;; ) ; *)
+(define-prop prop_2 fault_conf
+  (=>
+    (and
+      (<= (- (_ curr in) (_ curr out)) max_deriv)
+      (<= (- (_ curr out) (_ curr in)) max_deriv)
+      (not (_ curr err_in))
+    )
+    (ite (_ curr err_out)
+      (= (_ curr out) default)
+      (= (_ curr out) (_ curr in))
+    )
   )
 )
 
@@ -168,7 +179,6 @@
       (and
         (not (_ next err_in))
         (= diff (clamp diff))
-        (> max_deriv 0.0)
       )
       (ite (_ next err_out)
         (or
@@ -185,5 +195,5 @@
 )
 
 ;; Let's do this.
-(verify fault_conf (rel_1 rel_2 rel_3))
+(verify fault_conf (prop_1 prop_2 rel_1 rel_2 rel_3))
 
