@@ -21,7 +21,7 @@ use term::{
 } ;
 use term::smt::* ;
 
-use sys::Prop ;
+use sys::{ Prop, Sys } ;
 
 /// Associates a key and a description to some type.
 #[derive(Clone)]
@@ -112,7 +112,8 @@ impl Unroller for sys::Sys {
 
     // Declaring UFs and defining functions.
     // println!("declaring UFs, defining funs") ;
-    for fun in self.calls() {
+    for fun in self.calls().get() {
+      // println!("defining {}", fun.sym()) ;
       match * * fun {
         Dec(ref fun) => try!(
           solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
@@ -246,13 +247,31 @@ impl PropManager {
   pub fn mk<
     'a, S: Solver<'a, Factory>
   >(
-    factory: Factory, props: Vec<Prop>, solver: & mut S
+    factory: Factory, props: Vec<Prop>, solver: & mut S, sys: & Sys
   ) -> SmtRes<Self> {
     use term::{ VarMaker, SymMaker } ;
+    use sys::real_sys::Callable::* ;
+
+    let calls = sys.calls() ;
+
     let mut map_1 = HashMap::new() ;
     let mut map_2 = HashMap::new() ;
     let offset = Offset2::init() ;
     for prop in props {
+      for call in prop.calls().get() {
+        if ! calls.contains(call) {
+          match * * call {
+            Dec(ref fun) => try!(
+              solver.declare_fun(fun.sym(), fun.sig(), fun.typ(), & offset)
+            ),
+            Def(ref fun) => try!(
+              solver.define_fun(
+                fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
+              )
+            ),
+          }
+        }
+      } ;
       let fresh: Var = factory.var(
         factory.sym(format!("activate({})", prop.sym().get().sym()))
       ) ;

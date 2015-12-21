@@ -244,7 +244,7 @@ pub fn check_fun_def(
   let desc = super::fun_desc ;
   check_sym!(ctxt, sym, desc) ;
 
-  let mut calls = HashSet::new() ;
+  let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
   for call_sym in body.apps.iter() {
@@ -308,7 +308,7 @@ fn check_term_and_dep(
   state: & Args,
   svar_allowed: bool,
   next_allowed: bool,
-  calls: & mut HashSet<::Callable>
+  calls: & mut CallSet
 ) -> Result<HashSet<(Sym, Term)>, CheckFailed> {
   use term::real_term::Var::Var as NSVar ;
   use term::real_term::Var::SVar ;
@@ -369,7 +369,7 @@ pub fn check_prop(
     },
   } ;
 
-  let mut calls = HashSet::new() ;
+  let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
   for app_sym in body.apps.iter() {
@@ -426,7 +426,7 @@ pub fn check_rel(
     },
   } ;
 
-  let mut calls = HashSet::new() ;
+  let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
   for app_sym in body.apps.iter() {
@@ -495,7 +495,7 @@ pub fn check_sys(
   let desc = super::sys_desc ;
   check_sym!(ctxt, sym, desc) ;
 
-  let mut calls = HashSet::new() ;
+  let mut calls = CallSet::empty() ;
 
   let mut local_vars = Vec::with_capacity(locals.len()) ;
   // All locals definitions make sense.
@@ -570,7 +570,7 @@ pub fn check_sys(
       nu_params.push(term)
     } ;
 
-    for call in sub_sys.calls().iter() {
+    for call in sub_sys.calls().get() {
       calls.insert(call.clone()) ;
     } ;
 

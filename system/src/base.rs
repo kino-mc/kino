@@ -10,14 +10,102 @@
 use std::fmt ;
 use std::hash::{ Hash, Hasher } ;
 use std::cmp::{ PartialEq, Eq } ;
-use std::collections::HashSet ;
+use std::iter::Iterator ;
+// use std::collections::HashSet ;
 
 use term::{ Sym, Var, Type, Term, STerm } ;
 
 /** Set of callables. */
-pub type CallSet = HashSet<::Callable> ;
-/** Set of properties. */
-pub type PropSet = HashSet<::Prop> ;
+#[derive(Debug,Clone,PartialEq,Eq)]
+pub struct CallSet {
+  calls: Vec<::Callable>
+}
+impl CallSet {
+  /// Creates an empty call set.
+  pub fn empty() -> Self { CallSet { calls: vec![] } }
+  /// Returns `true` iff the set is empty.
+  pub fn is_empty(& self) -> bool {
+    self.calls.is_empty()
+  }
+  /// Returns `true` iff the set contains the element.
+  pub fn contains(& self, e: & ::Callable) -> bool {
+    self.calls.contains(e)
+  }
+  /// Inserts a call into a call set, recursively going down the subcalls.
+  pub fn insert(& mut self, fun: ::Callable) {
+    // println!("\n\n|===| insert") ;
+
+    let mut stack = vec![ vec![fun] ] ;
+    let mut cpt = 0 ;
+    loop {
+      cpt += 1 ;
+      if cpt >= 10 { panic!("aaa") } ;
+      // println!(
+      //   "\nstack:{}",
+      //   stack.iter().fold(
+      //     String::new(),
+      //     |s, calls| format!(
+      //       "{}\n {}", s,
+      //       calls.iter().fold(
+      //         String::new(),
+      //         |s, call| format!("{} {}", s, call.sym())
+      //       )
+      //     )
+      //   )
+      // ) ;
+      if let Some(mut calls) = stack.pop() {
+        if let Some(call) = calls.pop() {
+          // println!(
+          //   "calls: ({}){}",
+          //   self.calls.len(),
+          //   self.calls.iter().fold(
+          //     "".to_string(),
+          //     |s, call| format!("{}\n  {}", s, call.sym())
+          //   )
+          // ) ;
+          // println!("call: {}", call.sym()) ;
+          // Skipping if already known.
+          if ! self.calls.contains(& call) {
+            // println!("  new call") ;
+            if call.calls().is_empty() {
+              // println!("  no subcall") ;
+              // No sub call.
+              self.calls.push( call.clone() ) ;
+              // println!("  done updating calls ({})", self.calls.len()) ;
+            } else {
+              // println!("  {} subcall(s)", call.calls().len()) ;
+              // Call has subcalls.
+              let vec = {
+                let sub_calls = call.calls() ;
+                sub_calls.iter().fold(
+                  Vec::with_capacity(sub_calls.len()),
+                  |mut v, sc| {
+                    if ! self.calls.contains(sc) { v.push(sc.clone()) } ;
+                    v
+                  }
+                )
+              } ;
+              if ! vec.is_empty() {
+                // Some calls are unknown.
+                calls.push(call) ;
+                stack.push(calls) ;
+                stack.push(vec) ;
+              } else {
+                // No unknown subcalls.
+                stack.push(calls) ;
+                self.calls.push(call.clone())
+              }
+            }
+          } else {
+            // println!("  known call")
+          }
+        }
+      } else { break }
+    }
+  }
+  /// The calls in the set, ordered by topological order.
+  pub fn get(& self) -> & [::Callable] { & self.calls }
+}
 
 
 /** A signature, a list of types. Used only in `Uf`. */
@@ -153,7 +241,7 @@ impl Hash for Uf {
   }
 }
 
-/** A function (actually as a macro in SMT-LIB). */
+/** A function (actually a macro in SMT-LIB). */
 #[derive(Debug,Clone)]
 pub struct Fun {
   /** Identifier of the function. */
@@ -219,6 +307,14 @@ pub enum Callable {
   Def(Fun),
 }
 impl Callable {
+  /** The calls made by the function if any. */
+  #[inline(always)]
+  pub fn calls(& self) -> & [::Callable] {
+    match * self {
+      Callable::Dec(_) => & [],
+      Callable::Def(ref fun) => fun.calls.get(),
+    }
+  }
   /** The symbol of a function. */
   pub fn sym(& self) -> & Sym {
     match * self {
@@ -413,7 +509,7 @@ impl Sys {
     } ;
     if ! self.calls.is_empty() {
       s = format!("{}\n  calls:", s) ;
-      for callable in self.calls.iter() {
+      for callable in self.calls.get() {
         s = format!("{}\n    {}", s, callable.sym()) ;
       } ;
     } ;

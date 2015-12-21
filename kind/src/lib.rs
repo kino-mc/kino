@@ -99,7 +99,7 @@ fn kind(
 
       // event.log("creating manager, declaring actlits") ;
       let mut props = try_error!(
-        PropManager::mk(factory.clone(), props, & mut solver),
+        PropManager::mk(factory.clone(), props, & mut solver, & sys),
         event
       ) ;
 

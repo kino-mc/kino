@@ -112,7 +112,7 @@ fn bmc(
 
       // event.log("creating manager, declaring actlits") ;
       let mut props = try_error!(
-        PropManager::mk(factory.clone(), props, & mut solver),
+        PropManager::mk(factory.clone(), props, & mut solver, & sys),
         event
       ) ;
 
@@ -189,7 +189,7 @@ fn bmc(
                   },
                   Err(e) => {
                     event.error(
-                      & format!("could not get model:\n{:?}", e)
+                      & format!("could not get model:\n{}", e)
                     ) ;
                     event.done(Info::Error) ;
                     return ()
@@ -321,7 +321,7 @@ fn bmc(
                     },
                     Err(e) => {
                       event.error(
-                        & format!("could not get model:\n{:?}", e)
+                        & format!("could not get model:\n{}", e)
                       ) ;
                       event.done(Info::Error) ;
                       break

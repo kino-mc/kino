@@ -27,7 +27,7 @@ macro_rules! try_parse {
       println!("| parsing \"{}\"", $s) ;
       match $fun(& $arg[..], $factory) {
         ::nom::IResult::Done(_,$res) => {
-          println!("| done: {:?}", $res) ;
+          println!("| done: {}", $res) ;
           $b
         },
         ::nom::IResult::Error(
@@ -103,16 +103,54 @@ named!{ pub bool_parser<Bool>,
 }
 
 named!{ pub int_parser<Int>,
-  chain!(
-    peek!( one_of!("0123456789") ) ~
-    bytes: digit,
-    // Unwraping cannot fail.
-    || Int::parse_bytes(bytes, 10).unwrap()
+  alt!(
+    chain!(
+      peek!( one_of!("0123456789") ) ~
+      bytes: digit,
+      // Unwraping cannot fail.
+      || Int::parse_bytes(bytes, 10).unwrap()
+    ) |
+    chain!(
+      char!('(') ~
+      opt!(space_comment) ~
+      char!('-') ~
+      space_comment ~
+      int: int_parser ~
+      opt!(space_comment) ~
+      char!(')'),
+      || - int
+    )
   )
 }
 
 named!{ pub rat_parser<Rat>,
   alt!(
+    chain!(
+      peek!( one_of!("0123456789") ) ~
+      lft: digit ~
+      char!('.') ~
+      peek!( one_of!("0123456789") ) ~
+      rgt: digit,
+      || {
+        use std::char ;
+        let mut num = String::with_capacity(lft.len() + rgt.len()) ;
+        let mut den = String::with_capacity(rgt.len() + 1) ;
+        den.push('1') ;
+        for digit in lft {
+          let digit = char::from_u32(* digit as u32).unwrap() ;
+          num.push(digit)
+        } ;
+        for digit in rgt {
+          let digit = char::from_u32(* digit as u32).unwrap() ;
+          num.push(digit) ;
+          den.push('0')
+        } ;
+        Rat::new(
+          Int::parse_bytes(num.as_bytes(), 10).unwrap(),
+          Int::parse_bytes(den.as_bytes(), 10).unwrap(),
+        )
+      }
+    ) |
     chain!(
       char!('(') ~
       opt!(space_comment) ~
@@ -125,6 +163,28 @@ named!{ pub rat_parser<Rat>,
       char!(')'),
       // Unchecked division by 0.
       || Rat::new(num, den)
+    ) |
+    chain!(
+      char!('(') ~
+      opt!(space_comment) ~
+      char!('/') ~
+      space_comment ~
+      num: rat_parser ~
+      space_comment ~
+      den: rat_parser ~
+      opt!(space_comment) ~
+      char!(')'),
+      || num / den
+    ) |
+    chain!(
+      char!('(') ~
+      opt!(space_comment) ~
+      char!('-') ~
+      space_comment ~
+      rat: rat_parser ~
+      opt!(space_comment) ~
+      char!(')'),
+      || - rat
     )
   )
 }
@@ -137,8 +197,8 @@ where F: CstMaker<Bool, Cst> + CstMaker<Int, Cst> + CstMaker<Rat, Cst> {
     bytes,
     opt!(space_comment),
     alt!(
-      map!( int_parser, |i| f.cst(i) ) |
       map!( rat_parser, |r| f.cst(r) ) |
+      map!( int_parser, |i| f.cst(i) ) |
       map!( bool_parser, |b| f.cst(b) )
     )
   )
@@ -382,6 +442,35 @@ mod rat {
         Int::from_str("74205432075342042").unwrap(),
         Int::from_str("76453").unwrap()
       )
-    )
+    ) ;
+    try_parse_val!(
+      rat_parser, b"42.76453",
+      Rat::new(
+        Int::from_str("4276453").unwrap(),
+        Int::from_str("100000").unwrap()
+      )
+    ) ;
+    try_parse_val!(
+      rat_parser, b"0.0",
+      Rat::new(
+        Int::from_str("0").unwrap(),
+        Int::from_str("1").unwrap()
+      )
+    ) ;
+    try_parse_val!(
+      rat_parser, b"(/ 42.76453 1.0)",
+      Rat::new(
+        Int::from_str("4276453").unwrap(),
+        Int::from_str("100000").unwrap()
+      )
+    ) ;
+    try_parse_val!(
+      rat_parser, b"(- (/ 42.76453 1.0))",
+      Rat::new(
+        Int::from_str("-4276453").unwrap(),
+        Int::from_str("100000").unwrap()
+      )
+    ) ;
+    ()
   }
 }

@@ -24,6 +24,16 @@
 (define-fun max_deriv () Real (/ 1 1))
 (define-fun default () Real (/ 0 1))
 
+(define-fun clamp ( (in Real) ) Real
+  (ite (< in (- max_deriv))
+    (- max_deriv)
+    (ite (> in max_deriv)
+      max_deriv
+      in
+    )
+  )
+)
+
 ;; node sat_deriv(in: real) returns (out: real) ;
 ;; let
 ;;   out = in -> (
@@ -39,15 +49,9 @@
   ( (in Real) (out Real) )
   (= (_ curr out) (_ curr in))
   (= (_ next out)
-    (ite (< (_ next in) (_ curr out))
-      (ite (> (- (_ curr out) (_ next in)) max_deriv)
-        (- (_ curr out) max_deriv)
-        (_ next in)
-      )
-      (ite (> (- (_ next in) (_ curr out)) max_deriv)
-        (+ (_ curr out) max_deriv)
-        (_ next in)
-      )
+    (+
+      (_ curr out)
+      (clamp (- (_ next in) (_ curr out)))
     )
   )
   ()
@@ -144,5 +148,46 @@
   )
 )
 
+(define-rel rel_1 fault_conf
+  (=>
+    (= (- (_ next in) (_ curr in)) (clamp (- (_ next in) (_ curr in))))
+    (= (_ next out) (_ next in))
+  )
+)
+
+(define-rel rel_2 fault_conf
+  (=>
+    (and
+      (not (_ next err_in))
+      (= (- (_ next in) (_ curr out)) (clamp (- (_ next in) (_ curr out))))
+    )
+    (= (_ next out) (_ next in))
+  )
+)
+
+(define-fun abs ( (in Real) ) Real
+  (ite (< in 0.0) (- in) in)
+)
+
+(define-rel rel_3 fault_conf
+  (=>
+    (and
+      (not (_ next err_in))
+      (= (- (_ next in) (_ curr out)) (clamp (- (_ next in) (_ curr out))))
+    )
+    (ite (_ next err_out)
+      (or
+        (= (_ next out) default)
+        (<
+          (abs (- default (_ next out)))
+          (abs (- default (_ curr out)))
+        )
+      )
+      (= (_ next out) (_ next in))
+    )
+  )
+)
+
 ;; Let's do this.
-(verify fault_conf (prop_1 prop_2))
+(verify fault_conf (prop_1 prop_2 rel_1 rel_2 rel_3))
+
