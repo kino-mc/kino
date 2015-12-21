@@ -232,7 +232,8 @@ impl TermAndDep {
         linear = linear && res.linear ;
         qf = qf && res.qf ;
         binds.push( (sym, term) ) ;
-      } ;
+      } else {
+      }
     } ;
     vars.extend(bind_vars) ;
     let term = factory.let_b(binds, term) ;
@@ -402,6 +403,7 @@ pub fn let_parser<'a>(
     tag!("let") ~
     opt!(space_comment) ~
     char!('(') ~
+    opt!(space_comment) ~
     bindings: separated_list!(
       space_comment,
       delimited!(
@@ -413,8 +415,7 @@ pub fn let_parser<'a>(
             |sym| f.sym(sym)
           ) ~
           space_comment ~
-          term: apply!(term_parser, f) ~
-          opt!(space_comment),
+          term: apply!(term_parser, f),
           || (sym, term)
         ),
         char!(')')
