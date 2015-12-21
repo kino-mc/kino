@@ -18,6 +18,7 @@ extern crate unroll ;
 extern crate common ;
 extern crate bmc ;
 extern crate kind ;
+extern crate tig as inv_gen ;
 
 mod master ;
 

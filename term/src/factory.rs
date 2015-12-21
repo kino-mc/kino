@@ -251,6 +251,63 @@ impl Factory {
   ) -> Result<Cst, String> {
     ::term::eval::eval(& self, term, off, model)
   }
+
+  /** Evaluates a term to a bool value. */
+  pub fn eval_bool(
+    & self, term: & Term, off: & Offset2, model: & ::Model
+  ) -> Result<Bool, String> {
+    use ::real_term::Cst::* ;
+    match ::term::eval::eval(& self, term, off, model) {
+      Ok(val) => match * val.get() {
+        Bool(ref b) => Ok(* b),
+        Int(ref i) => Err(
+          format!("[eval_bool] got integer value {}", i)
+        ),
+        Rat(ref r) => Err(
+          format!("[eval_bool] got rational value {}", r)
+        ),
+      },
+      Err(e) => Err(e),
+    }
+  }
+
+  /** Evaluates a term to an integer value. */
+  pub fn eval_int(
+    & self, term: & Term, off: & Offset2, model: & ::Model
+  ) -> Result<Int, String> {
+    use ::real_term::Cst::* ;
+    match ::term::eval::eval(& self, term, off, model) {
+      Ok(val) => match * val.get() {
+        Int(ref i) => Ok(i.clone()),
+        Bool(ref b) => Err(
+          format!("[eval_int] got bool value {}", b)
+        ),
+        Rat(ref r) => Err(
+          format!("[eval_int] got rational value {}", r)
+        ),
+      },
+      Err(e) => Err(e),
+    }
+  }
+
+  /** Evaluates a term to an integer value. */
+  pub fn eval_rat(
+    & self, term: & Term, off: & Offset2, model: & ::Model
+  ) -> Result<Rat, String> {
+    use ::real_term::Cst::* ;
+    match ::term::eval::eval(& self, term, off, model) {
+      Ok(val) => match * val.get() {
+        Rat(ref r) => Ok(r.clone()),
+        Bool(ref b) => Err(
+          format!("[eval_int] got bool value {}", b)
+        ),
+        Int(ref i) => Err(
+          format!("[eval_int] got integer value {}", i)
+        ),
+      },
+      Err(e) => Err(e),
+    }
+  }
 }
 
 

@@ -1,5 +1,5 @@
 [package]
-name = "bmc"
+name = "tig"
 version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@mail.com>"]
 
@@ -8,3 +8,4 @@ term = { path = "../term" }
 common = { path = "../common" }
 system = { path = "../system" }
 unroll = { path = "../unroll" }
+
