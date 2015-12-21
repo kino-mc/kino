@@ -1,0 +1,56 @@
+(define-sys count
+  ( (in Bool) (out Int) )   ;; > State signature.
+  (= (_ curr out)           ;; \
+    (ite (_ curr in) 1 0)   ;; | Init predicate.
+  )                         ;; /
+  (= (_ next out)           ;; \
+    (+ (_ curr out)         ;; |
+      (ite (_ next in) 1 0) ;; | Transition relation.
+    )                       ;; |
+  )                         ;; /
+  ()                        ;; > No composition.
+)
+
+(define-prop out_positive count
+  (>= (_ curr out) 0)
+)
+
+(define-rel out_increment count
+  (=>
+    (_ next in)
+    (= (_ next out) (+ (_ curr out) 1))
+  )
+)
+
+;; (verify count
+;;   (out_positive out_increment)
+;; )
+
+(define-sys observer
+  (
+    (count_in Bool) (count_out Int)
+    (out_positive Bool) (out_increment Bool)
+  )
+  (and
+    (= (_ curr out_positive) (>= (_ curr count_out) 0))
+    (= (_ curr out_increment) true)
+  )
+  (and
+    (= (_ next out_positive) (>= (_ next count_out) 0) )
+    (= (_ next out_increment)
+      (=> (_ next count_in)
+        (= (_ next count_out) (+ (_ curr count_out) 1) )
+      )
+    )
+  )
+  (
+    (count (_ curr count_in) (_ curr count_out))
+  )
+)
+
+(define-prop out_pos observer (_ curr out_positive))
+(define-prop out_inc observer (_ curr out_increment))
+
+(verify observer
+  (out_pos out_inc)
+)

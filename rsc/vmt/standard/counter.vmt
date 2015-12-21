@@ -1,0 +1,28 @@
+(define-sys count
+  ( (in Bool) (out Int) )   ;; > State signature.
+  (= (_ curr out)           ;; \
+    (ite (_ curr in) 1 0)   ;; | Init predicate.
+  )                         ;; /
+  (= (_ next out)           ;; \
+    (+ (_ curr out)         ;; |
+      (ite (_ next in) 1 0) ;; | Transition relation.
+    )                       ;; |
+  )                         ;; /
+  ()                        ;; > No composition.
+)
+
+(define-prop out_positive count
+  (>= (_ curr out) 0)
+)
+
+(define-rel out_increment count
+  (=>
+    (_ next in)
+    (= (_ next out) (+ (_ curr out) 1))
+  )
+)
+
+(verify count
+  (out_positive out_increment)
+)
+

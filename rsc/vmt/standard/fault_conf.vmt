@@ -1,0 +1,122 @@
+(declare-fun err_thres () Int)
+(declare-fun max_deriv () Real)
+(declare-fun default () Real)
+
+(define-fun clamp ( (in Real) ) Real
+  (ite (< in (- max_deriv))
+    (- max_deriv)
+    (ite (> in max_deriv)
+      max_deriv
+      in
+    )
+  )
+)
+
+(define-sys count
+  ( (in Bool) (out Int) )
+  (= (_ curr out)
+    (ite (_ curr in) 1 0)
+  )
+  (= (_ next out)
+    (+ (_ curr out) (ite (_ next in) 1 0))
+  )
+  ()
+)
+
+(define-sys sat_deriv
+  ( (in Real) (out Real) )
+  (= (_ curr out) (_ curr in))
+  (= (_ next out)
+    (+
+      (_ curr out)
+      (clamp (- (_ next in) (_ curr out)))
+    )
+  )
+  ()
+)
+
+(define-sys fault_conf
+  (
+    (in Real) (err_in Bool)
+    (target Real) (errs Int)
+    (out Real) (err_out Bool)
+  )
+  (and ;; Init.
+    (= (_ curr err_out) (>= (_ curr errs) err_thres))
+    (= (_ curr target)
+      (ite
+        (or (_ curr err_in) (_ curr err_out))
+        default     ;; `in` is not safe, `target` is `default`.
+        (_ curr in) ;; `in` is safe.
+      )
+    )
+  )
+  (and ;; Trans.
+    (= (_ next err_out) (>= (_ next errs) err_thres))
+    (= (_ next target)
+      (ite (_ next err_out)
+        default ;; Fault confirmed, converging towards `default`.
+        (ite (_ next err_in)
+          (_ curr target) ;; `in` unsafe, keeping previous target.
+          (_ next in)     ;; `in` safe.
+        )
+      )
+    )
+  )
+  (
+    ;; Count errors.
+    (count (_ curr err_in) (_ curr errs))
+    ;; Converge towards target.
+    (sat_deriv (_ curr target) (_ curr out))
+  )
+)
+
+(define-rel rel_1 fault_conf
+  (let ( (diff (- (_ next in) (_ curr out))) )
+    (=>
+      (= diff (clamp diff))
+      (= (_ next out) (_ next in))
+    )
+  )
+)
+
+(define-rel rel_2 fault_conf
+  (let ( (diff (- (_ next in) (_ curr out))) )
+    (=>
+      (and
+        (not (_ next err_in))
+        (= diff (clamp diff))
+      )
+      (= (_ next out) (_ next in))
+    )
+  )
+)
+
+(define-fun abs ( (in Real) ) Real
+  (ite (< in 0.0) (- in) in)
+)
+
+(define-rel rel_3 fault_conf
+  (let ( (diff (- (_ next in) (_ curr out))) )
+    (=>
+      (and
+        (not (_ next err_in))
+        (= diff (clamp diff))
+        (> max_deriv 0.0)
+      )
+      (ite (_ next err_out)
+        (or
+          (= (_ next out) default) ;; Either `out` is `default`, or
+          (<
+            (abs (- default (_ next out))) ;; `out` is closer to `default`
+            (abs (- default (_ curr out))) ;; than it was previously.
+          )
+        )
+        (= (_ next out) (_ next in))
+      )
+    )
+  )
+)
+
+(verify fault_conf (rel_1 rel_2 rel_3))
+
