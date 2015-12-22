@@ -79,6 +79,8 @@ struct Node<V> {
   others: HashSet<Term>,
   /// The keys of the nodes directly above this one.
   above: HashSet<Key>,
+  /// Stores the nodes potentially above this one after the split.
+  above_transient: HashSet<Key>,
   /// The keys of the nodes directly below this one.
   below: HashSet<Key>,
 }
@@ -94,6 +96,7 @@ impl<V: Val> Node<V> {
       rep: rep,
       others: others,
       above: HashSet::new(),
+      above_transient: HashSet::new(),
       below: HashSet::new(),
     }
   }
@@ -102,6 +105,10 @@ impl<V: Val> Node<V> {
   pub fn of_rep(rep: Term) -> Self {
     Self::mk( rep, HashSet::new() )
   }
+
+  /// The key of the node (hkey of the representant).
+  #[inline(always)]
+  pub fn key(& self) -> Key { self.rep.hkey() }
 
   /// Adds a term to the node.
   #[inline(always)]
@@ -234,20 +241,24 @@ struct Graph<V> {
   /// Roots of the graph.
   roots: HashSet<Key>,
   /// Nodes of the graph.
-  nodes: HashMap<Key, (Node<V>, V)>
+  nodes: HashMap<Key, Node<V>>,
 }
-impl<V> Graph<V> {
+impl<V: Val> Graph<V> {
+  /// The node and value associated with a key.
   #[inline(always)]
-  pub fn node(& self, index: & Key) -> Option<& (Node<V>, V)> {
+  pub fn node(& self, index: & Key) -> Option<& Node<V>> {
     self.nodes.get(index)
   }
+  /// The node and value associated with a key (mutable).
   #[inline(always)]
   pub fn node_mut(
     & mut self, index: & Key
-  ) -> Option<& mut (Node<V>, V)> {
+  ) -> Option<& mut Node<V>> {
     self.nodes.get_mut(index)
   }
-  /// Extracts a root (removes it from the set of nodes).
+
+  /** Extracts a root. Removes it from the set of nodes and returns the root
+  and its kids. */
   #[inline]
   pub fn root(& mut self) -> Option<Node<V>> {
     let root = match self.roots.iter().next() {
@@ -257,12 +268,109 @@ impl<V> Graph<V> {
     let was_there = self.roots.remove(& root) ;
     debug_assert!( was_there ) ;
     match self.nodes.remove(& root) {
-      Some( (n, _) ) => Some(n),
+      Some( root ) => Some(root),
       None => panic!(
         "node {} is registered as root but unknown to set of nodes",
         root
       )
     }
+  }
+
+  /// Splits a graph according to a model.
+  pub fn split(
+    mut self, model: & Model, offset: & Offset2, factory: & Factory
+  ) -> Result<Self, String> {
+    // Orphan kids, kids we can process.
+    let mut orphans = Vec::with_capacity(13) ;
+    // The new graph we're building.
+    let mut new = Graph {
+      roots: HashSet::with_capacity(self.roots.len()),
+      nodes: HashMap::with_capacity(self.nodes.len()),
+    } ;
+
+    // Handle all roots first.
+    'roots: loop {
+      if let Some(root) = self.root() {
+        let old_key = root.key() ;
+
+        // Splitting root.
+        let mut ordered = match root.split(model, offset, factory) {
+          Ok(ordered) => ordered, Err(s) => return Err(s)
+        } ;
+
+        // Adding biggest node, i.e. the new root.
+        let mut prev = if let Some((_, root)) = ordered.pop() {
+          let key = root.key() ;
+          new.roots.insert(key) ;
+          new.nodes.insert(key, root) ;
+          key
+        } else {
+          return Err(
+            format!("split of root {} resulted in nothing", old_key)
+          )
+        } ;
+
+        // Looping over what's below the new root.
+        'nu_kids: loop {
+          if let Some((_, mut kid)) = ordered.pop() {
+            kid.above.insert(prev) ;
+            match new.nodes.get_mut(& prev) {
+              Some(prev) => prev.below.insert(kid.key()),
+              None => return Err(
+                format!("unknown previous node {}", prev)
+              ),
+            } ;
+            prev = kid.key() ;
+            let was_there = new.nodes.insert(kid.key(), kid) ;
+            debug_assert!(was_there.is_none())
+          } else {
+            break 'nu_kids
+          }
+        } ;
+
+        // Removing the root from its kids, adding smallet new node as
+        // transient. Remembering orphan kids.
+        for kid in new.nodes.get_mut(& old_key).unwrap().above().iter() {
+          match self.nodes.get_mut(kid) {
+            Some(kid) => {
+              let was_there = kid.rm_above(old_key) ;
+              debug_assert!(was_there) ;
+              let was_there = kid.above_transient.insert(prev) ;
+              debug_assert!(! was_there) ;
+              if kid.above.is_empty() {
+                orphans.push(kid.key()) // Orphan, remember it.
+              }
+            },
+            None => return Err(
+              format!("unknown root with key {}", kid)
+            ),
+          }
+        } ;
+        ()
+      } else { break 'roots }
+    } ;
+
+    // 'non_roots: loop {
+    //   if let Some(node) = orphans.pop() {
+    //     let old_key = node.key() ;
+
+    //     // Split node.
+    //     let mut ordered = match node.split(model, offset, factory) {
+    //       Ok(ordered) => ordered,
+    //       Err(s) => return Err(s),
+    //     } ;
+
+    //     // Updating biggest node.
+    //     let mut prev = if let Some((_, node)) = ordered.pop() {
+    //       let key = node.key() ;
+    //       new.nodes.insert
+    //     }
+
+
+    //   } else { break 'non_roots }
+    // } ;
+
+    Ok(new)
   }
 }
 
