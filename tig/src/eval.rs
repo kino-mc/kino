@@ -31,7 +31,7 @@ Do stuff, and later just recycle.
 
 `evaluator.recycle(new_model, new_offset) ;`
 */
-struct Eval<V: Val> {
+pub struct Eval<V: Val> {
   /// Phantom data for the type we evaluate things to.
   phantom: PhantomData<V>,
   /// The model we're evaluating with.

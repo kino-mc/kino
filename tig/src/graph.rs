@@ -17,7 +17,7 @@ use term::{
   Offset2, Cst, Term, Operator, Bool, Int, Rat, Factory, Model
 } ;
 
-
+use eval::Eval ;
 
 
 
@@ -157,18 +157,16 @@ impl<V: Val> Node<V> {
     values.
 
   Uses `insert_in_vec`. */
-  pub fn split(
-    self, model: & Model, offset: & Offset2, factory: & Factory
-  ) -> Result<Vec<(V,Self)>, String> {
+  pub fn split(self, eval: & mut Eval<V>) -> Result<Vec<(V,Self)>, String> {
     debug_assert!( self.above.is_empty() ) ;
     debug_assert!( self.below.is_empty() ) ;
     let mut vec = vec![] ;
-    match V::eval(& self.rep, offset, model, factory) {
+    match eval.eval(self.rep.clone()) {
       Ok(v) => vec.push( (v, Self::of_rep(self.rep)) ),
       Err(s) => return Err(s),
     } ;
     for term in self.others.into_iter() {
-      match V::eval(& term, offset, model, factory) {
+      match eval.eval(term.clone()) {
         Ok(v) => vec = insert_in_vec(vec, v, term),
         Err(s) => return Err(s),
       }
@@ -260,9 +258,11 @@ impl<V: Val> Graph<V> {
     }
   }
 
-  /// Splits a graph according to a model.
+  /** Splits a graph according to a model.
+
+  Evaluator is mutable for cache updates. */
   pub fn split(
-    mut self, model: & Model, offset: & Offset2, factory: & Factory
+    mut self, eval: & mut Eval<V>
   ) -> Result<Self, String> {
     // Orphan kids, kids we can process.
     let mut orphans = Vec::with_capacity(13) ;
@@ -278,7 +278,7 @@ impl<V: Val> Graph<V> {
         let old_key = root.key() ;
 
         // Splitting root.
-        let mut ordered = match root.split(model, offset, factory) {
+        let mut ordered = match root.split(eval) {
           Ok(ordered) => ordered, Err(s) => return Err(s)
         } ;
 
