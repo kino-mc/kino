@@ -100,6 +100,8 @@ macro_rules! unimpl {
   () => ( panic!("not implemented") ) ;
 }
 
+pub use nom::{ IResult,  } ;
+
 mod base ;
 pub use base::{
   State, PrintSmt2, PrintVmt, Offset, Offset2, Smt2Offset

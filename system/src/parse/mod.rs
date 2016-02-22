@@ -27,7 +27,8 @@ static check_ass_desc: & 'static str = "verify with assumption query" ;
 use std::io ;
 use std::fmt ;
 use std::sync::Arc ;
-use std::thread::sleep_ms ;
+use std::time::Duration ;
+use std::thread::sleep ;
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
@@ -448,7 +449,7 @@ impl Context {
           Some(Err(e)) => return Err( Error::Io(e) ),
           None => {
             if new_things { break } else {
-              sleep_ms(10u32)
+              sleep(Duration::from_millis(10))
             }
           }
         }

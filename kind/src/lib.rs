@@ -19,7 +19,8 @@ extern crate common ;
 extern crate unroll ;
 
 use std::sync::Arc ;
-use std::thread::sleep_ms ;
+use std::time::Duration ;
+use std::thread::sleep ;
 
 use term::Offset2 ;
 use term::smt::* ;
@@ -243,7 +244,7 @@ fn kind(
                         }
                       },
                     } ;
-                    sleep_ms(10) ;
+                    sleep(Duration::from_millis(10)) ;
                   }
                 }
               },

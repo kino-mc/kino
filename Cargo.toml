@@ -8,7 +8,6 @@ name = "kino"
 doc = false
 
 [dependencies]
-nom = "1.0.1"
 term = { path = "term" }
 system = { path = "system" }
 unroll = { path = "unroll" }

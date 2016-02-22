@@ -17,7 +17,6 @@
 write stuff here
 */
 
-extern crate nom ;
 extern crate term ;
 extern crate system ;
 extern crate common ;

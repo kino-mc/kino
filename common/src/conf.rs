@@ -7,9 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Option handling stuff.
-
-*/
+/*! Option handling stuff. */
 
 use nom::{ multispace, IResult } ;
 
