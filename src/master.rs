@@ -12,13 +12,12 @@
 It runs on a system and tries to prove some properties. */
 
 use std::sync::Arc ;
-use std::io::Write ;
 use std::collections::HashMap ;
 
 use term::{ Sym, Term } ;
 
 use system::{ Prop, Sys } ;
-use system::ctxt::* ;
+use system::ctxt::Context ;
 
 use common::Tek::Kino ;
 use common::conf ;

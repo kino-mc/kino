@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
-num = "0.1.31"
-nom = "1.2.0"
-rand = "0.3.14"
+num = "*"
+nom = "*"
+rand = "*"
 hashconsing = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git", rev = "1c5b9b0" }
-rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git", rev = "e0536ee" }
+rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git" }

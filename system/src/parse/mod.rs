@@ -446,7 +446,7 @@ impl Context {
               },
             }
           },
-          Some(Err(e)) => return Err( Error::Io(e) ),
+          Some(Err(e)) => return Err( check::Error::Io(e) ),
           None => {
             if new_things { break } else {
               sleep(Duration::from_millis(10))

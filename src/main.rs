@@ -28,7 +28,7 @@ use std::process::exit ;
 use system::ctxt::* ;
 
 use common::Tek::Kino ;
-use common::log::{ MasterLog, Formatter, Styler } ;
+use common::log::MasterLog ;
 
 pub mod master ;
 
