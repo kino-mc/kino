@@ -31,6 +31,42 @@ pub mod msg ;
 pub mod log ;
 pub mod conf ;
 
+
+/** Try for `Result<T, String>` to `Result<T, Vec<String>>` that appends
+something to error messages. */
+#[macro_export]
+macro_rules! try_str {
+  ($e:expr, $($blah:expr),+) => (
+    match $e {
+      Ok(res) => res,
+      Err(msg) => return Err(
+        vec![
+          format!( $($blah),+ ), msg
+        ]
+      ),
+    }
+  ) ;
+}
+
+
+/** Try for `Result<T, Vec<String>>` to `Result<T, Vec<String>>` that appends
+something to error messages. */
+#[macro_export]
+macro_rules! try_strs {
+  ($e:expr, $($blah:expr),+) => (
+    match $e {
+      Ok(res) => res,
+      Err(mut msg) => {
+        msg.push( format!( $($blah),+ ) ) ;
+        return Err(msg)
+      },
+    }
+  ) ;
+}
+
+/** Result yielding a list of strings. */
+pub type Res<T> = Result<T, Vec<String>> ;
+
 /** Trait the techniques should implement so that kino can call them in a
 generic way. */
 pub trait CanRun<Conf> {

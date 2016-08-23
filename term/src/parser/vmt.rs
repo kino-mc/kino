@@ -320,7 +320,6 @@ pub fn var_parser<'a>(
 pub fn cst_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
-  use term::CstMaker ;
   map!(
     bytes,
     apply!( super::cst_parser, f ),
@@ -331,7 +330,6 @@ pub fn cst_parser<'a>(
 pub fn op_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
-  use term::OpMaker ;
   chain!(
     bytes,
     char!('(') ~
@@ -352,7 +350,6 @@ pub fn quantified_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
-  use term::BindMaker ;
   chain!(
     bytes,
     char!('(') ~
@@ -395,7 +392,6 @@ pub fn let_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
-  use term::BindMaker ;
   chain!(
     bytes,
     char!('(') ~
@@ -435,7 +431,6 @@ fn app_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
-  use term::AppMaker ;
   chain!(
     bytes,
     char!('(') ~

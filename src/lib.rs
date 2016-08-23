@@ -31,6 +31,7 @@ pub use common::* ;
 pub mod teks {
   pub use bmc::Bmc ;
   pub use kind::KInd ;
+  pub use inv_gen::* ;
 }
 
 pub use master::Master ;

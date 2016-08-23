@@ -293,7 +293,7 @@ impl Smt2Offset {
   pub fn merge(
     & self, rhs: & Smt2Offset, off: & Offset2
   ) -> Option<Smt2Offset> {
-    use std::cmp::{ Ordering, Ord } ;
+    use std::cmp::Ordering ;
     use base::Smt2Offset::* ;
     if self == rhs {
       Some( rhs.clone() )

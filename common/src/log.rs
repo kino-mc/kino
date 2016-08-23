@@ -51,7 +51,7 @@ impl Format {
   /** Default formatter. */
   pub fn default() -> Self {
     Format {
-      pref: "|", head: "=====|", trail: "=====|"
+      pref: "; |", head: "=====|", trail: "=====|"
     }
   }
 }

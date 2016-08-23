@@ -13,7 +13,7 @@ use std::io ;
 use std::fmt ;
 
 use base::{
-  State, Writable, SVarWriter, StateWritable, SymPrintStyle, SymWritable,
+  State, SVarWriter, StateWritable, SymPrintStyle, SymWritable,
   HConsed, HConsign
 } ;
 use sym::Sym ;

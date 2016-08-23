@@ -14,10 +14,12 @@
 
 extern crate term ;
 extern crate system ;
+#[ macro_use(try_str, try_strs) ]
 extern crate common ;
 extern crate unroll ;
 
-mod eval ;
-mod graph ;
-
-
+/** Cached evaluator. */
+pub mod eval ;
+/** Graph representing the knowledge learnt by the invariant generation
+technique. */
+pub mod graph ;

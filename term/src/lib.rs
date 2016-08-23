@@ -94,7 +94,7 @@ extern crate rand ;
 extern crate hashconsing as hcons ;
 extern crate rsmt2 ;
 
-use std::collections::HashSet ;
+use std::collections::{ HashSet, HashMap } ;
 
 macro_rules! unimpl {
   () => ( panic!("not implemented") ) ;
@@ -133,6 +133,8 @@ pub type CstSet = HashSet<Cst> ;
 pub type VarSet = HashSet<Var> ;
 /** A set of terms. */
 pub type TermSet = HashSet<Term> ;
+/** A map from terms to something. */
+pub type TermMap<Val> = HashMap<Term, Val> ;
 
 /** Real, underlying representation of symbols, constants and terms. */
 pub mod real_term {
