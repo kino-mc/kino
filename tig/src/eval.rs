@@ -15,7 +15,7 @@ use term::{
   Factory, Model,
 } ;
 
-use graph::Domain ;
+use Domain ;
 
 
 /** Cached evaluator.
