@@ -88,7 +88,7 @@ fn kind(
   } ;
 
   let factory = event.factory().clone() ;
-  let mut actlit = Actlit::mk(factory.clone()) ;
+  let mut actlit_factory = ActlitFactory::mk() ;
 
   // Reversed to unroll backwards.
   let check_offset = Offset2::init().rev() ;
@@ -100,7 +100,7 @@ fn kind(
 
       // event.log("creating manager, declaring actlits") ;
       let mut props = try_error!(
-        PropManager::mk(factory.clone(), props, & mut solver, & sys),
+        PropManager::mk(props, & mut solver, & sys),
         event
       ) ;
 
@@ -150,24 +150,30 @@ fn kind(
 
         'split: loop {
 
-            if let Some(one_prop_false) = props.one_false_next() {
+          if let Some(one_prop_false) = props.one_false_next() {
+            // Unique, fresh actlit.
+            let actlit = actlit_factory.mk_fresh() ;
+            actlit.declare(& mut solver).expect(
+              & format!(
+                "while declaring activation literal in BMC at {}", k
+              )
+            ) ;
 
-            let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
             // event.log(
             //   & format!(
             //     "defining actlit {}\nto imply {} at {}",
             //     lit, one_prop_false, check_offset
             //   )
             // ) ;
-            let check = actlit.mk_impl(& lit, one_prop_false) ;
+            let implication = actlit.activate_term(one_prop_false) ;
 
-            try_error!(solver.assert(& check, & check_offset), event) ;
+            try_error!(solver.assert(& implication, & k), event) ;
 
             // event.log(& format!("check-sat assuming {}", lit)) ;
 
             let mut actlits = props.actlits() ;
             // let prop_count = actlits.len() ;
-            actlits.push(lit) ;
+            actlits.push(actlit.name()) ;
 
             // event.log(
             //   & format!(
@@ -178,7 +184,7 @@ fn kind(
             //   )
             // ) ;
 
-            match solver.check_sat_assuming( & actlits, check_offset.next() ) {
+            match solver.check_sat_assuming( & actlits, & () ) {
               Ok(true) => {
                 // event.log("sat, getting falsified properties") ;
                 match props.get_false_next(& mut solver, & check_offset) {

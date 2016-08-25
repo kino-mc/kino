@@ -545,6 +545,8 @@ digraph mode_graph {{
   pub fn split(& mut self, eval: & mut Eval<Val>) -> Res<()> {
     // INVARIANT: a class can be split **iff** all its parents have already
     //            been split.
+    // This is forced by starting from orphan nodes in the graph, splitting
+    // them, and then iterating on their kids.
 
     // Clear `values` memory.
     self.values.clear() ;

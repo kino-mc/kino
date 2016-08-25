@@ -17,9 +17,10 @@ extern crate system as sys ;
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
-  Factory, Type, Sym, Var, Term, Offset, Offset2, STerm, real_term
+  Factory, Type, Sym, Term, Offset, Offset2, STerm, real_term
 } ;
 use term::smt::* ;
+use term::tmp::* ;
 
 use sys::{ Prop, Sys } ;
 
@@ -167,12 +168,33 @@ impl Unroller for sys::Sys {
   }
 }
 
+
+/// Actlit factory.
+pub struct ActlitFactory {
+  /// Counter for unique actlits.
+  count: usize,
+}
+impl ActlitFactory {
+  /// Creates a new actlit factory.
+  #[inline]
+  pub fn mk() -> Self {
+    ActlitFactory { count: 0 }
+  }
+  /// Creates a new actlit.
+  #[inline]
+  pub fn mk_fresh(& mut self) -> Actlit {
+    let actlit = Actlit {
+      count: self.count, offset: Offset2::init()
+    } ;
+    self.count += 1 ;
+    actlit
+  }
+}
+
 /** Handles fresh activation literal creation, declaration, decativation.
 
 Also, provides a few helper functions. */
 pub struct Actlit {
-  /** Factory used to create actlits. */
-  factory: Factory,
   /** Counter for unique activation literals. */
   count: usize,
   /** A dummy offset used to print in the solver. */
@@ -181,47 +203,53 @@ pub struct Actlit {
 
 impl Actlit {
   /** Constructs an actlit generator. */
-  pub fn mk(factory: Factory) -> Self {
-    Actlit { factory: factory, count: 0, offset: Offset2::init() }
+  #[inline]
+  pub fn mk() -> Self {
+    Actlit { count: 0, offset: Offset2::init() }
+  }
+
+  /** Identifier corresponding to an actlit. */
+  #[inline]
+  pub fn name(& self) -> String {
+    format!("fresh_actlit_{}", self.count)
+  }
+
+  /** `TmpTerm` version of an actlit. */
+  pub fn as_tmp_term(& self) -> TmpTerm {
+    TmpTerm::Sym( self.name(), Type::Bool )
   }
 
   /** Creates a fresh actlit and declares it. */
-  pub fn mk_fresh_declare<
+  pub fn declare<
     'a, S: Solver<'a, Factory>
-  >(& mut self, solver: & mut S) -> SmtRes<::term::Var> {
-    use term::{ VarMaker, SymMaker } ;
-    let fresh: Var = self.factory.var(
-      self.factory.sym(format!("fresh_actlit_{}", self.count))
-    ) ;
-    self.count = self.count + 1 ;
-    match solver.declare_fun(
-      & fresh, & [], & Type::Bool, self.offset.curr()
-    ) {
-      Ok(()) => Ok(fresh),
-      Err(e) => Err(e),
-    }
-  }
-
-  /** Turns an actlit into a term. */
-  pub fn to_term(& self, actlit: & Var) -> Term {
-    self.factory.mk_var(actlit.clone())
+  >(& self, solver: & mut S) -> SmtRes<()> {
+    let (id, ty) = ( self.name(), Type::Bool ) ;
+    solver.declare_fun(& id, & [], & ty, & ())
   }
 
   /** Builds an implication between the actlit and `rhs`. */
-  pub fn mk_impl(
-    & self, actlit: & Var, rhs: Term
-  ) -> Term {
-    self.factory.imp( self.factory.mk_var(actlit.clone()), rhs )
+  pub fn activate_term(& self, rhs: TmpTerm) -> TmpTerm {
+    rhs.under_actlit( self.name() )
   }
 
   /** Deactivates an activation literal. */
   pub fn deactivate<
     'a, S: Solver<'a, Factory>
-  >(& self, actlit: Var, solver: & mut S) -> UnitSmtRes {
+  >(self, solver: & mut S) -> UnitSmtRes {
     solver.assert(
-      & self.factory.not(self.factory.mk_var(actlit)), & self.offset
+      & self.as_tmp_term(), & self.offset
     )
   }
+}
+
+/** Actlit name of a symbol. */
+fn actlit_name_of_sym(sym: & Sym) -> String {
+  format!( "|actlit( {} )|", sym.sym() )
+}
+
+/** Actlit name of a property. */
+fn actlit_name_of(prop: & Prop) -> String {
+  actlit_name_of_sym(prop.sym())
 }
 
 /** Handles properties by providing a positive actlits for each.
@@ -229,12 +257,10 @@ impl Actlit {
 Also, provides a few helper functions to temporarily inhibit properties. See
 `inhibite`, `all_inhibited`, `reset_inhibited` and `not_inhibited`. */
 pub struct PropManager {
-  /** Factory to create actlits. */
-  factory: Factory,
   /** Map from property name to one-state properties. */
-  props_1: HashMap<Sym, (Prop, Var, Term)>,
+  props_1: HashMap<Sym, (Prop, TmpTerm)>,
   /** Map from property name to two-state properties. */
-  props_2: HashMap<Sym, (Prop, Var, Term)>,
+  props_2: HashMap<Sym, (Prop, TmpTerm)>,
   /** Dummy offset to print in the solver. */
   offset: Offset2,
   /** Temporarily inhibited properties. */
@@ -247,9 +273,8 @@ impl PropManager {
   pub fn mk<
     'a, S: Solver<'a, Factory>
   >(
-    factory: Factory, props: Vec<Prop>, solver: & mut S, sys: & Sys
+    props: Vec<Prop>, solver: & mut S, sys: & Sys
   ) -> SmtRes<Self> {
-    use term::{ VarMaker, SymMaker } ;
     use sys::real_sys::Callable::* ;
 
     let calls = sys.calls() ;
@@ -257,6 +282,7 @@ impl PropManager {
     let mut map_1 = HashMap::new() ;
     let mut map_2 = HashMap::new() ;
     let offset = Offset2::init() ;
+
     for prop in props {
       for call in prop.calls().get() {
         if ! calls.contains(call) {
@@ -272,40 +298,33 @@ impl PropManager {
           }
         }
       } ;
-      let fresh: Var = factory.var(
-        factory.sym(format!("activate({})", prop.sym().get().sym()))
-      ) ;
+      let actlit = actlit_name_of(& prop) ;
       match solver.declare_fun(
-        & fresh, & [], & Type::Bool, offset.curr()
+        & actlit, & [], & Type::Bool, & ()
       ) {
         Ok(()) => (),
         Err(e) => return Err(e),
       }
       match prop.body().clone() {
         STerm::One(ref state, _) => {
-          let state_impl = factory.imp(
-            factory.mk_var(fresh.clone()), state.clone()
-          ) ;
+          let state_impl = state.under_actlit(actlit) ;
           let was_there = map_1.insert(
-            prop.sym().clone(), (prop, fresh, state_impl)
+            prop.sym().clone(), (prop, state_impl)
           ) ;
-          assert!(was_there.is_none())
+          assert!( was_there.is_none() )
         },
         STerm::Two(ref next) => {
-          let next_impl = factory.imp(
-            factory.mk_var(fresh.clone()), next.clone()
-          ) ;
+          let next_impl = next.under_actlit(actlit) ;
           let was_there = map_2.insert(
-            prop.sym().clone(), (prop, fresh, next_impl)
+            prop.sym().clone(), (prop, next_impl)
           ) ;
-          assert!(was_there.is_none())
+          assert!( was_there.is_none() )
         },
       }
     } ;
     let inhibited = HashSet::with_capacity(map_1.len() + map_2.len()) ;
     Ok(
       PropManager {
-        factory: factory,
         props_1: map_1, props_2: map_2,
         offset: offset, inhibited: inhibited
       }
@@ -327,17 +346,19 @@ impl PropManager {
     & mut self, solver: & mut S, props: & [Sym]
   ) -> UnitSmtRes {
     for prop in props {
-      let actlit = match self.props_1.remove(& prop) {
-        Some( (_, actlit, _) ) => actlit,
+      match self.props_1.remove(& prop) {
+        Some(_) => (),
         None => match self.props_2.remove(& prop) {
-          Some ( (_, actlit, _) ) => actlit,
-          None => continue
+          Some(_) => (),
+          None => continue,
         },
-      } ;
+      }
+
+      let deactlit = TmpTerm::Sym(
+        actlit_name_of_sym(prop), Type::Bool
+      ).tmp_neg() ;
       try!(
-        solver.assert(
-          & self.factory.not( self.factory.mk_var(actlit) ), & self.offset
-        )
+        solver.assert( & deactlit, & self.offset )
       )
     } ;
     Ok(())
@@ -353,7 +374,7 @@ impl PropManager {
   >(
     & self, solver: & mut S, at: & Offset2
   ) -> UnitSmtRes {
-    for (_, & (_, _, ref act)) in self.props_1.iter() {
+    for (_, & (_, ref act)) in self.props_1.iter() {
       try!( solver.assert(act, at) )
     } ;
     Ok(())
@@ -366,7 +387,7 @@ impl PropManager {
   >(
     & self, solver: & mut S, at: & Offset2
   ) -> UnitSmtRes {
-    for (_, & (_, _, ref act)) in self.props_2.iter() {
+    for (_, & (_, ref act)) in self.props_2.iter() {
       try!( solver.assert(act, at) )
     } ;
     Ok(())
@@ -374,53 +395,53 @@ impl PropManager {
 
   /** Returns the term corresponding to one of the one state, non-inhibited
   properties being false **in state**. */
-  pub fn one_false_state(& self) -> Option<Term> {
+  pub fn one_false_state(& self) -> Option<TmpTerm> {
     let mut props = Vec::with_capacity(self.props_1.len()) ;
-    for (ref sym, & (ref prop, _, _)) in self.props_1.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
         // If manager is well-founded the unwrap cannot fail.
         props.push( prop.body().state().unwrap().clone() )
       }
     } ;
     if props.is_empty() { None } else {
-      Some( self.factory.not( self.factory.and(props) ) )
+      Some( TmpTerm::mk_term_conj(& props).tmp_neg() )
     }
   }
 
   /** Returns the term corresponding to one of the non-inhibited properties
   being false. Uses the next version of one-state. */
-  pub fn one_false_next(& self) -> Option<Term> {
+  pub fn one_false_next(& self) -> Option<TmpTerm> {
     let mut props = Vec::with_capacity(
       self.props_1.len() + self.props_2.len()
     ) ;
-    for (ref sym, & (ref prop, _, _)) in self.props_1.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
         props.push( prop.body().next().clone() )
       }
     } ;
-    for (ref sym, & (ref prop, _, _)) in self.props_2.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_2.iter() {
       if ! self.inhibited.contains(sym) {
         props.push( prop.body().next().clone() )
       }
     } ;
     if props.is_empty() { None } else {
-      Some( self.factory.not( self.factory.and(props) ) )
+      Some( TmpTerm::mk_term_conj(& props).tmp_neg() )
     }
   }
 
   /** Returns the actlits activating all the non-inhibited properties. */
-  pub fn actlits(& self) -> Vec<Var> {
+  pub fn actlits(& self) -> Vec<String> {
     let mut vec = Vec::with_capacity(
       self.props_1.len() + self.props_2.len()
     ) ;
-    for (ref sym, & (_, ref act, _)) in self.props_1.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
-        vec.push(act.clone())
+        vec.push( actlit_name_of(prop) )
       }
     } ;
-    for (ref sym, & (_, ref act, _)) in self.props_2.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_2.iter() {
       if ! self.inhibited.contains(sym) {
-        vec.push(act.clone())
+        vec.push( actlit_name_of(prop) )
       }
     } ;
     vec.shrink_to_fit() ;
@@ -436,7 +457,7 @@ impl PropManager {
   ) -> SmtRes<Vec<Sym>> {
     let mut terms = Vec::with_capacity(self.props_1.len()) ;
     let mut back_map = HashMap::with_capacity(self.props_1.len()) ;
-    for (ref sym, & (ref prop, _, _)) in self.props_1.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
         terms.push(prop.body().state().unwrap().clone()) ;
         match back_map.insert(
@@ -479,7 +500,7 @@ impl PropManager {
     let mut back_map = HashMap::with_capacity(
       self.props_1.len() + self.props_2.len()
     ) ;
-    for (ref sym, & (ref prop, _, _)) in self.props_1.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
         terms.push(prop.body().next().clone()) ;
         match back_map.insert(
@@ -498,7 +519,7 @@ impl PropManager {
         } ;
       }
     } ;
-    for (ref sym, & (ref prop, _, _)) in self.props_2.iter() {
+    for (ref sym, & (ref prop, _)) in self.props_2.iter() {
       if ! self.inhibited.contains(sym) {
         terms.push(prop.body().next().clone()) ;
         match back_map.insert(prop.body().next().clone(), prop.sym().clone()) {

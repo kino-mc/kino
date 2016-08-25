@@ -93,7 +93,7 @@ fn bmc(
   } ;
 
   let factory = event.factory().clone() ;
-  let mut actlit = Actlit::mk(factory.clone()) ;
+  let mut actlit_factory = ActlitFactory::mk() ;
   let mut k = Offset2::init() ;
 
   match solver(kid, factory.clone()) {
@@ -112,7 +112,7 @@ fn bmc(
 
       // event.log("creating manager, declaring actlits") ;
       let mut props = try_error!(
-        PropManager::mk(factory.clone(), props, & mut solver, & sys),
+        PropManager::mk(props, & mut solver, & sys),
         event
       ) ;
 
@@ -129,19 +129,25 @@ fn bmc(
 
       if let Some(one_prop_false) = props.one_false_state() {
 
-        let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+        // Unique, fresh actlit.
+        let actlit = actlit_factory.mk_fresh() ;
+        actlit.declare(& mut solver).expect(
+          & format!(
+            "while declaring activation literal in BMC at {}", k
+          )
+        ) ;
         // event.log(
         //   & format!(
         //     "defining actlit {}\nto imply {} at {}",
         //     lit, one_prop_false, k
         //   )
         // ) ;
-        let check = actlit.mk_impl(& lit, one_prop_false) ;
+        let implication = actlit.activate_term(one_prop_false) ;
 
-        try_error!(solver.assert(& check, & k), event) ;
+        try_error!(solver.assert(& implication, & k), event) ;
 
         let mut actlits = props.actlits() ;
-        actlits.push(lit) ;
+        actlits.push(actlit.name()) ;
 
         match solver.check_sat() {
           Ok(true) => (),
@@ -169,7 +175,7 @@ fn bmc(
         //   )
         // ) ;
 
-        match solver.check_sat_assuming( & actlits, k.next() ) {
+        match solver.check_sat_assuming( & actlits, & () ) {
           Ok(true) => {
             // event.log("sat, getting falsified properties") ;
             match props.get_false_state(& mut solver, & k) {
@@ -256,21 +262,26 @@ fn bmc(
 
         if let Some(one_prop_false) = props.one_false_next() {
 
-          let lit = actlit.mk_fresh_declare(& mut solver).unwrap() ;
+          let actlit = actlit_factory.mk_fresh() ;
+          actlit.declare(& mut solver).expect(
+            & format!(
+              "while declaring activation literal in BMC at {}", k
+            )
+          ) ;
           // event.log(
           //   & format!(
           //     "defining actlit {}\nto imply {} at {}",
           //     lit, one_prop_false, k
           //   )
           // ) ;
-          let check = actlit.mk_impl(& lit, one_prop_false) ;
+          let check = actlit.activate_term(one_prop_false) ;
 
           try_error!(solver.assert(& check, & k), event) ;
 
           // event.log(& format!("check-sat assuming {}", lit)) ;
 
           let mut actlits = props.actlits() ;
-          actlits.push(lit) ;
+          actlits.push(actlit.name()) ;
 
           match solver.check_sat() {
             Ok(true) => (),
@@ -298,7 +309,7 @@ fn bmc(
           //   )
           // ) ;
 
-          match solver.check_sat_assuming( & actlits, k.next() ) {
+          match solver.check_sat_assuming( & actlits, & () ) {
             Ok(true) => {
               // event.log("sat, getting falsified properties") ;
               match props.get_false_next(& mut solver, & k) {

@@ -118,6 +118,7 @@ mod term ;
 pub use term::{
   Operator, Term, STerm, CstMaker, BindMaker, AppMaker, OpMaker
 } ;
+pub mod tmp ;
 mod parser ;
 pub use parser::vmt::TermAndDep ;
 mod factory ;
@@ -147,7 +148,7 @@ pub mod real_term {
 /** Zipper on terms. */
 pub mod zip {
   pub use term::zip2::{ Step, fold, fold_info, extract } ;
-} 
+}
 
 /** Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
 
