@@ -194,7 +194,6 @@ fn kind<
 
         // Wait until we get something from BMC.
         loop {
-          event.log("waiting for confirmation") ;
           let mut invariant = true ;
           let at_least = k.curr().pre().unwrap() ;
           for prop in unfalsifiable.iter() {
@@ -223,38 +222,42 @@ fn kind<
             // event.log("recv") ;
             match event.recv() {
               None => return (),
-              Some(msgs) => for msg in msgs {
-                match msg {
-                  MsgDown::Forget(ps, Status::Proved) => {
-                    try_error!(
-                      props.forget(& mut solver, ps.iter()), event,
-                      "while forgetting some properties\n\
-                      because of a `Forget` message (2, proved)"
-                    ) ;
-                    for p in ps.iter() {
-                      let _ = unfalsifiable.remove(p) ;
-                      ()
-                    }
-                  },
-                  MsgDown::Forget(ps, Status::Disproved) => {
-                    try_error!(
-                      props.forget(& mut solver, ps.iter()), event,
-                      "while forgetting some properties\n\
-                      because of a `Forget` message (2, disproved)"
-                    ) ;
-                    for p in ps.iter() {
-                      let was_there = unfalsifiable.remove(p) ;
-                      if was_there {
-                        // One of the unfalsifiable properties was falsified.
-                        // Need to restart the check.
-                        continue 'split
+              Some(msgs) => {
+                let mut disproved = false ;
+                for msg in msgs {
+                  match msg {
+                    MsgDown::Forget(ps, Status::Proved) => {
+                      try_error!(
+                        props.forget(& mut solver, ps.iter()), event,
+                        "while forgetting some properties\n\
+                        because of a `Forget` message (2, proved)"
+                      ) ;
+                      for p in ps.iter() {
+                        let _ = unfalsifiable.remove(p) ;
+                        ()
                       }
-                    }
-                  },
-                  MsgDown::Invariants(_,_) => event.log(
-                    "received invariants, skipping"
-                  ),
-                  _ => event.error("unknown message")
+                    },
+                    MsgDown::Forget(ps, Status::Disproved) => {
+                      try_error!(
+                        props.forget(& mut solver, ps.iter()), event,
+                        "while forgetting some properties\n\
+                        because of a `Forget` message (2, disproved)"
+                      ) ;
+                      for p in ps.iter() {
+                        disproved = disproved || unfalsifiable.remove(p)
+                      }
+                    },
+                    MsgDown::Invariants(_,_) => event.log(
+                      "received invariants, skipping"
+                    ),
+                    _ => event.error("unknown message")
+                  }
+                }
+
+                if disproved {
+                  // One of the unfalsifiable properties was falsified.
+                  // Need to restart the check.
+                  continue 'split
                 }
               },
             } ;

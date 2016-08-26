@@ -47,7 +47,7 @@ dependencies = [
 [[package]]
 name = "hashconsing"
 version = "0.3.0"
-source = "git+https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git?rev=1c5b9b0#1c5b9b015e349904a8f94a16355a1c97cec5bb47"
+source = "git+https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git#1faa21eef095be838b88c15cbe4f874914bb3e6f"
 
 [[package]]
 name = "kernel32-sys"
@@ -203,7 +203,7 @@ dependencies = [
 name = "term"
 version = "0.1.0"
 dependencies = [
- "hashconsing 0.3.0 (git+https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git?rev=1c5b9b0)",
+ "hashconsing 0.3.0 (git+https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git)",
  "nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",

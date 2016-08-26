@@ -99,6 +99,11 @@ fn bmc<
     "while creating property manager"
   ) ;
 
+  if props.none_left() {
+    event.done_at(k.curr()) ;
+    return ()
+  }
+
   // event.log("declaring functions, init and trans") ;
   try_error!(
     sys.defclare_funs(& mut solver), event,
@@ -111,127 +116,20 @@ fn bmc<
     "while asserting init"
   ) ;
 
+  props.reset_inhibited() ;
 
   // Check for init is separate since only one-state properties must be
   // checked.
-
-  props.reset_inhibited() ;
-
-  if props.none_left() {
-    event.done_at(k.curr()) ;
-    return ()
-  }
-
-  if let Some(one_prop_false) = props.one_false_state() {
-
-    // Checking whether unrolling is satisfiable by itself.
-    match solver.check_sat() {
-      Ok(true) => (),
-      Ok(false) => {
-        // No more transitions can be taken, all remaining properties
-        // hold.
-        event.proved_at( props.not_inhibited(), k.curr() ) ;
-        event.warning(
-          & format!("no more reachable state after {} transitions", k)
-        ) ;
-        event.done_at(k.curr()) ;
-        return ()
-      },
-      Err(e) => {
-        event.error(
-          & format!("could not perform check-sat\n{:?}", e)
-        ) ;
-        return ()
-      },
-    } ;
-
-    // Unique, fresh actlit.
-    let actlit = actlit_factory.mk_fresh() ;
-    actlit.declare(& mut solver).expect(
-      & format!(
-        "while declaring activation literal in BMC at {}", k
-      )
-    ) ;
-    // event.log(
-    //   & format!(
-    //     "defining actlit {}\nto imply {} at {}",
-    //     lit, one_prop_false, k
-    //   )
-    // ) ;
-    let implication = actlit.activate_term(one_prop_false) ;
-
-    try_error!(
-      solver.assert(& implication, & k), event,
-      "while asserting implication at {} (1):\n  {:?}", k, implication
-    ) ;
-
-    let mut actlits = props.actlits() ;
-    actlits.push(actlit.name()) ;
-
-    // event.log(
-    //   & format!(
-    //     "checking {} properties @{}",
-    //     props.len(),
-    //     k.curr()
-    //   )
-    // ) ;
-
-    match solver.check_sat_assuming( & actlits, & () ) {
-      Ok(true) => {
-        // event.log("sat, getting falsified properties") ;
-        match props.get_false_state(& mut solver, & k) {
-          Ok(falsified) => {
-            // let mut s = "falsified:".to_string() ;
-            // for sym in falsified.iter() {
-            //   s = format!("{}\n  {}", s, sym)
-            // } ;
-            // event.log(& s) ;
-
-            let model = try_error!(
-              solver.get_model(), event,
-              "could not retrieve model"
-            ) ;
-            
-            try_error!(
-              props.forget(& mut solver, falsified.iter()), event,
-              "while forgetting property in manager"
-            ) ;
-            event.disproved_at(model, falsified, k.curr())
-          },
-          Err(e) => {
-            event.error(
-              & format!("could not get falsifieds\n{:?}", e)
-            ) ;
-            return ()
-          },
-        }
-      },
-      Ok(false) => {
-        event.k_true(props.not_inhibited(), k.curr())
-      },
-      Err(e) => {
-        event.error(
-          & format!("could not perform check-sat-assuming\n{:?}", e)
-        ) ;
-        return ()
-      },
-    } ;
-
-    if props.none_left() {
-      event.done_at(k.curr()) ;
-      return ()
-    }
-  } ;
-
-  try_error!(
-    sys.unroll(& mut solver, & k), event,
-    "while unrolling system at {}", k
-  ) ;
-
-  k = k.nxt() ;
-
+  let mut doing_init = false ;
 
   'unroll: loop {
+
+    if ! doing_init {
+      try_error!(
+        sys.unroll(& mut solver, & k), event,
+        "while unrolling system at {}", k
+      ) ;
+    }
 
     props.reset_inhibited() ;
 
@@ -257,12 +155,6 @@ fn bmc<
       break
     }
 
-    // event.log( & format!("unrolling at {}", k) ) ;
-    try_error!(
-      sys.unroll(& mut solver, & k), event,
-      "while unrolling system at {}", k
-    ) ;
-
     // Check that the unrolling is satisfiable by itself.
     if ! try_error!(
       solver.check_sat(), event,
@@ -280,7 +172,12 @@ fn bmc<
 
     'this_k: loop {
       
-      if let Some(one_prop_false) = props.one_false_next() {
+      // If we're doing init, only check one state properties.
+      if let Some(
+        one_prop_false
+      ) = if doing_init {
+        props.one_false_state()
+      } else { props.one_false_next() } {
 
         // Setting up the negative actlit.
         let actlit = actlit_factory.mk_fresh() ;
@@ -343,8 +240,9 @@ fn bmc<
 
     }
 
-    k = k.nxt()
+    k = k.nxt() ;
 
+    doing_init = false
   }
 }
 
