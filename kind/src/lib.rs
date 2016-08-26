@@ -27,7 +27,7 @@ use term::Offset2 ;
 
 use common::conf ;
 use common::SolverTrait ;
-use common::msg::{ Info, Event, MsgDown } ;
+use common::msg::{ Info, Event, MsgDown, Status } ;
 
 use system::{ Sys, Prop } ;
 
@@ -129,8 +129,8 @@ fn kind<
       None => return (),
       Some(msgs) => for msg in msgs {
         match msg {
-          MsgDown::Forget(ps) => try_error!(
-            props.forget(& mut solver, & ps), event,
+          MsgDown::Forget(ps, _) => try_error!(
+            props.forget(& mut solver, ps.iter()), event,
             "while forgetting some properties\n\
             because of a `Forget` message (1)"
           ),
@@ -147,132 +147,146 @@ fn kind<
       break
     }
 
-    'split: loop {
+    'split: while let Some(one_prop_false) = props.one_false_next() {
+        
+      // Setting up the negative actlit.
+      let actlit = actlit_factory.mk_fresh() ;
+      actlit.declare(& mut solver).expect(
+        & format!(
+          "while declaring activation literal at {}", k
+        )
+      ) ;
+      let implication = actlit.activate_term(one_prop_false) ;
 
-      if let Some(one_prop_false) = props.one_false_next() {
-        // Unique, fresh actlit.
-        let actlit = actlit_factory.mk_fresh() ;
+      try_error!(
+        solver.assert(& implication, & k), event,
+        "while asserting property falsification"
+      ) ;
 
-        actlit.declare(& mut solver).expect(
-          & format!(
-            "while declaring activation literal in BMC at {}", k
-          )
+      // Building list of actlits for this check.
+      let mut actlits = props.actlits() ;
+      actlits.push(actlit.name()) ;
+
+      // Check sat.
+      let is_sat = try_error!(
+        solver.check_sat_assuming( & actlits, & () ), event,
+        "during a `check_sat_assuming` query at {}", k
+      ) ;
+
+      if is_sat {
+        // event.log("sat, getting falsified props") ;
+        let falsified = try_error!(
+          props.get_false_next(& mut solver, & k), event,
+          "could not retrieve falsified properties"
         ) ;
-
-        // event.log(
-        //   & format!(
-        //     "defining actlit {}\nto imply {} at {}",
-        //     lit, one_prop_false, check_offset
-        //   )
-        // ) ;
-        let implication = actlit.activate_term(one_prop_false) ;
-
         try_error!(
-          solver.assert(& implication, & k), event,
-          "while asserting property falsification"
+          actlit.deactivate(& mut solver), event,
+          "while deactivating negative actlit"
         ) ;
-
-        // event.log(& format!("check-sat assuming {}", lit)) ;
-
-        let mut actlits = props.actlits() ;
-        // let prop_count = actlits.len() ;
-        actlits.push(actlit.name()) ;
-
-        // event.log(
-        //   & format!(
-        //     "checking {} properties @{} ({} unrolling(s))",
-        //     props.len(),
-        //     check_offset.next(),
-        //     k.curr()
-        //   )
-        // ) ;
-
-        match solver.check_sat_assuming( & actlits, & () ) {
-          Ok(true) => {
-            // event.log("sat, getting falsified properties") ;
-            match props.get_false_next(& mut solver, & check_offset) {
-              Ok(falsified) => {
-                // let mut s = "falsified:".to_string() ;
-                // for sym in falsified.iter() {
-                //   s = format!("{}\n  {}", s, sym)
-                // } ;
-                // event.log(& s) ;
-                props.inhibit(& falsified) ;
-              },
-              Err(e) => {
-                event.error(
-                  & format!("could not get falsifieds\n{:?}", e)
-                ) ;
-                break
-              },
-            }
-          },
-          Ok(false) => {
-            // event.log("unsat") ;
-            let unfalsifiable = props.not_inhibited() ;
-            // Wait until we get something.
-            loop {
-              let mut invariant = true ;
-              let at_least = k.curr().pre().unwrap() ;
-              for prop in unfalsifiable.iter() {
-                match * event.get_k_true(prop) {
-                  Some(ref o) => {
-                    if o < & at_least {
-                      invariant = false ;
-                      break
-                    }
-                  },
-                  _ => { invariant = false ; break }
-                }
-              } ;
-              if invariant {
-                // event.log("forgetting") ;
-                try_error!(
-                  props.forget(& mut solver, & unfalsifiable), event,
-                  "while forgetting some properties\n\
-                  because I just proved them invariant"
-                ) ;
-                event.proved_at(unfalsifiable, k.curr()) ; 
-                break 'split
-              } else {
-                // event.log("recv") ;
-                match event.recv() {
-                  None => return (),
-                  Some(msgs) => for msg in msgs {
-                    match msg {
-                      MsgDown::Forget(ps) => {
-                        try_error!(
-                          props.forget(& mut solver, & ps), event,
-                          "while forgetting some properties\n\
-                          because of a `Forget` message (2)"
-                        ) ;
-                        continue 'out
-                      },
-                      MsgDown::Invariants(_,_) => event.log(
-                        "received invariants, skipping"
-                      ),
-                      _ => event.error("unknown message")
-                    }
-                  },
-                } ;
-                sleep(Duration::from_millis(10)) ;
-              }
-            }
-          },
-          Err(e) => {
-            event.error(
-              & format!("could not perform check-sat\n{:?}", e)
-            ) ;
-            break
-          },
-        } ;
-
-        if props.all_inhibited() { break }
+        props.inhibit(& falsified)
       } else {
-        break 'split
-      }
-    } ;
+        // event.log("unsat") ;
+        try_error!(
+          actlit.deactivate(& mut solver), event,
+          "while deactivating negative actlit"
+        ) ;
+        let mut unfalsifiable = props.not_inhibited_set() ;
 
+        // Wait until we get something from BMC.
+        loop {
+          event.log("waiting for confirmation") ;
+          let mut invariant = true ;
+          let at_least = k.curr().pre().unwrap() ;
+          for prop in unfalsifiable.iter() {
+            match * event.get_k_true(prop) {
+              Some(ref o) => {
+                if o < & at_least {
+                  invariant = false ;
+                  break
+                }
+              },
+              _ => { invariant = false ; break }
+            }
+          } ;
+
+          if invariant {
+            try_error!(
+              props.forget(
+                & mut solver, unfalsifiable.iter()
+              ), event,
+              "while forgetting some properties\n\
+              because I just proved them invariant"
+            ) ;
+            event.proved_at(unfalsifiable.into_iter().collect(), k.curr()) ; 
+            break 'split
+          } else {
+            // event.log("recv") ;
+            match event.recv() {
+              None => return (),
+              Some(msgs) => for msg in msgs {
+                match msg {
+                  MsgDown::Forget(ps, Status::Proved) => {
+                    try_error!(
+                      props.forget(& mut solver, ps.iter()), event,
+                      "while forgetting some properties\n\
+                      because of a `Forget` message (2, proved)"
+                    ) ;
+                    for p in ps.iter() {
+                      let _ = unfalsifiable.remove(p) ;
+                      ()
+                    }
+                  },
+                  MsgDown::Forget(ps, Status::Disproved) => {
+                    try_error!(
+                      props.forget(& mut solver, ps.iter()), event,
+                      "while forgetting some properties\n\
+                      because of a `Forget` message (2, disproved)"
+                    ) ;
+                    for p in ps.iter() {
+                      let was_there = unfalsifiable.remove(p) ;
+                      if was_there {
+                        // One of the unfalsifiable properties was falsified.
+                        // Need to restart the check.
+                        continue 'split
+                      }
+                    }
+                  },
+                  MsgDown::Invariants(_,_) => event.log(
+                    "received invariants, skipping"
+                  ),
+                  _ => event.error("unknown message")
+                }
+              },
+            } ;
+            if props.none_left() {
+              event.done_at( k.curr() ) ;
+              break 'out
+            }
+            sleep(Duration::from_millis(10)) ;
+          }
+        }
+      }
+
+      match event.recv() {
+        None => return (),
+        Some(msgs) => for msg in msgs {
+          match msg {
+            MsgDown::Forget(ps, _) => try_error!(
+              props.forget(& mut solver, ps.iter()), event,
+              "while forgetting some properties\n\
+              because of a `Forget` message (1)"
+            ),
+            MsgDown::Invariants(_,_) => event.warning(
+              "received invariants, skipping"
+            ),
+            _ => event.error("unknown message")
+          }
+        },
+      }
+
+    }
+
+    event.log("checking if there's some properties left") ;
     if props.none_left() {
       event.done_at( k.curr() ) ;
       break

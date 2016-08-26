@@ -124,6 +124,27 @@ fn bmc<
 
   if let Some(one_prop_false) = props.one_false_state() {
 
+    // Checking whether unrolling is satisfiable by itself.
+    match solver.check_sat() {
+      Ok(true) => (),
+      Ok(false) => {
+        // No more transitions can be taken, all remaining properties
+        // hold.
+        event.proved_at( props.not_inhibited(), k.curr() ) ;
+        event.warning(
+          & format!("no more reachable state after {} transitions", k)
+        ) ;
+        event.done_at(k.curr()) ;
+        return ()
+      },
+      Err(e) => {
+        event.error(
+          & format!("could not perform check-sat\n{:?}", e)
+        ) ;
+        return ()
+      },
+    } ;
+
     // Unique, fresh actlit.
     let actlit = actlit_factory.mk_fresh() ;
     actlit.declare(& mut solver).expect(
@@ -146,24 +167,6 @@ fn bmc<
 
     let mut actlits = props.actlits() ;
     actlits.push(actlit.name()) ;
-
-    match solver.check_sat() {
-      Ok(true) => (),
-      Ok(false) => {
-        // No more transitions can be taken, all remaining properties
-        // hold.
-        event.proved_at( props.not_inhibited(), k.curr() ) ;
-        event.warning("no more reachable state") ;
-        event.done_at(k.curr()) ;
-        return ()
-      },
-      Err(e) => {
-        event.error(
-          & format!("could not perform check-sat\n{:?}", e)
-        ) ;
-        return ()
-      },
-    } ;
 
     // event.log(
     //   & format!(
@@ -190,7 +193,7 @@ fn bmc<
             ) ;
             
             try_error!(
-              props.forget(& mut solver, & falsified), event,
+              props.forget(& mut solver, falsified.iter()), event,
               "while forgetting property in manager"
             ) ;
             event.disproved_at(model, falsified, k.curr())
@@ -228,7 +231,7 @@ fn bmc<
   k = k.nxt() ;
 
 
-  loop {
+  'unroll: loop {
 
     props.reset_inhibited() ;
 
@@ -236,8 +239,8 @@ fn bmc<
       None => break,
       Some(msgs) => for msg in msgs {
         match msg {
-          MsgDown::Forget(ps) => try_error!(
-            props.forget(& mut solver, & ps),
+          MsgDown::Forget(ps, _) => try_error!(
+            props.forget(& mut solver, ps.iter()),
             event,
             "while forgetting property in manager"
           ),
@@ -260,118 +263,89 @@ fn bmc<
       "while unrolling system at {}", k
     ) ;
 
-    if let Some(one_prop_false) = props.one_false_next() {
-
-      let actlit = actlit_factory.mk_fresh() ;
-      actlit.declare(& mut solver).expect(
-        & format!(
-          "while declaring activation literal in BMC at {}", k
-        )
+    // Check that the unrolling is satisfiable by itself.
+    if ! try_error!(
+      solver.check_sat(), event,
+      "could not perform `check-sat`"
+    ) {
+      // No more transitions can be taken, all remaining properties
+      // hold.
+      event.proved_at( props.not_inhibited(), k.curr() ) ;
+      event.warning(
+        & format!("no more reachable state after {} transitions", k)
       ) ;
-      // event.log(
-      //   & format!(
-      //     "defining actlit {}\nto imply {} at {}",
-      //     lit, one_prop_false, k
-      //   )
-      // ) ;
-      let check = actlit.activate_term(one_prop_false) ;
+      event.done_at(k.curr()) ;
+      return ()
+    } ;
 
-      try_error!(
-        solver.assert(& check, & k), event,
-        "while asserting implication at {} (2)", k
-      ) ;
+    'this_k: loop {
+      
+      if let Some(one_prop_false) = props.one_false_next() {
 
-      // event.log(& format!("check-sat assuming {}", lit)) ;
+        // Setting up the negative actlit.
+        let actlit = actlit_factory.mk_fresh() ;
+        actlit.declare(& mut solver).expect(
+          & format!(
+            "while declaring activation literal at {}", k
+          )
+        ) ;
+        let implication = actlit.activate_term(one_prop_false) ;
 
-      let mut actlits = props.actlits() ;
-      actlits.push(actlit.name()) ;
+        try_error!(
+          solver.assert(& implication, & k), event,
+          "while asserting implication at {} (2)", k
+        ) ;
 
-      match solver.check_sat() {
-        Ok(true) => (),
-        Ok(false) => {
-          // No more transitions can be taken, all remaining properties
-          // hold.
-          event.proved_at( props.not_inhibited(), k.next() ) ;
-          event.warning("no more reachable state") ;
-          event.done_at( k.next() ) ;
-          break
-        },
-        Err(e) => {
-          event.error(
-            & format!("could not perform check-sat\n{:?}", e)
-          ) ;
-          break
-        },
-      } ;
+        // Building list of actlits for this check.
+        let mut actlits = props.actlits() ;
+        actlits.push(actlit.name()) ;
 
-      // event.log(
-      //   & format!(
-      //     "checking {} properties @{}",
-      //     props.len(),
-      //     k.curr()
-      //   )
-      // ) ;
+        // Check sat.
+        let is_sat = try_error!(
+          solver.check_sat_assuming( & actlits, & () ), event,
+          "during a `check_sat_assuming` query at {}", k
+        ) ;
 
-      match solver.check_sat_assuming( & actlits, & () ) {
-        Ok(true) => {
+        if is_sat {
           // event.log("sat, getting falsified properties") ;
-          match props.get_false_next(& mut solver, & k) {
-            Ok(falsified) => {
-              // let mut s = "falsified:".to_string() ;
-              // for sym in falsified.iter() {
-              //   s = format!("{}\n  {}", s, sym)
-              // } ;
-              // event.log(& s) ;
-
-              // event.log("getting model") ;
-              match solver.get_model() {
-                Ok(model) => {
-                  // event.log("got model") ;
-                  try_error!(
-                    props.forget(& mut solver, & falsified), event,
-                    "while forgetting property in manager"
-                  ) ;
-                  // event.log("communicating model") ;
-                  event.disproved_at(model, falsified, k.curr())
-                },
-                Err(e) => {
-                  event.error(
-                    & format!("could not get model:\n{}", e)
-                  ) ;
-                  event.done(Info::Error) ;
-                  break
-                },
-              } ;
-            },
-            Err(e) => {
-              event.error(
-                & format!("could not get falsifieds\n{:?}", e)
-              ) ;
-              break
-            },
-          }
-        },
-        Ok(false) => {
-          // event.log("unsat") ;
-          event.k_true(props.not_inhibited(), k.curr())
-        },
-        Err(e) => {
-          event.error(
-            & format!("could not perform check-sat-assuming\n{:?}", e)
+          let falsified = try_error!(
+            props.get_false_next(& mut solver, & k), event,
+            "could not retrieve falsified properties"
           ) ;
-          break
-        },
-      } ;
+          let model = try_error!(
+            solver.get_model(), event,
+            "could not retrieve model"
+          ) ;
+          try_error!(
+            props.forget(& mut solver, falsified.iter()), event,
+            "while forgetting property in manager"
+          ) ;
+          try_error!(
+            actlit.deactivate(& mut solver), event,
+            "could not deactivate negative actlit"
+          ) ;
+          event.disproved_at(model, falsified, k.curr())
+        } else {
+          // event.log("unsat") ;
+          event.k_true(props.not_inhibited(), k.curr()) ;
+          try_error!(
+            actlit.deactivate(& mut solver), event,
+            "could not deactivate negative actlit"
+          ) ;
+          break 'this_k
+        }
 
-      if props.none_left() {
+      } else {
+        // No more properties to check, done.
+        event.log( & format!("no property left at {}", k) ) ;
         event.done_at(k.curr()) ;
-        break
       }
+
     }
 
     k = k.nxt()
 
-  } ;
+  }
 }
 
 /// Configuration for BMC.

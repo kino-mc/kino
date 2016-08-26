@@ -22,7 +22,7 @@ use system::ctxt::Context ;
 use common::Tek::Kino ;
 use common::conf ;
 use common::msg::MsgUp::* ;
-use common::msg::{ KidManager, MsgDown, Info } ;
+use common::msg::{ KidManager, MsgDown, Info, Status } ;
 use common::log::{ MasterLog, Formatter, Styler } ;
 
 use bmc ;
@@ -85,7 +85,7 @@ impl Master {
         Ok( Disproved(model, props, from, _) ) => {
           let cex = c.cex_of(& model, & sys) ;
           log.log_cex(& from, & cex, & props) ;
-          manager.broadcast( MsgDown::Forget(props) ) ;
+          manager.broadcast( MsgDown::Forget(props, Status::Disproved) ) ;
         },
 
         Ok( Proved(props, from, info) ) => {
@@ -97,7 +97,7 @@ impl Master {
               Some(ref prop) => vec.push( prop.body().clone() ),
             }
           } ;
-          manager.broadcast( MsgDown::Forget(props) ) ;
+          manager.broadcast( MsgDown::Forget(props, Status::Proved) ) ;
           manager.broadcast( MsgDown::Invariants(sys.sym().clone(), vec) ) ;
         },
 

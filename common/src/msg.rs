@@ -115,13 +115,22 @@ impl fmt::Display for Info {
   }
 }
 
+/** Status of a property. */
+#[derive(Debug, Clone)]
+pub enum Status {
+  /// Property was proved.
+  Proved,
+  /// Property was disproved.
+  Disproved,
+}
+
 /** Message from kino to the techniques. */
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum MsgDown {
   /** Contains invariants for a system. */
   Invariants(Sym, Vec<STerm>),
   /** Some properties have been proved or disproved. */
-  Forget(Vec<Sym>),
+  Forget(Vec<Sym>, Status),
   /** Some properties were found k-true. */
   KTrue(Vec<Sym>, Offset),
 }

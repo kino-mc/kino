@@ -237,7 +237,7 @@ impl Actlit {
     'a, S: Solver<'a, Factory>
   >(self, solver: & mut S) -> UnitSmtRes {
     solver.assert(
-      & self.as_tmp_term(), & self.offset
+      & self.as_tmp_term().tmp_neg(), & self.offset
     )
   }
 }
@@ -341,9 +341,9 @@ impl PropManager {
 
   /** Removes some properties from a manager. */
   pub fn forget<
-    'a, S: Solver<'a, Factory>
+    'a, 'b, S: Solver<'a, Factory>, Props: Iterator<Item=& 'b Sym>
   >(
-    & mut self, solver: & mut S, props: & [Sym]
+    & mut self, solver: & mut S, props: Props
   ) -> UnitSmtRes {
     for prop in props {
       match self.props_1.remove(& prop) {
@@ -575,16 +575,28 @@ impl PropManager {
   }
 
   /** Returns the properties that are not inhibited. */
-  pub fn not_inhibited(& self) -> Vec<Sym> {
-    let mut vec = Vec::with_capacity(
+  pub fn not_inhibited_set(& self) -> HashSet<Sym> {
+    let mut map = HashSet::with_capacity(
       self.props_1.len() + self.props_2.len() - self.inhibited.len()
     ) ;
     for (ref sym, _) in self.props_1.iter() {
-      if ! self.inhibited.contains(sym) { vec.push((* sym).clone()) }
+      if ! self.inhibited.contains(sym) {
+        let _ = map.insert((* sym).clone()) ;
+        ()
+      }
     } ;
     for (ref sym, _) in self.props_2.iter() {
-      if ! self.inhibited.contains(sym) { vec.push((* sym).clone()) }
+      if ! self.inhibited.contains(sym) {
+        let _ = map.insert((* sym).clone()) ;
+        ()
+      }
     } ;
-    vec
+    debug_assert!( map.capacity() == map.len() ) ;
+    map
+  }
+
+  /** Returns the properties that are not inhibited. */
+  pub fn not_inhibited(& self) -> Vec<Sym> {
+    self.not_inhibited_set().into_iter().collect()
   }
 }
