@@ -28,7 +28,10 @@
 (define-prop out_positive sys_a
   (<= (_ curr out) 10)
 )
+(define-rel out_positive1 sys_a
+  (= (_ curr out) (_ next out))
+)
 
 ;; Check.
-( verify sys_a (out_positive) )
+( verify sys_a (out_positive out_positive1) )
 

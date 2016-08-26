@@ -12,7 +12,7 @@
 It runs on a system and tries to prove some properties. */
 
 use std::sync::Arc ;
-use std::collections::HashMap ;
+use std::collections::{ HashSet, HashMap } ;
 
 use term::{ Sym, Term } ;
 
@@ -39,6 +39,9 @@ impl Master {
     _assumptions: Option<Vec<Term>>,
     conf: conf::Master
   ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
+
+    let mut proved_set = HashSet::with_capacity(props.len()) ;
+    let mut disproved_set = HashSet::with_capacity(props.len()) ;
 
     log.title( & format!("Running on {}", sys.sym().sym()) ) ;
     log.nl() ;
@@ -83,6 +86,18 @@ impl Master {
         Ok( Warning(from, bla) ) => log.sad(& from, & bla),
 
         Ok( Disproved(model, props, from, _) ) => {
+          for prop in props.iter() {
+            let was_there = disproved_set.insert(prop.clone()) ;
+            debug_assert!( ! was_there ) ;
+            if proved_set.contains(prop) {
+              log.bad(
+                & from,
+                & format!("disproved {}, but it was previously proved", prop)
+              ) ;
+              log.trail() ;
+              return Err(())
+            }
+          }
           let cex = c.cex_of(& model, & sys) ;
           log.log_cex(& from, & cex, & props) ;
           manager.broadcast( MsgDown::Forget(props, Status::Disproved) ) ;
@@ -95,6 +110,16 @@ impl Master {
             match c.get_prop(prop) {
               None => panic!("[kino.proved] unknown property {}", prop),
               Some(ref prop) => vec.push( prop.body().clone() ),
+            }
+            let was_there = proved_set.insert(prop.clone()) ;
+            debug_assert!( ! was_there ) ;
+            if disproved_set.contains(prop) {
+              log.bad(
+                & from,
+                & format!("proved {}, but it was previously disproved", prop)
+              ) ;
+              log.trail() ;
+              return Err(())
             }
           } ;
           manager.broadcast( MsgDown::Forget(props, Status::Proved) ) ;
@@ -121,6 +146,28 @@ impl Master {
 
       }
     } ;
+
+    if disproved_set.is_empty() {
+      if proved_set.len() == props.len() {
+        log.log_safe()
+      } else {
+        log.log_unknown(
+          props.iter().filter_map(
+            |prop| if ! proved_set.contains(
+              prop.sym()
+            ) && ! disproved_set.contains(
+              prop.sym()
+            ) {
+              Some(prop.sym())
+            } else {
+              None
+            }
+          )
+        )
+      }
+    } else {
+      log.log_unsafe()
+    }
 
     log.trail() ;
 

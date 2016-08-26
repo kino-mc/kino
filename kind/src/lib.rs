@@ -69,7 +69,7 @@ impl common::CanRun<conf::Kind> for KInd {
     } ;
 
     mk_solver_run!(
-      solver_conf, conf.smt_log(), "bmc", event.factory(),
+      solver_conf, conf.smt_log(), "kind", event.factory(),
       solver => kind(solver, sys, props, & mut event),
       msg => event.error(msg)
     )
@@ -159,7 +159,7 @@ fn kind<
       let implication = actlit.activate_term(one_prop_false) ;
 
       try_error!(
-        solver.assert(& implication, & k), event,
+        solver.assert(& implication, & check_offset), event,
         "while asserting property falsification"
       ) ;
 
@@ -307,6 +307,10 @@ fn kind<
     try_error!(
       props.activate_next(& mut solver, & k), event,
       "while activating two state properties"
+    ) ;
+    try_error!(
+      props.activate_state(& mut solver, & k), event,
+      "while activating one state properties"
     ) ;
 
     ()

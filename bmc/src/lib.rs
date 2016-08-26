@@ -236,6 +236,7 @@ fn bmc<
         // No more properties to check, done.
         event.log( & format!("no property left at {}", k) ) ;
         event.done_at(k.curr()) ;
+        return ()
       }
 
     }

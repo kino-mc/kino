@@ -258,6 +258,69 @@ impl<
     self.nl()
   }
 
+  /// Logs a `safe` end of analysis.
+  pub fn log_safe(& self) {
+    let pref = format!(
+      "{} {}",
+      self.fmt.ppre(),
+      self.mk_happy( self.fmt.pref() )
+    ) ;
+    println!(
+      "{} {}",
+      pref, self.mk_happy( "done, system is safe")
+    ) ;
+    println!("{}", pref) ;
+    println!("safe") ;
+    self.nl()
+  }
+
+  /// Logs an `unsafe` end of analysis.
+  pub fn log_unsafe(& self) {
+    let pref = format!(
+      "{} {}",
+      self.fmt.ppre(),
+      self.mk_bad( self.fmt.pref() )
+    ) ;
+    println!(
+      "{} {}",
+      pref,
+      self.mk_bad( "done, system is unsafe")
+    ) ;
+    println!("{}", pref) ;
+    println!("unsafe") ;
+    self.nl()
+  }
+
+  /// Logs a `unknown` end of analysis.
+  pub fn log_unknown<
+    'a, Props: Iterator<Item = & 'a Sym>
+  >(& self, props: Props) {
+    let pref = format!(
+      "{} {}",
+      self.fmt.ppre(),
+      self.mk_sad( self.fmt.pref() )
+    ) ;
+    println!(
+      "{} {}",
+      pref,
+      self.mk_sad( "done, analysis was inconclusive")
+    ) ;
+    println!(
+      "{} could not (dis)prove",
+      pref
+    ) ;
+    for prop in props {
+      println!(
+        "{} - {}",
+        pref,
+        self.mk_sad( & format!("{}", prop) )
+      )
+    } ;
+    println!("{}", pref) ;
+    println!("unknown") ;
+    self.nl()
+  }
+
   /** Logs the fact that a property proved some techniques. */
   pub fn log_proved(
     & self, t: & super::Tek, props: & [Sym], info: & ::msg::Info

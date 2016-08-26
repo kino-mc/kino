@@ -66,7 +66,7 @@ the solver to return different models. (This is known to happen for z3.)
 
 # License
 
-Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+Copyright 2016 Adrien Champion. See the COPYRIGHT file at the top-level
 directory of this distribution.
 
 Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
