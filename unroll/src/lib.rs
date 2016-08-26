@@ -211,7 +211,7 @@ impl Actlit {
   /** Identifier corresponding to an actlit. */
   #[inline]
   pub fn name(& self) -> String {
-    format!("|fresh_actlit {}|", self.count)
+    format!("| fresh_actlit {}|", self.count)
   }
 
   /** `TmpTerm` version of an actlit. */
@@ -244,7 +244,7 @@ impl Actlit {
 
 /** Actlit name of a symbol. */
 fn actlit_name_of_sym(sym: & Sym) -> String {
-  format!( "|actlit( {} )|", sym.sym() )
+  format!( "| actlit( {} )|", sym.sym() )
 }
 
 /** Actlit name of a property. */

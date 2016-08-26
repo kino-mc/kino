@@ -17,6 +17,9 @@ use sys::Cex ;
 
 /** Formatting elements of a log. */
 pub trait Formatter: Clone {
+  /** The pre prefix. */
+  #[inline(always)]
+  fn ppre(& self) -> & str ;
   /** The prefix. */
   #[inline(always)]
   fn pref(& self) -> & str ;
@@ -32,6 +35,7 @@ pub trait Formatter: Clone {
 #[derive(Clone)]
 pub struct NoFormat ;
 impl Formatter for NoFormat {
+  fn ppre(& self) -> & str { & "" }
   fn pref(& self) -> & str { & "" }
   fn head(& self) -> & str { & "" }
   fn trail(& self) -> & str { & "" }
@@ -40,6 +44,8 @@ impl Formatter for NoFormat {
 /** Custom formatting. */
 #[derive(Clone)]
 pub struct Format {
+  /** The pre prefix. */
+  ppre: & 'static str,
   /** The prefix. */
   pref: & 'static str,
   /** The header. */
@@ -51,11 +57,12 @@ impl Format {
   /** Default formatter. */
   pub fn default() -> Self {
     Format {
-      pref: "; |", head: "=====|", trail: "=====|"
+      ppre: ";", pref: "|", head: "=====|", trail: "=====|"
     }
   }
 }
 impl Formatter for Format {
+  fn ppre(& self) -> & str { self.ppre }
   fn pref(& self) -> & str { self.pref }
   fn head(& self) -> & str { self.head }
   fn trail(& self) -> & str { self.trail }
@@ -191,24 +198,27 @@ impl<
 
   /** Prints a newline in a log section. */
   pub fn nl(& self) {
-    println!("{}", self.fmt.pref())
+    println!("{} {}", self.fmt.ppre(), self.fmt.pref())
   }
 
   /** Prints a trailer line. */
   pub fn trail(& self) {
-    println!("{}{}", self.fmt.pref(), self.fmt.trail()) ;
+    println!("{} {}{}", self.fmt.ppre(), self.fmt.pref(), self.fmt.trail()) ;
     self.sep()
   }
 
   /** Prints a title line. */
   pub fn title(& self, e: & str) {
-    println!("{}{} {}", self.fmt.pref(), self.fmt.head(), self.mk_emph(e))
+    println!(
+      "{} {}{} {}",
+      self.fmt.ppre(), self.fmt.pref(), self.fmt.head(), self.mk_emph(e)
+    )
   }
 
   /** Prints some log lines. */
   pub fn print(& self, e: & str) {
     for line in e.lines() {
-      println!("{} {}", self.fmt.pref(), line)
+      println!("{} {} {}", self.fmt.ppre(), self.fmt.pref(), line)
     }
   }
 
@@ -216,9 +226,11 @@ impl<
   pub fn pref_log(
     & self, pref: & str, title: & super::Tek, bla: & str
   ) {
-    println!("{} {}", pref, self.emph(title.to_str())) ;
+    println!(
+      "{} {} {}", self.fmt.ppre(), pref, self.emph(title.to_str())
+    ) ;
     for line in bla.lines() {
-      println!("{}   {}", pref, line)
+      println!("{} {}   {}", self.fmt.ppre(), pref, line)
     }
   }
 
@@ -250,14 +262,20 @@ impl<
   pub fn log_proved(
     & self, t: & super::Tek, props: & [Sym], info: & ::msg::Info
   ) {
-    let pref = self.mk_happy(self.fmt.pref()) ;
+    let pref = format!(
+      "{} {}", self.fmt.ppre(), self.mk_happy(self.fmt.pref())
+    ) ;
     println!(
       "{} {} proved {} propertie(s) {}:",
       pref, self.emph(t.to_str()), props.len(), info
     ) ;
+    println!("{}", pref) ;
+    println!("(proved") ;
     for prop in props.iter() {
-      println!("{}   {}", pref, self.mk_happy(prop.sym())) ;
+      println!("  {}", prop.sym()) ;
+      // println!("{}   {}", pref, self.mk_happy(prop.sym())) ;
     } ;
+    println!(")") ;
     self.nl()
   }
 
@@ -265,7 +283,10 @@ impl<
   pub fn log_cex(
     & self, t: & super::Tek, cex: & Cex, props: & [Sym]
   ) {
-    let pref = self.mk_bad(self.fmt.pref()) ;
+    use std::io::stdout ;
+    let pref = format!(
+      "{} {}", self.fmt.ppre(), self.mk_bad(self.fmt.pref())
+    ) ;
     println!(
       "{} {} falsified {} propertie(s) at {}:",
       pref, self.emph(t.to_str()), props.len(), cex.len()
@@ -274,9 +295,13 @@ impl<
       println!("{}   {}", pref, self.mk_bad(prop.sym())) ;
     } ;
     println!("{} {}:", pref, self.mk_emph("cex")) ;
-    for line in cex.format().lines() {
-      println!("{}   {}", pref, line)
-    } ;
+    // for line in cex.format().lines() {
+    //   println!("{}   {}", pref, line)
+    // } ;
+    println!("{}", pref) ;
+    cex.write_vmt(props, & mut stdout()).expect(
+      "could not write counterexample to stdout"
+    ) ;
     self.nl()
   }
 }

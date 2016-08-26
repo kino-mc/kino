@@ -71,7 +71,7 @@ impl<Val: Domain> Graph<Val> {
   /** Adds kids to a representative. Updates `map_for` and `map_bak`. */
   pub fn add_kids(
     & mut self, rep: & Term, kids: TermSet
-  ) -> Result<(), String> {
+  ) -> Res<()> {
     // Update backward edges.
     for kid in kids.iter() {
       match self.map_bak.get_mut(kid) {
@@ -111,7 +111,7 @@ impl<Val: Domain> Graph<Val> {
   Version where `kids` is a reference. */
   pub fn add_kids_ref(
     & mut self, rep: & Term, kids: & TermSet
-  ) -> Result<(), String> {
+  ) -> Res<()> {
     // Update backward edges.
     for kid in kids.iter() {
       match self.map_bak.get_mut(kid) {
@@ -340,12 +340,10 @@ digraph mode_graph {{
     let was_there = class.remove(elem) ;
     if ! was_there {
       Err(
-        vec![
-          format!(
-            "[drop_member] {} is not an element of the class of {}",
-            elem, rep
-          )
-        ]
+        format!(
+          "[drop_member] {} is not an element of the class of {}",
+          elem, rep
+        )
       )
     } else { Ok(()) }
   }
@@ -367,9 +365,7 @@ digraph mode_graph {{
       let class = match self.classes.get(rep) {
         Some(class) => class,
         None => return Err(
-          vec![
-            format!("[split_class] representative {} is unknown", rep)
-          ]
+          format!("[split_class] representative {} is unknown", rep)
         ),
       } ;
       // Evaluate representative first.
@@ -419,9 +415,7 @@ digraph mode_graph {{
     let kids = match self.map_for.remove(rep) {
       Some(kids) => kids,
       None => return Err(
-        vec![
-          format!("[insert_chain] rep {} has no kids in the graph", rep)
-        ]
+        format!("[insert_chain] rep {} has no kids in the graph", rep)
       ),
     } ;
 
@@ -429,9 +423,7 @@ digraph mode_graph {{
     let to_update = match self.map_bak.remove(rep) {
       Some(parents) => parents,
       None => return Err(
-        vec![
-          format!("[insert_chain] rep {} has no parents in the graph", rep)
-        ]
+        format!("[insert_chain] rep {} has no parents in the graph", rep)
       ),
     } ;
 
@@ -463,9 +455,7 @@ digraph mode_graph {{
             let parent_value = match self.values.get(& parent) {
               Some(v) => v.clone(),
               None => return Err(
-                vec![
-                  format!("[insert_chain] parent {} has no value", parent)
-                ]
+                format!("[insert_chain] parent {} has no value", parent)
               ),
             } ;
 
@@ -581,12 +571,12 @@ digraph mode_graph {{
       to_do.remove(& rep) ;
 
       // Split equivalence class.
-      let chain = try_strs!(
+      let chain = try_str!(
         self.split_class(& rep, eval),
         "[split] while splitting rep {}", rep
       ) ;
       // Insert resulting chain.
-      try_strs!(
+      try_str!(
         self.insert_chain(& rep, chain),
         "[split] while inserting chain after splitting rep {}", rep
       ) ;

@@ -157,7 +157,43 @@ impl Cex {
     assert!(self.trace.len() > 0) ;
     self.trace.len() - 1
   }
-  /** Formats a counterexample. */
+  /** Formats a counterexample vmt-style. */
+  pub fn write_vmt<W: io::Write>(
+    & self, props: & [ Sym ], fmt: & mut W
+  ) -> io::Result<()> {
+    try!( write!(fmt, "(cex\n  ( ") ) ;
+    for prop in props.iter() {
+      try!( write!(fmt, "{} ", prop) )
+    }
+    try!( write!(fmt, ")\n") ) ;
+
+    // Printing function symbols.
+    if self.no_state.is_empty() {
+      try!( write!(fmt, "  () ; no function symbols\n") )
+    } else {
+      try!( write!(fmt, "  ( ; function symbols:") ) ;
+      for (ref sym, ref cst) in self.no_state.iter() {
+        try!(
+          write!(
+            fmt, "\n    (declare-fun {} () {} {})", sym, cst.typ(), cst
+          )
+        )
+      }
+      try!( write!(fmt, "\n  )\n") ) ;
+    }
+
+    // Printing states.
+    for (ref off, ref cex) in self.trace.iter() {
+      try!( write!(fmt, "  ; State {}:\n  (and\n", off) ) ;
+      for (ref sym, ref cst) in cex.iter() {
+        try!( write!(fmt, "    (= {} {})\n", sym, cst) )
+      }
+      try!( write!(fmt, "  )\n") )
+    }
+
+    write!(fmt, ")\n")
+  }
+  /** Formats a counterexample human-style. */
   pub fn format(& self) -> String {
     use std::cmp::max ;
     // First, we format all constants as strings and compute the maximal width

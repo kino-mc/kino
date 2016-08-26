@@ -9,7 +9,9 @@ use super::{
   Term, Type, Operator, Offset2
 } ;
 
-/// *Temporary* terms that are not hashconsed.
+/** *Temporary* terms that are not hashconsed.
+
+**Warning**: no `|`-quoting is added when printing a symbol in SMT-LIB 2. */
 #[derive(Clone, Debug)]
 pub enum TmpTerm {
   /// A (typed) symbol.

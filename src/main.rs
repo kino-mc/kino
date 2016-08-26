@@ -67,10 +67,10 @@ fn main() {
         Ok(res) => {
           log.print( & log.mk_happy("success") ) ;
 
-          log.title("Context") ;
-          for line in context.lines().lines() {
-            log.print(line)
-          } ;
+          // log.title("Context") ;
+          // for line in context.lines().lines() {
+          //   log.print(line)
+          // } ;
 
           log.title("Query") ;
           for line in res.lines().lines() {

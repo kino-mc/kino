@@ -15,30 +15,31 @@ Unrolls backwards.
 
 extern crate term ;
 extern crate system ;
+#[macro_use]
 extern crate common ;
 extern crate unroll ;
 
 use std::sync::Arc ;
-use std::fs::File ;
 use std::time::Duration ;
 use std::thread::sleep ;
 
-use term::{ Term, Offset2, Factory } ;
-use term::smt::* ;
+use term::Offset2 ;
 
 use common::conf ;
-use common::msg::{ Info, Event, MsgDown} ;
+use common::SolverTrait ;
+use common::msg::{ Info, Event, MsgDown } ;
 
 use system::{ Sys, Prop } ;
 
 use unroll::* ;
 
 macro_rules! try_error {
-  ($e:expr, $event:expr) => (
+  ($e:expr, $event:expr, $($blah:expr),+) => (
     match $e {
       Ok(v) => v,
       Err(e) => {
-        $event.error( & format!("{:?}", e) ) ;
+        let blah = format!( $( $blah ),+ ) ;
+        $event.error( & format!("{}\n{:?}", blah, e) ) ;
         $event.done(Info::Error) ;
         return ()
       },
@@ -67,35 +68,17 @@ impl common::CanRun<conf::Kind> for KInd {
       Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
     } ;
 
-    match Kid::mk(solver_conf) {
-      Ok(mut kid) => match solver(& mut kid, event.factory().clone()) {
-        Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
-        Ok(solver) => match * conf.smt_log() {
-          None => kind(solver, sys, props, & mut event),
-          Some(ref path) => match File::create(
-            & format!("{}/kind.smt2", path)
-          ) {
-            Ok(file) => kind(solver.tee(file), sys, props, & mut event),
-            Err(e) => event.error(
-              & format!("could not open smt log file \"{}\":\n{:?}", path, e)
-            ),
-          },
-        },
-      },
-      Err(e) => {
-        event.error( & format!("could not spawn solver kid\n{:?}", e) ) ;
-        return ()
-      },
-    }
+    mk_solver_run!(
+      solver_conf, conf.smt_log(), "bmc", event.factory(),
+      solver => kind(solver, sys, props, & mut event),
+      msg => event.error(msg)
+    )
   }
 }
 
 fn kind<
   'a,
-  S: Solver<'a, Factory>
-      + Query<'a, Factory>
-      + QueryIdent<'a, Factory, (), String>
-      + QueryExprInfo<'a, Factory, Term>
+  S: SolverTrait<'a>
 >(
   mut solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
@@ -109,22 +92,28 @@ fn kind<
   // event.log("creating manager, declaring actlits") ;
   let mut props = try_error!(
     PropManager::mk(props, & mut solver, & sys),
-    event
+    event,
+    "while creating property manager"
   ) ;
 
   // event.log("declaring functions, init and trans") ;
   try_error!(
-    sys.defclare_funs(& mut solver), event
+    sys.defclare_funs(& mut solver), event,
+    "while declaring UFs, init and trans"
   ) ;
 
   // event.log("declare svar@0") ;
   try_error!(
-    sys.declare_svars(& mut solver, check_offset.next()), event
+    sys.declare_svars(& mut solver, check_offset.next()), event,
     // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~~~^^^^
+    "while declaring state variables"
   ) ;
 
   // event.log( & format!("unroll {}", k) ) ;
-  try_error!( sys.unroll(& mut solver, & k), event ) ;
+  try_error!(
+    sys.unroll(& mut solver, & k), event,
+    "while unrolling system"
+  ) ;
 
   'out: loop {
 
@@ -132,7 +121,8 @@ fn kind<
 
     // event.log( & format!("activating state at {}", k) ) ;
     try_error!(
-      props.activate_state(& mut solver, & k), event
+      props.activate_state(& mut solver, & k), event,
+      "while activating one-state property"
     ) ;
 
     match event.recv() {
@@ -140,8 +130,9 @@ fn kind<
       Some(msgs) => for msg in msgs {
         match msg {
           MsgDown::Forget(ps) => try_error!(
-            props.forget(& mut solver, & ps),
-            event
+            props.forget(& mut solver, & ps), event,
+            "while forgetting some properties\n\
+            because of a `Forget` message (1)"
           ),
           MsgDown::Invariants(_,_) => event.warning(
             "received invariants, skipping"
@@ -176,7 +167,10 @@ fn kind<
         // ) ;
         let implication = actlit.activate_term(one_prop_false) ;
 
-        try_error!(solver.assert(& implication, & k), event) ;
+        try_error!(
+          solver.assert(& implication, & k), event,
+          "while asserting property falsification"
+        ) ;
 
         // event.log(& format!("check-sat assuming {}", lit)) ;
 
@@ -234,8 +228,9 @@ fn kind<
               if invariant {
                 // event.log("forgetting") ;
                 try_error!(
-                  props.forget(& mut solver, & unfalsifiable),
-                  event
+                  props.forget(& mut solver, & unfalsifiable), event,
+                  "while forgetting some properties\n\
+                  because I just proved them invariant"
                 ) ;
                 event.proved_at(unfalsifiable, k.curr()) ; 
                 break 'split
@@ -247,8 +242,9 @@ fn kind<
                     match msg {
                       MsgDown::Forget(ps) => {
                         try_error!(
-                          props.forget(& mut solver, & ps),
-                          event
+                          props.forget(& mut solver, & ps), event,
+                          "while forgetting some properties\n\
+                          because of a `Forget` message (2)"
                         ) ;
                         continue 'out
                       },
@@ -285,11 +281,15 @@ fn kind<
     k = k.nxt() ;
 
     // event.log( & format!("unroll {}", k) ) ;
-    try_error!( sys.unroll(& mut solver, & k), event ) ;
+    try_error!(
+      sys.unroll(& mut solver, & k), event,
+      "while unrolling system"
+    ) ;
 
     // event.log( & format!("activate next at {}", k) ) ;
     try_error!(
-      props.activate_next(& mut solver, & k), event
+      props.activate_next(& mut solver, & k), event,
+      "while activating two state properties"
     ) ;
 
     ()

@@ -25,47 +25,140 @@ extern crate system as sys ;
 use std::fmt ;
 use std::sync::Arc ;
 
+use term::{ Term, Factory } ;
+use term::smt::{
+  Solver, PlainSolver, TeeSolver,
+  Query, QueryIdent, QueryExprInfo
+} ;
+
 use sys::{ Prop, Sys } ;
 
 pub mod msg ;
 pub mod log ;
 pub mod conf ;
 
-
-/** Try for `Result<T, String>` to `Result<T, Vec<String>>` that appends
-something to error messages. */
+/** Try for `Result<T, String>`, appends something to error messages. */
 #[macro_export]
 macro_rules! try_str {
   ($e:expr, $($blah:expr),+) => (
     match $e {
       Ok(res) => res,
       Err(msg) => return Err(
-        vec![
-          format!( $($blah),+ ), msg
-        ]
+        format!(
+          "{}\n{}", format!( $($blah),+ ), msg
+        )
       ),
     }
   ) ;
 }
 
 
-/** Try for `Result<T, Vec<String>>` to `Result<T, Vec<String>>` that appends
-something to error messages. */
+/** Solver trait that bmc and kind will use. */
+pub trait SolverTrait<'a>:
+  Solver<'a, Factory> +
+  Query<'a, Factory> +
+  QueryIdent<'a, Factory, (), String> +
+  QueryExprInfo<'a, Factory, Term> {
+}
+impl<'a> SolverTrait<'a> for PlainSolver<'a, Factory> {}
+impl<'a> SolverTrait<'a> for TeeSolver<'a, Factory> {}
+
+/** Creates a plain solver.
+
+```[no_use]
+// With the `term` crate in scope...
+mk_solver! {
+  solver_conf,
+  conf.smt_log(),
+  "smt_log_file_name_without_smt2_extension",
+  factory, // Cloned in the macro, should be a ref.
+  solver => blah(conf, event, solver),
+  error_msg => event.error(error_msg)
+}
+```
+
+Why use a macro? The solver stores mutable references to the stdin and stout
+of the kid. The kid must thus be in scope when the solver is used.
+
+Writing this in a function is a mess, mostly because of the genericity of the
+function applied in terms of `Plain`/`Tee` solvers.
+
+# TODO
+
+The configuration stuff to pass is messy for now, waiting for conf module to
+reach maturity. */
 #[macro_export]
-macro_rules! try_strs {
-  ($e:expr, $($blah:expr),+) => (
-    match $e {
-      Ok(res) => res,
-      Err(mut msg) => {
-        msg.push( format!( $($blah),+ ) ) ;
-        return Err(msg)
+macro_rules! mk_solver_run {
+  (
+    $conf:expr,
+    $smt_log:expr,
+    $log_file: expr,
+    $factory:expr,
+    $solver:ident => $run:expr,
+    $err:ident => $errun:expr
+  ) => (
+    match term::smt::Kid::mk($conf) {
+      Ok(mut kid) => match term::smt::solver(
+        & mut kid, $factory.clone()
+      ) {
+        Ok($solver) => match * $smt_log {
+          None => $run,
+          Some(ref path) => {
+            let path = format!("{}/{}.smt2", path, $log_file) ;
+            match std::fs::File::create(& path) {
+              Ok(file) => {
+                let $solver = $solver.tee(file) ;
+                $run
+              },
+              Err(e) => {
+                let $err = & format!(
+                  "could not open smt log file \"{}\":\n{:?}", path, e
+                ) ;
+                $errun
+              },
+            }
+          },
+        },
+        Err(e) => {
+          let $err = & format!(
+            "could not create solver from kid:\n{}", e
+          ) ;
+          $errun
+        },
+      },
+      Err(e) => {
+        let $err = & format!(
+          "could not spawn solver kid:\n{}", e
+        ) ;
+        $errun
       },
     }
   ) ;
 }
 
+
+// /** Creates a plain solver. */
+// pub fn run_on_solver<
+//   'a,
+//   F: FnOnce(SolverTrait<'a> + 'static)
+// >(
+//   conf: SolverConf,
+//   f: Factory,
+//   run: F
+// ) -> Res<()> {
+//   let mut kid = try_str!(
+//     Kid::mk(conf),
+//     "could not spawn solver kid:"
+//   ) ;
+//   let solver = try_str!(
+//     term::smt::solver(& mut kid, f),
+//     "could not create solver from kid:"
+//   ) ;
+//   Ok( run(solver) )
+// }
+
 /** Result yielding a list of strings. */
-pub type Res<T> = Result<T, Vec<String>> ;
+pub type Res<T> = Result<T, String> ;
 
 /** Trait the techniques should implement so that kino can call them in a
 generic way. */

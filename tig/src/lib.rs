@@ -14,7 +14,7 @@
 
 extern crate term ;
 extern crate system ;
-#[ macro_use(try_str, try_strs) ]
+#[ macro_use(try_str) ]
 extern crate common ;
 extern crate unroll ;
 

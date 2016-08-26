@@ -19,11 +19,11 @@
 
 extern crate term ;
 extern crate system ;
+#[macro_use]
 extern crate common ;
 extern crate unroll ;
 
 use std::sync::Arc ;
-use std::fs::File ;
 
 use term::{ Term, Offset2, Factory } ;
 use term::smt::* ;
@@ -70,26 +70,11 @@ impl common::CanRun<conf::Bmc> for Bmc {
       Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
     } ;
 
-    match Kid::mk(solver_conf) {
-      Ok(mut kid) => match solver(& mut kid, event.factory().clone()) {
-        Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
-        Ok(solver) => match * conf.smt_log() {
-          None => bmc(solver, sys, props, & mut event),
-          Some(ref path) => match File::create(
-            & format!("{}/bmc.smt2", path)
-          ) {
-            Ok(file) => bmc(solver.tee(file), sys, props, & mut event),
-            Err(e) => event.error(
-              & format!("could not open smt log file \"{}\":\n{:?}", path, e)
-            ),
-          },
-        },
-      },
-      Err(e) => {
-        event.error( & format!("could not spawn solver kid\n{:?}", e) ) ;
-        return ()
-      },
-    }
+    mk_solver_run!(
+      solver_conf, conf.smt_log(), "bmc", event.factory(),
+      solver => bmc(solver, sys, props, & mut event),
+      msg => event.error(msg)
+    )
   }
 }
 
@@ -107,6 +92,13 @@ fn bmc<
 
   let mut actlit_factory = ActlitFactory::mk() ;
 
+  // event.log("creating manager, declaring actlits") ;
+  let mut props = try_error!(
+    PropManager::mk(props, & mut solver, & sys),
+    event,
+    "while creating property manager"
+  ) ;
+
   // event.log("declaring functions, init and trans") ;
   try_error!(
     sys.defclare_funs(& mut solver), event,
@@ -117,13 +109,6 @@ fn bmc<
   try_error!(
     sys.assert_init(& mut solver, & k), event,
     "while asserting init"
-  ) ;
-
-  // event.log("creating manager, declaring actlits") ;
-  let mut props = try_error!(
-    PropManager::mk(props, & mut solver, & sys),
-    event,
-    "while creating property manager"
   ) ;
 
 
@@ -199,22 +184,16 @@ fn bmc<
             // } ;
             // event.log(& s) ;
 
-            match solver.get_model() {
-              Ok(model) => {
-                try_error!(
-                  props.forget(& mut solver, & falsified), event,
-                  "while forgetting property in manager"
-                ) ;
-                event.disproved_at(model, falsified, k.curr())
-              },
-              Err(e) => {
-                event.error(
-                  & format!("could not get model:\n{}", e)
-                ) ;
-                event.done(Info::Error) ;
-                return ()
-              },
-            } ;
+            let model = try_error!(
+              solver.get_model(), event,
+              "could not retrieve model"
+            ) ;
+            
+            try_error!(
+              props.forget(& mut solver, & falsified), event,
+              "while forgetting property in manager"
+            ) ;
+            event.disproved_at(model, falsified, k.curr())
           },
           Err(e) => {
             event.error(
