@@ -10,7 +10,7 @@ use super::{
 } ;
 
 /// *Temporary* terms that are not hashconsed.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TmpTerm {
   /// A (typed) symbol.
   Sym(String, Type),
@@ -40,6 +40,7 @@ impl TmpTerm {
       }
     }
 
+    res.shrink_to_fit() ;
     res
   }
 

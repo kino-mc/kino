@@ -19,10 +19,11 @@ extern crate common ;
 extern crate unroll ;
 
 use std::sync::Arc ;
+use std::fs::File ;
 use std::time::Duration ;
 use std::thread::sleep ;
 
-use term::Offset2 ;
+use term::{ Term, Offset2, Factory } ;
 use term::smt::* ;
 
 use common::conf ;
@@ -66,227 +67,233 @@ impl common::CanRun<conf::Kind> for KInd {
       Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
     } ;
 
-    let mut kid = match Kid::mk(solver_conf) {
-      Ok(kid) => kid,
+    match Kid::mk(solver_conf) {
+      Ok(mut kid) => match solver(& mut kid, event.factory().clone()) {
+        Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
+        Ok(solver) => match * conf.smt_log() {
+          None => kind(solver, sys, props, & mut event),
+          Some(ref path) => match File::create(
+            & format!("{}/kind.smt2", path)
+          ) {
+            Ok(file) => kind(solver.tee(file), sys, props, & mut event),
+            Err(e) => event.error(
+              & format!("could not open smt log file \"{}\":\n{:?}", path, e)
+            ),
+          },
+        },
+      },
       Err(e) => {
         event.error( & format!("could not spawn solver kid\n{:?}", e) ) ;
         return ()
       },
-    } ;
-
-    kind(& mut kid, sys, props, & mut event, conf.smt_log()) ;
+    }
   }
 }
 
-fn kind(
-  kid: & mut Kid, sys: Sys, props: Vec<Prop>,
-  event: & mut Event, _smt_log: & Option<String>
+fn kind<
+  'a,
+  S: Solver<'a, Factory>
+      + Query<'a, Factory>
+      + QueryIdent<'a, Factory, (), String>
+      + QueryExprInfo<'a, Factory, Term>
+>(
+  mut solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
-  match * _smt_log {
-    None => (),
-    Some(_) => event.warning("smt_log is not implemented")
-  } ;
 
-  let factory = event.factory().clone() ;
   let mut actlit_factory = ActlitFactory::mk() ;
 
   // Reversed to unroll backwards.
   let check_offset = Offset2::init().rev() ;
   let mut k = check_offset.clone() ;
 
-  match solver(kid, factory.clone()) {
-    Err(e) => event.error( & format!("could not create solver\n{:?}", e) ),
-    Ok(mut solver) => {
+  // event.log("creating manager, declaring actlits") ;
+  let mut props = try_error!(
+    PropManager::mk(props, & mut solver, & sys),
+    event
+  ) ;
 
-      // event.log("creating manager, declaring actlits") ;
-      let mut props = try_error!(
-        PropManager::mk(props, & mut solver, & sys),
-        event
-      ) ;
+  // event.log("declaring functions, init and trans") ;
+  try_error!(
+    sys.defclare_funs(& mut solver), event
+  ) ;
 
-      // event.log("declaring functions, init and trans") ;
-      try_error!(
-        sys.defclare_funs(& mut solver), event
-      ) ;
+  // event.log("declare svar@0") ;
+  try_error!(
+    sys.declare_svars(& mut solver, check_offset.next()), event
+    // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~~~^^^^
+  ) ;
 
-      // event.log("declare svar@0") ;
-      try_error!(
-        sys.declare_svars(& mut solver, check_offset.next()), event
-        // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~~~^^^^
-      ) ;
+  // event.log( & format!("unroll {}", k) ) ;
+  try_error!( sys.unroll(& mut solver, & k), event ) ;
 
-      // event.log( & format!("unroll {}", k) ) ;
-      try_error!( sys.unroll(& mut solver, & k), event ) ;
+  'out: loop {
 
-      'out: loop {
+    props.reset_inhibited() ;
 
-        props.reset_inhibited() ;
+    // event.log( & format!("activating state at {}", k) ) ;
+    try_error!(
+      props.activate_state(& mut solver, & k), event
+    ) ;
 
-        // event.log( & format!("activating state at {}", k) ) ;
-        try_error!(
-          props.activate_state(& mut solver, & k), event
+    match event.recv() {
+      None => return (),
+      Some(msgs) => for msg in msgs {
+        match msg {
+          MsgDown::Forget(ps) => try_error!(
+            props.forget(& mut solver, & ps),
+            event
+          ),
+          MsgDown::Invariants(_,_) => event.warning(
+            "received invariants, skipping"
+          ),
+          _ => event.error("unknown message")
+        }
+      },
+    } ;
+
+    if props.none_left() {
+      event.done_at(& k.curr()) ;
+      break
+    }
+
+    'split: loop {
+
+      if let Some(one_prop_false) = props.one_false_next() {
+        // Unique, fresh actlit.
+        let actlit = actlit_factory.mk_fresh() ;
+
+        actlit.declare(& mut solver).expect(
+          & format!(
+            "while declaring activation literal in BMC at {}", k
+          )
         ) ;
 
-        match event.recv() {
-          None => return (),
-          Some(msgs) => for msg in msgs {
-            match msg {
-              MsgDown::Forget(ps) => try_error!(
-                props.forget(& mut solver, & ps),
-                event
-              ),
-              MsgDown::Invariants(_,_) => event.warning(
-                "received invariants, skipping"
-              ),
-              _ => event.error("unknown message")
-            }
-          },
-        } ;
+        // event.log(
+        //   & format!(
+        //     "defining actlit {}\nto imply {} at {}",
+        //     lit, one_prop_false, check_offset
+        //   )
+        // ) ;
+        let implication = actlit.activate_term(one_prop_false) ;
 
-        if props.none_left() {
-          event.done_at(& k.curr()) ;
-          break
-        }
+        try_error!(solver.assert(& implication, & k), event) ;
 
-        'split: loop {
+        // event.log(& format!("check-sat assuming {}", lit)) ;
 
-          if let Some(one_prop_false) = props.one_false_next() {
-            // Unique, fresh actlit.
-            let actlit = actlit_factory.mk_fresh() ;
-            actlit.declare(& mut solver).expect(
-              & format!(
-                "while declaring activation literal in BMC at {}", k
-              )
-            ) ;
+        let mut actlits = props.actlits() ;
+        // let prop_count = actlits.len() ;
+        actlits.push(actlit.name()) ;
 
-            // event.log(
-            //   & format!(
-            //     "defining actlit {}\nto imply {} at {}",
-            //     lit, one_prop_false, check_offset
-            //   )
-            // ) ;
-            let implication = actlit.activate_term(one_prop_false) ;
+        // event.log(
+        //   & format!(
+        //     "checking {} properties @{} ({} unrolling(s))",
+        //     props.len(),
+        //     check_offset.next(),
+        //     k.curr()
+        //   )
+        // ) ;
 
-            try_error!(solver.assert(& implication, & k), event) ;
-
-            // event.log(& format!("check-sat assuming {}", lit)) ;
-
-            let mut actlits = props.actlits() ;
-            // let prop_count = actlits.len() ;
-            actlits.push(actlit.name()) ;
-
-            // event.log(
-            //   & format!(
-            //     "checking {} properties @{} ({} unrolling(s))",
-            //     props.len(),
-            //     check_offset.next(),
-            //     k.curr()
-            //   )
-            // ) ;
-
-            match solver.check_sat_assuming( & actlits, & () ) {
-              Ok(true) => {
-                // event.log("sat, getting falsified properties") ;
-                match props.get_false_next(& mut solver, & check_offset) {
-                  Ok(falsified) => {
-                    // let mut s = "falsified:".to_string() ;
-                    // for sym in falsified.iter() {
-                    //   s = format!("{}\n  {}", s, sym)
-                    // } ;
-                    // event.log(& s) ;
-                    props.inhibit(& falsified) ;
-                  },
-                  Err(e) => {
-                    event.error(
-                      & format!("could not get falsifieds\n{:?}", e)
-                    ) ;
-                    break
-                  },
-                }
-              },
-              Ok(false) => {
-                // event.log("unsat") ;
-                let unfalsifiable = props.not_inhibited() ;
-                // Wait until we get something.
-                loop {
-                  let mut invariant = true ;
-                  let at_least = k.curr().pre().unwrap() ;
-                  for prop in unfalsifiable.iter() {
-                    match * event.get_k_true(prop) {
-                      Some(ref o) => {
-                        if o < & at_least {
-                          invariant = false ;
-                          break
-                        }
-                      },
-                      _ => { invariant = false ; break }
-                    }
-                  } ;
-                  if invariant {
-                    // event.log("forgetting") ;
-                    try_error!(
-                      props.forget(& mut solver, & unfalsifiable),
-                      event
-                    ) ;
-                    event.proved_at(unfalsifiable, k.curr()) ; 
-                    break 'split
-                  } else {
-                    // event.log("recv") ;
-                    match event.recv() {
-                      None => return (),
-                      Some(msgs) => for msg in msgs {
-                        match msg {
-                          MsgDown::Forget(ps) => {
-                            try_error!(
-                              props.forget(& mut solver, & ps),
-                              event
-                            ) ;
-                            continue 'out
-                          },
-                          MsgDown::Invariants(_,_) => event.log(
-                            "received invariants, skipping"
-                          ),
-                          _ => event.error("unknown message")
-                        }
-                      },
-                    } ;
-                    sleep(Duration::from_millis(10)) ;
-                  }
-                }
+        match solver.check_sat_assuming( & actlits, & () ) {
+          Ok(true) => {
+            // event.log("sat, getting falsified properties") ;
+            match props.get_false_next(& mut solver, & check_offset) {
+              Ok(falsified) => {
+                // let mut s = "falsified:".to_string() ;
+                // for sym in falsified.iter() {
+                //   s = format!("{}\n  {}", s, sym)
+                // } ;
+                // event.log(& s) ;
+                props.inhibit(& falsified) ;
               },
               Err(e) => {
                 event.error(
-                  & format!("could not perform check-sat\n{:?}", e)
+                  & format!("could not get falsifieds\n{:?}", e)
                 ) ;
                 break
               },
-            } ;
-
-            if props.all_inhibited() { break }
-          } else {
-            break 'split
-          }
+            }
+          },
+          Ok(false) => {
+            // event.log("unsat") ;
+            let unfalsifiable = props.not_inhibited() ;
+            // Wait until we get something.
+            loop {
+              let mut invariant = true ;
+              let at_least = k.curr().pre().unwrap() ;
+              for prop in unfalsifiable.iter() {
+                match * event.get_k_true(prop) {
+                  Some(ref o) => {
+                    if o < & at_least {
+                      invariant = false ;
+                      break
+                    }
+                  },
+                  _ => { invariant = false ; break }
+                }
+              } ;
+              if invariant {
+                // event.log("forgetting") ;
+                try_error!(
+                  props.forget(& mut solver, & unfalsifiable),
+                  event
+                ) ;
+                event.proved_at(unfalsifiable, k.curr()) ; 
+                break 'split
+              } else {
+                // event.log("recv") ;
+                match event.recv() {
+                  None => return (),
+                  Some(msgs) => for msg in msgs {
+                    match msg {
+                      MsgDown::Forget(ps) => {
+                        try_error!(
+                          props.forget(& mut solver, & ps),
+                          event
+                        ) ;
+                        continue 'out
+                      },
+                      MsgDown::Invariants(_,_) => event.log(
+                        "received invariants, skipping"
+                      ),
+                      _ => event.error("unknown message")
+                    }
+                  },
+                } ;
+                sleep(Duration::from_millis(10)) ;
+              }
+            }
+          },
+          Err(e) => {
+            event.error(
+              & format!("could not perform check-sat\n{:?}", e)
+            ) ;
+            break
+          },
         } ;
 
-        if props.none_left() {
-          event.done_at( k.curr() ) ;
-          break
-        }
+        if props.all_inhibited() { break }
+      } else {
+        break 'split
+      }
+    } ;
 
-        k = k.nxt() ;
+    if props.none_left() {
+      event.done_at( k.curr() ) ;
+      break
+    }
 
-        // event.log( & format!("unroll {}", k) ) ;
-        try_error!( sys.unroll(& mut solver, & k), event ) ;
+    k = k.nxt() ;
 
-        // event.log( & format!("activate next at {}", k) ) ;
-        try_error!(
-          props.activate_next(& mut solver, & k), event
-        ) ;
+    // event.log( & format!("unroll {}", k) ) ;
+    try_error!( sys.unroll(& mut solver, & k), event ) ;
 
-        ()
+    // event.log( & format!("activate next at {}", k) ) ;
+    try_error!(
+      props.activate_next(& mut solver, & k), event
+    ) ;
 
-      } ;
-    },
+    ()
+
   }
 }
 

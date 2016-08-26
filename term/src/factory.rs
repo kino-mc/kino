@@ -149,6 +149,30 @@ impl Factory {
         debug_assert!(kids.len() == 1) ;
         return kids[0].clone()
       },
+      RealTerm::Op(Operator::Le, ref kids) => {
+        debug_assert!(kids.len() == 2) ;
+        return self.op(
+          Operator::Gt, kids.clone()
+        )
+      },
+      RealTerm::Op(Operator::Lt, ref kids) => {
+        debug_assert!(kids.len() == 2) ;
+        return self.op(
+          Operator::Ge, kids.clone()
+        )
+      },
+      RealTerm::Op(Operator::Ge, ref kids) => {
+        debug_assert!(kids.len() == 2) ;
+        return self.op(
+          Operator::Lt, kids.clone()
+        )
+      },
+      RealTerm::Op(Operator::Gt, ref kids) => {
+        debug_assert!(kids.len() == 2) ;
+        return self.op(
+          Operator::Le, kids.clone()
+        )
+      },
       _ => (),
     }
     self.op(Operator::Not, vec![ term ])

@@ -211,7 +211,7 @@ impl Actlit {
   /** Identifier corresponding to an actlit. */
   #[inline]
   pub fn name(& self) -> String {
-    format!("fresh_actlit_{}", self.count)
+    format!("|fresh_actlit {}|", self.count)
   }
 
   /** `TmpTerm` version of an actlit. */
@@ -219,7 +219,7 @@ impl Actlit {
     TmpTerm::Sym( self.name(), Type::Bool )
   }
 
-  /** Creates a fresh actlit and declares it. */
+  /** Declares an actlit. */
   pub fn declare<
     'a, S: Solver<'a, Factory>
   >(& self, solver: & mut S) -> SmtRes<()> {

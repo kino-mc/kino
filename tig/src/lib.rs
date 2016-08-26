@@ -85,3 +85,48 @@ impl Domain for Rat  {
     f.le(lhs, rhs)
   }
 }
+
+
+
+/// Candidate term mining functions.
+pub mod mine {
+
+  use std::collections::HashSet ;
+
+  use term::{ Factory, Term } ;
+  use system::Sys ;
+
+  /// Mines a system for boolean candidate terms.
+  pub fn bool(factory: & Factory, sys: Sys) -> HashSet<Term> {
+    use term::{ VarMaker, State } ;
+
+    let svars = sys.state().args() ;
+    let mut boo_svars = Vec::with_capacity( svars.len() / 3 ) ;
+    // let int_svars = Vec::with_capacity( svars.len() / 3 ) ;
+    // let rat_svars = Vec::with_capacity( svars.len() / 3 ) ;
+
+    let mut result = HashSet::with_capacity( svars.len() * 10 ) ;
+
+    for & (ref sym, ref typ) in svars.iter() {
+      use term::Type::* ;
+      match * typ {
+        Bool => boo_svars.push( sym.clone() ),
+        _ => (),
+        // Int  => int_svars.push( sym.clone() ),
+        // Rat  => rat_svars.push( sym.clone() ),
+      }
+    }
+
+    for svar in boo_svars.into_iter() {
+      let svar = factory.svar(svar, State::Curr) ;
+      let term = factory.mk_var(svar) ;
+      let was_there = result.insert( term.clone() ) ;
+      debug_assert!( ! was_there ) ;
+      let term = factory.not(term) ;
+      let was_there = result.insert( term ) ;
+      debug_assert!( ! was_there )
+    }
+
+    result
+  }
+}

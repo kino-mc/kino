@@ -12,8 +12,6 @@
 (define-sys sys_a 
   ;; State signature.
   ( (in Bool) (out Int) )
-  ;; Local definitions.
-  ()
   ;; Init.
   (ite (_ curr in) (= (_ curr out) 1) (= (_ curr out) 0))
   ;; Trans.
