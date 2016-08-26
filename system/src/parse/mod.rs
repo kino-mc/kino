@@ -183,12 +183,14 @@ impl Cex {
     }
 
     // Printing states.
-    for (ref off, ref cex) in self.trace.iter() {
-      try!( write!(fmt, "  ; State {}:\n  (and\n", off) ) ;
+    let mut off = Offset::zero() ;
+    while let Some( ref cex ) = self.trace.get(& off) {
+      try!( write!(fmt, "  ; state {}:\n  (and\n", off) ) ;
       for (ref sym, ref cst) in cex.iter() {
         try!( write!(fmt, "    (= {} {})\n", sym, cst) )
       }
-      try!( write!(fmt, "  )\n") )
+      try!( write!(fmt, "  )\n") ) ;
+      off = off.nxt()
     }
 
     write!(fmt, ")\n")
