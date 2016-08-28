@@ -7,13 +7,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+/*! Cached evaluator. */
+
 use std::marker::PhantomData ;
+use std::collections::HashMap ;
 
 use term::{
-  Offset2, Cst,
-  Term, TermMap,
-  Factory, Model,
+  Offset2, Cst, Factory, Model, Term
 } ;
+use term::tmp::{ TmpTerm } ;
+
+use common::Res ;
+
+/// Cache: map from temp terms to constants.
+type TTermCache = HashMap<TmpTerm, Cst> ;
 
 use Domain ;
 
@@ -42,7 +49,7 @@ use Domain ;
     /// The offset we're evaluating with.
     offset: Offset2,
     /// The cache for term evaluation in this model.
-    cache: TermMap<Cst>,
+    cache: TTermCache,
     /// Term factory for actual evaluation.
     factory: Factory,
   }
@@ -53,7 +60,7 @@ use Domain ;
       Eval {
         phantom: PhantomData,
         model: model, offset: offset,
-        cache: TermMap::with_capacity(100), factory: factory
+        cache: TTermCache::with_capacity(100), factory: factory
       }
     }
 
@@ -66,8 +73,15 @@ use Domain ;
       ()
     }
 
-    /// Evaluates a term, cached.
-    pub fn eval(& mut self, term: & Term) -> Result<Val, String> {
+    /// Evaluates a real term. Cached at top level.
+    pub fn eval_term(& mut self, term: & Term) -> Res<Val> {
+      self.eval(
+        & TmpTerm::Trm( (* term).clone() )
+      )
+    }
+
+    /// Evaluates a temp term, cached at temp leve.
+    pub fn eval(& mut self, term: & TmpTerm) -> Res<Val> {
       use term::zip::Step ;
 
       // Early check to return immediately if term's cached.
@@ -76,7 +90,7 @@ use Domain ;
         return Val::of_cst(cst)
       }
 
-      let term = term.clone() ;
+      // let term = term.clone() ;
 
       let mut stack = vec![] ;       // Vector of `Step`s for zipping down/up.
       let mut values  = vec![] ;     // Vector of arguments already evaluated.
@@ -88,52 +102,85 @@ use Domain ;
 
           if let Some(term) = current.pop() {
             // There is a term to evaluate for this step.
+            use term::tmp::TmpTerm::* ;
 
             if let Some(cst) = self.cache.get(& term) {
               // Cache hit, done with this term.
-              values.push(cst.clone())
+              values.push(cst.clone()) ;
+              continue 'eval_args
+            }
 
-            } else {
-              use term::real_term::Term::* ;
-              // Need to evaluate this term.
-              match * term.get() {
-                // Variable, evaluate.
-                V(_) => match self.factory.eval(
-                  & term, & self.offset, & self.model
-                ) {
-                  Ok(c) => values.push(c),
-                  Err(s) => return Err(s),
-                },
+            // Need to evaluate this term.
+            match * term {
 
-                // Constant, nothing to do.
-                C(ref cst) => values.push(cst.clone()),
+              // Symbol, illegal.
+              Sym(ref sym, ref typ) => return Err(
+                format!(
+                  "cannot evaluate temporary symbol {}: {}", sym, typ
+                )
+              ),
 
-                // Operator, putting on stack.
-                Op(ref op, ref args) => {
-                  use std::iter::Extend ;
-                  stack.push(
-                    (
-                      Step::Op(op.clone(), vec![()]),
-                      values, current
-                    )
-                  ) ;
-                  values = Vec::with_capacity(args.len()) ;
-                  current = Vec::with_capacity(args.len()) ;
-                  current.extend( args.iter().map(|t| t.clone()) )
-                },
+              // Actual term, evaluate.
+              Trm(ref trm) => {
+                let value = try_str!(
+                  self.factory.eval(trm, & self.offset, & self.model),
+                  "could not evaluate term\n{}", trm
+                ) ;
+                self.cache.insert( Trm(trm.clone()), value.clone() ) ;
+                values.push(value)
+              },
 
-                App(ref sym, _) => panic!(
-                  format!("evaluation of applications not implemented ({})", sym)
-                ),
+              // Node, push on stack.
+              Nod(ref op, ref kids) => {
+                stack.push(
+                  (
+                    Step::Op( op.clone(), kids.clone() ),
+                    values, current
+                  )
+                ) ;
+                values = Vec::with_capacity( kids.len() ) ;
+                current = Vec::with_capacity( kids.len() ) ;
+                for kid in kids.iter().rev() {
+                  current.push(kid)
+                }
+              },
 
-                Let(_, _) => panic!(
-                  "evaluation of let bindings not implemented"
-                ),
+              // // Variable, evaluate.
+              // V(_) => match self.factory.eval(
+              //   & term, & self.offset, & self.model
+              // ) {
+              //   Ok(c) => values.push(c),
+              //   Err(s) => return Err(s),
+              // },
 
-                Forall(_, _) | Exists(_, _) => panic!(
-                  "evaluation of quantifier not implemented"
-                ),
-              }
+              // // Constant, nothing to do.
+              // C(ref cst) => values.push(cst.clone()),
+
+              // // Operator, putting on stack.
+              // Op(ref op, ref args) => {
+              //   use std::iter::Extend ;
+              //   stack.push(
+              //     (
+              //       Step::Op(op.clone(), vec![()]),
+              //       values, current
+              //     )
+              //   ) ;
+              //   values = Vec::with_capacity(args.len()) ;
+              //   current = Vec::with_capacity(args.len()) ;
+              //   current.extend( args.iter().map(|t| t.clone()) )
+              // },
+
+              // App(ref sym, _) => panic!(
+              //   format!("evaluation of applications not implemented ({})", sym)
+              // ),
+
+              // Let(_, _) => panic!(
+              //   "evaluation of let bindings not implemented"
+              // ),
+
+              // Forall(_, _) | Exists(_, _) => panic!(
+              //   "evaluation of quantifier not implemented"
+              // ),
             }
           } ;
 
@@ -151,12 +198,16 @@ use Domain ;
           // Stack's not empty.
           match step {
 
-            Step::Op(op, _) => {
+            Step::Op(op, kids) => {
               // Evaluating operator on arguments.
               let val = match op.eval(& self.factory, values) {
                 Ok(val) => val,
                 Err(s) => return Err(s),
               } ;
+              // Updating cache.
+              self.cache.insert(
+                TmpTerm::Nod(op, kids), val.clone()
+              ) ;
               // Restoring previous context.
               values = vals ;
               current = curs ;
@@ -164,7 +215,7 @@ use Domain ;
               values.push(val)
             },
 
-            _ => panic!("aaa"),
+            _ => unreachable!(),
           }
         } else {
           // Stack is empty, there should be exactly one value in `values` and

@@ -554,29 +554,29 @@ impl ParseSmt2 for Factory {
 }
 
 
-/** Parsers for TSV Systems */
-pub trait ParseSts2 {
-  /** Type of identifiers when parsing an TSV system. */
+/** Parsers for VMT Systems */
+pub trait ParseVmt2 {
+  /** Type of identifiers when parsing an VMT system. */
   type Ident ;
   /** Type for the result of expression parsing. */
   type ExprRes ;
-  /** Type of types when parsing an TSV system. */
+  /** Type of types when parsing an VMT system. */
   type Type ;
-  /** Parses an identifier in TSV format. */
+  /** Parses an identifier in VMT format. */
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], Self::Ident> ;
-  /** Parses an expression in TSV format. */
+  /** Parses an expression in VMT format. */
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], Self::ExprRes> ;
-  /** Parses a Type in TSV format. */
+  /** Parses a Type in VMT format. */
   fn parse_type<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], Self::Type> ;
 }
 
-impl ParseSts2 for Factory {
+impl ParseVmt2 for Factory {
   type Ident = Sym ;
   type ExprRes = TermAndDep ;
   type Type = Type ;

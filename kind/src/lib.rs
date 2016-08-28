@@ -24,6 +24,7 @@ use std::time::Duration ;
 use std::thread::sleep ;
 
 use term::Offset2 ;
+use term::smt::SolverStyle ;
 
 use common::conf ;
 use common::SolverTrait ;
@@ -195,7 +196,7 @@ fn kind<
         // Wait until we get something from BMC.
         loop {
           let mut invariant = true ;
-          let at_least = k.curr().pre().unwrap() ;
+          let at_least = k.curr().pre() ;
           for prop in unfalsifiable.iter() {
             match * event.get_k_true(prop) {
               Some(ref o) => {
@@ -324,7 +325,7 @@ fn kind<
 pub struct KIndConf {
   max: Option<usize>,
   restart: bool,
-  solver: term::smt::SolverStyle,
+  solver: SolverStyle,
 }
 
 impl KIndConf {
@@ -333,7 +334,7 @@ impl KIndConf {
   #[inline(always)]
   pub fn default() -> Self {
     KIndConf {
-      max: None, restart: true, solver: term::smt::SolverStyle::Z3
+      max: None, restart: true, solver: SolverStyle::Z3
     }
   }
 
@@ -349,7 +350,7 @@ impl KIndConf {
   }
   /** Sets the solver style. */
   #[inline(always)]
-  pub fn set_solver(& mut self, s: term::smt::SolverStyle) {
+  pub fn set_solver(& mut self, s: SolverStyle) {
     self.solver = s
   }
 
@@ -365,7 +366,7 @@ impl KIndConf {
   }
   /** The solver style. */
   #[inline(always)]
-  pub fn solver(& self) -> & term::smt::SolverStyle {
+  pub fn solver(& self) -> & SolverStyle {
     & self.solver
   }
 }

@@ -74,19 +74,21 @@ pub trait StateWritable<S: SymWritable, Svw: SVarWriter<S>> {
 }
 
 /** An offset. */
-#[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash,Clone,Copy)]
-pub struct Offset { offset: u16 }
+#[derive(
+  Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy
+)]
+pub struct Offset { offset: i16 }
 
 impl Offset {
   /** The zero offset. */
-  pub fn zero() -> Self { Offset { offset: 0u16 } }
+  pub fn zero() -> Self { Offset { offset: 0i16 } }
 
   /** Bytes to Offset conversion. */
   pub fn of_bytes(bytes: & [u8]) -> Self {
     // -> Result<Offset, std::num::ParseIntError> {
     use std::str ;
     Offset {
-      offset: u16::from_str_radix(
+      offset: i16::from_str_radix(
         str::from_utf8(bytes).unwrap(), 10
       ).unwrap()
     }
@@ -95,7 +97,7 @@ impl Offset {
   /** `usize` to Offset conversion. */
   pub fn of_int(int: usize) -> Self {
     Offset {
-      offset: u16::from_str_radix(
+      offset: i16::from_str_radix(
         & int.to_string(), 10
       ).unwrap()
     }
@@ -104,20 +106,19 @@ impl Offset {
   /** Returns the offset following this one. */
   pub fn nxt(& self) -> Self {
     Offset {
-      offset: self.offset + 1u16
+      offset: self.offset + 1i16
     }
   }
 
-  /** Returns the offset preceeding this one if it's not 0. */
-  pub fn pre(& self) -> Option<Self> {
-    if self.offset == 0u16 { None } else {
-      Some(
-        Offset {
-          offset: self.offset - 1u16
-        }
-      )
+  /** Returns the offset preceeding this one. */
+  pub fn pre(& self) -> Self {
+    Offset {
+      offset: self.offset - 1i16
     }
   }
+
+  /** `usize` version of anoffset. */
+  pub fn to_usize(& self) -> usize { self.offset as usize }
 }
 
 impl fmt::Display for Offset {
@@ -133,7 +134,7 @@ impl Writable for Offset {
 }
 
 /** Two-state offset. */
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Offset2 {
   /** Current offset. */
   curr: Offset,
@@ -142,6 +143,11 @@ pub struct Offset2 {
 }
 
 impl Offset2 {
+  // /// Creates an `Offset2`. Sometimes necessary, but prefer `init`.
+  // pub fn mk(curr: Offset, next: Offset) -> Self {
+  //   Offset2 { curr: curr, next: next }
+  // }
+
   /** Initial two-state offset. */
   pub fn init() -> Self {
     Offset2{
@@ -174,6 +180,15 @@ impl Offset2 {
     Offset2 {
       curr: self.curr.nxt(),
       next: self.next.nxt(),
+    }
+  }
+
+  /** Returns the two state offset preceeding `self`. */
+  #[inline(always)]
+  pub fn pre(& self) -> Self {
+    Offset2 {
+      curr: self.curr.pre(),
+      next: self.next.pre(),
     }
   }
 

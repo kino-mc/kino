@@ -9,10 +9,12 @@ use super::{
   Term, Type, Operator, Offset2
 } ;
 
+use Factory ;
+
 /** *Temporary* terms that are not hashconsed.
 
 **Warning**: no `|`-quoting is added when printing a symbol in SMT-LIB 2. */
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum TmpTerm {
   /// A (typed) symbol.
   Sym(String, Type),
@@ -46,11 +48,121 @@ impl TmpTerm {
     res
   }
 
+  /// Transforms a temp term in a normal term.
+  ///
+  /// Returns an error if the temp term contains a `Sym`. That's because
+  /// a symbol in a temp term is a temporary symbol. There is currently no
+  /// situation where a temporary symbol needs to be converted to a term.
+  pub fn to_term_safe(mut self, factory: & Factory) -> Result<Term, String> {
+    use term::OpMaker ;
+    use self::TmpTerm::* ;
+
+    // Temp terms are supposed to be relatively shallow, small stack.
+    //
+    // Stores triples of
+    // - an operator
+    // - a list of terms
+    // - a list of temp terms
+    let mut stack = Vec::with_capacity(4) ;
+
+    // Inserts a term in a stack.
+    //
+    // Result is either `Union::Lft` with the final term, meaning the stack
+    // has been consumed. Or a `Union::Rgt` containing the next temp term to
+    // translate.
+    let insert = |
+      stack: & mut Vec< (Operator, Vec<Term>, Vec<TmpTerm>) >,
+      mut term,
+      factory: & Factory
+    | {
+      loop {
+        if let Some( (op, mut kids, mut to_do) ) = stack.pop() {
+          kids.push(term) ;
+          match to_do.pop() {
+            // No terms left for this node, going up.
+            None => term = factory.op(op, kids),
+            // There's some temp kids left, done.
+            Some(tmp_kid) => {
+              stack.push( (op, kids, to_do) ) ;
+              return Union::Rgt(tmp_kid)
+            },
+          }
+        } else {
+          // Stack's empty, we done.
+          return Union::Lft(term)
+        }
+      }
+    } ;
+
+    loop {
+
+      match self {
+
+        // Already a real term, insert in stack.
+        Trm(t) => match insert(& mut stack, t, factory) {
+          // Insertion yields the result term.
+          Union::Lft(result) => {
+            debug_assert!( stack.len() == 0 ) ;
+            return Ok(result)
+          },
+          // Insertion yields the next temp term to translate.
+          Union::Rgt(t) => self = t,
+        },
+
+        // Node, updating `stack` and `term`.
+        Nod(op, mut kids) => {
+          // Reverse kids so that it's in the right order in the stack.
+          kids.reverse() ;
+          // Retrieving first kid.
+          self = match kids.pop() {
+            Some(kid) => kid,
+            None => return Err(
+              format!("illegal application of op {} with no kids", op)
+            ),
+          } ;
+          // Updating stack.
+          stack.push(
+            (op, Vec::with_capacity( kids.len() ), kids)
+          )
+        },
+
+        // Symbols are illegal.
+        Sym(s, t) => return Err(
+          format!(
+            "temporary term contains a symbol {}: {}\n\
+            conversion to actual term is unsafe",
+            s, t
+          )
+        ),
+      }
+    }
+  }
+
+  /// Creates a conjunction of temp terms.
+  pub fn and(terms: Vec<TmpTerm>) -> TmpTerm {
+    TmpTerm::Nod( Operator::And, terms )
+  }
+
   /// Creates a conjunction of real terms.
   pub fn mk_term_conj(terms: & Vec<Term>) -> TmpTerm {
-    TmpTerm::Nod(
-      Operator::And,
+    TmpTerm::and(
       terms.iter().map(|t| TmpTerm::Trm(t.clone())).collect()
+    )
+  }
+
+  /// Creates an implication between two real terms.
+  pub fn mk_term_impl(lhs: Term, rhs: Term) -> TmpTerm {
+    TmpTerm::Nod(
+      Operator::Impl,
+      vec![ TmpTerm::Trm(lhs), TmpTerm::Trm(rhs) ]
+    )
+  }
+
+  /// Creates an `Le` relation between two real terms.
+  pub fn mk_term_le(lhs: Term, rhs: Term) -> TmpTerm {
+    TmpTerm::Nod(
+      Operator::Le,
+      vec![ TmpTerm::Trm(lhs), TmpTerm::Trm(rhs) ]
     )
   }
 
@@ -98,6 +210,14 @@ impl Expr2Smt<Offset2> for TmpTerm {
 
     Ok(())
   }
+}
+
+/// Helper enum for term translation.
+pub enum Union<T1, T2> {
+  /// A value of the first type.
+  Lft(T1),
+  /// A value of the second type.
+  Rgt(T2),
 }
 
 /// Can create an activation term from something.

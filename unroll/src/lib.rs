@@ -13,16 +13,21 @@ properties. */
 
 extern crate term ;
 extern crate system as sys ;
+#[macro_use]
+extern crate common ;
 
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
-  Factory, Type, Sym, Term, Offset, Offset2, STerm, real_term
+  Factory, Type, Sym, Term, Model,
+  Offset, Offset2, STerm, real_term
 } ;
 use term::smt::* ;
 use term::tmp::* ;
 
 use sys::{ Prop, Sys } ;
+
+use common::{ Res, SolverTrait } ;
 
 /// Associates a key and a description to some type.
 #[derive(Clone)]
@@ -53,7 +58,7 @@ impl<T: Clone> Opt<T> {
 }
 
 /** Defines the init and trans predicates of a system. */
-fn define<'a, S: Solver<'a, Factory>>(
+fn define<'a, S: SolverTrait<'a>>(
   sys: & sys::Sys, solver: & mut S, o: & Offset2
 ) -> UnitSmtRes {
   let init = sys.init() ;
@@ -82,30 +87,34 @@ fn define<'a, S: Solver<'a, Factory>>(
 pub trait Unroller {
   /** Declares/defines UFs, functions, and system init/trans predicates. */
   fn defclare_funs<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, & mut S) -> UnitSmtRes ;
+
   /** Declares state variables at some offset. */
   #[inline(always)]
   fn declare_svars<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, & mut S, & Offset) -> UnitSmtRes ;
+
   /** Asserts the init predicate. **Declares** state variables in the current
   offset. */
   #[inline(always)]
   fn assert_init<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes ;
+
   /** Unrolls the transition relation once. **Declares** state variables in
   the next offset if the offset is not reversed, in the current offset
   otherwise (for backward unrolling). */
   #[inline(always)]
   fn unroll<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes ;
 }
+
 impl Unroller for sys::Sys {
   fn defclare_funs<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S) -> UnitSmtRes {
     use sys::real_sys::Callable::* ;
     // Will not really be used.
@@ -139,7 +148,7 @@ impl Unroller for sys::Sys {
   }
 
   fn declare_svars<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S, o: & Offset) -> UnitSmtRes {
     for & (ref var, ref typ) in self.init().1.iter() {
       try!(
@@ -150,7 +159,7 @@ impl Unroller for sys::Sys {
   }
 
   fn assert_init<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes {
     try!(
       self.declare_svars(solver, o.curr())
@@ -158,13 +167,79 @@ impl Unroller for sys::Sys {
     solver.assert(self.init_term(), o)
   }
   fn unroll<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes {
     let off = if o.is_rev() { o.curr() } else { o.next() } ;
     try!(
       self.declare_svars(solver, off)
     ) ;
     solver.assert(self.trans_term(), o)
+  }
+}
+
+/// Can retrieve a model corresponding to a precise state of a system.
+pub trait SysModel {
+  /// The variables to aske the value of for `get_model`.
+  fn get_model_vars(& self, & Factory) -> Vec< Term > ;
+  /// A model for a precise state (or pair of states) of a system.
+  fn get_model<
+    'a, S: SolverTrait<'a> + QueryExprInfo<'a, Factory, Term>
+  >(
+    & self, solver: & mut S, off: & Offset2
+  ) -> Res<Model> {
+    use term::Smt2Offset ;
+    let vars = self.get_model_vars( solver.parser() ) ;
+    let values = try_str!(
+      solver.get_values( & vars, off ),
+      "could not get values of (state) vars"
+    ) ;
+    let mut model = Vec::with_capacity( values.len() ) ;
+    for ( (term, off), val ) in values.into_iter() {
+      let off = match off {
+        Smt2Offset::No => None,
+        Smt2Offset::One(off) => Some(off),
+        Smt2Offset::Two(lo, hi) => return Err(
+          format!(
+            "unexpected two state ({},{}) term\n\
+            terms should be one- or zero-state", lo, hi
+          )
+        ),
+      } ;
+      if let real_term::Term::V(ref var) = * term.get() {
+        model.push( ( (var.clone(), off), val) )
+      } else {
+        return Err(
+          format!(
+            "unexpected term {}\nall terms should be variables", term
+          )
+        )
+      }
+    }
+    Ok(model)
+  }
+}
+impl SysModel for Sys {
+  fn get_model_vars(& self, factory: & Factory) -> Vec<Term> {
+    use term::{ VarMaker, State } ;
+    use sys::real_sys::Callable::* ;
+
+    let mut to_get = Vec::with_capacity( (** self).state().args().len() ) ;
+
+    // Retrieve global UFs.
+    for fun in self.calls().get() {
+      match * * fun {
+        Dec(ref fun) => to_get.push( factory.var(fun.sym().clone()) ),
+        Def(_) => (),
+      }
+    }
+
+    // Push state.
+    for & (ref sym, _) in (** self).state().args().iter() {
+      to_get.push( factory.svar( sym.clone(), State::Curr ) ) ;
+      to_get.push( factory.svar( sym.clone(), State::Next ) ) ;
+    }
+
+    to_get
   }
 }
 
@@ -202,11 +277,6 @@ pub struct Actlit {
 }
 
 impl Actlit {
-  /** Constructs an actlit generator. */
-  #[inline]
-  pub fn mk() -> Self {
-    Actlit { count: 0, offset: Offset2::init() }
-  }
 
   /** Identifier corresponding to an actlit. */
   #[inline]
@@ -221,7 +291,7 @@ impl Actlit {
 
   /** Declares an actlit. */
   pub fn declare<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(& self, solver: & mut S) -> SmtRes<()> {
     let (id, ty) = ( self.name(), Type::Bool ) ;
     solver.declare_fun(& id, & [], & ty, & ())
@@ -234,7 +304,7 @@ impl Actlit {
 
   /** Deactivates an activation literal. */
   pub fn deactivate<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(self, solver: & mut S) -> UnitSmtRes {
     solver.assert(
       & self.as_tmp_term().tmp_neg(), & self.offset
@@ -271,7 +341,7 @@ impl PropManager {
   /** Constructs a property manager. Creates and declares one positive
   activation literal per property. */
   pub fn mk<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(
     props: Vec<Prop>, solver: & mut S, sys: & Sys
   ) -> SmtRes<Self> {
@@ -341,7 +411,7 @@ impl PropManager {
 
   /** Removes some properties from a manager. */
   pub fn forget<
-    'a, 'b, S: Solver<'a, Factory>, Props: Iterator<Item=& 'b Sym>
+    'a, 'b, S: SolverTrait<'a>, Props: Iterator<Item=& 'b Sym>
   >(
     & mut self, solver: & mut S, props: Props
   ) -> UnitSmtRes {
@@ -370,7 +440,7 @@ impl PropManager {
   That is, if the offset is `(0,1)` all one-state properties will be activated
   at `1`. */
   pub fn activate_state<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, at: & Offset2
   ) -> UnitSmtRes {
@@ -383,7 +453,7 @@ impl PropManager {
   /** Activates all the two-state properties, including inhibited ones, at a
   given offset by overloading their activation literals. */
   pub fn activate_next<
-    'a, S: Solver<'a, Factory>
+    'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, at: & Offset2
   ) -> UnitSmtRes {
@@ -451,7 +521,7 @@ impl PropManager {
   /** Returns the list of non-inhibited one-state properties that evaluate to
   false in their state version for some offset in a solver. */
   pub fn get_false_state<
-    'a, S: Solver<'a, Factory> + QueryExprInfo<'a, Factory, Term>
+    'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, o: & Offset2
   ) -> SmtRes<Vec<Sym>> {
@@ -490,7 +560,7 @@ impl PropManager {
   /** Returns the list of non-inhibited properties that evaluate to false in
   their next version for some offset in a solver. */
   pub fn get_false_next<
-    'a, S: Solver<'a, Factory> + QueryExprInfo<'a, Factory, Term>
+    'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, o: & Offset2
   ) -> SmtRes<Vec<Sym>> {

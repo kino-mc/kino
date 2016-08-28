@@ -25,9 +25,10 @@ extern crate unroll ;
 
 use std::sync::Arc ;
 
-use term::{ Term, Offset2, Factory } ;
-use term::smt::* ;
+use term::Offset2 ;
+use term::smt::SolverStyle ;
 
+use common::SolverTrait ;
 use common::conf ;
 use common::msg::{ Event, MsgDown, Info } ;
 
@@ -80,11 +81,7 @@ impl common::CanRun<conf::Bmc> for Bmc {
 
 
 fn bmc<
-  'a,
-  S: Solver<'a, Factory>
-      + Query<'a, Factory>
-      + QueryIdent<'a, Factory, (), String>
-      + QueryExprInfo<'a, Factory, Term>
+  'a, S: SolverTrait<'a>
 >(
   mut solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
@@ -253,7 +250,7 @@ pub struct BmcConf {
   /// Max number of unrolling.
   max: Opt< Option<usize> >,
   /// Solver to use.
-  solver: Opt< term::smt::SolverStyle >,
+  solver: Opt< SolverStyle >,
   /// Optional file path to log the smt trace to.
   smt_trace: Opt< Option<String> >,
 }

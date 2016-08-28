@@ -21,17 +21,16 @@ extern crate unroll ;
 use std::fmt::Display ;
 
 use term::{
-  Factory, Term, Cst,
-  Bool, Int, Rat,
+  Term, Cst, Bool, Int, Rat,
 } ;
 
-/** Cached evaluator. */
+use term::tmp::TmpTerm ;
+
 pub mod eval ;
-/** Chain (result of splitting an equivalence class. */
 pub mod chain ;
-/** Graph representing the knowledge learnt by the invariant generation
-technique. */
 pub mod graph ;
+
+pub mod lsd ;
 
 
 
@@ -44,7 +43,7 @@ pub trait Domain : PartialEq + Eq + PartialOrd + Ord + Clone + Display {
   /** A value from a constant. */
   fn of_cst(& Cst) -> Result<Self, String> ;
   /** Creates a term encoding a relation between terms. */
-  fn mk_cmp(& mut Factory, Term, Term) -> Term ;
+  fn mk_cmp(Term, Term) -> TmpTerm ;
 }
 impl Domain for Bool {
   fn of_cst(cst: & Cst) -> Result<Self, String> {
@@ -55,8 +54,8 @@ impl Domain for Bool {
       ),
     }
   }
-  fn mk_cmp(f: & mut Factory, lhs: Term, rhs: Term) -> Term {
-    f.imp(lhs, rhs)
+  fn mk_cmp(lhs: Term, rhs: Term) -> TmpTerm {
+    TmpTerm::mk_term_impl(lhs, rhs)
   }
 }
 impl Domain for Int  {
@@ -68,8 +67,8 @@ impl Domain for Int  {
       ),
     }
   }
-  fn mk_cmp(f: & mut Factory, lhs: Term, rhs: Term) -> Term {
-    f.le(lhs, rhs)
+  fn mk_cmp(lhs: Term, rhs: Term) -> TmpTerm {
+    TmpTerm::mk_term_le(lhs, rhs)
   }
 }
 impl Domain for Rat  {
@@ -81,8 +80,8 @@ impl Domain for Rat  {
       ),
     }
   }
-  fn mk_cmp(f: & mut Factory, lhs: Term, rhs: Term) -> Term {
-    f.le(lhs, rhs)
+  fn mk_cmp(lhs: Term, rhs: Term) -> TmpTerm {
+    TmpTerm::mk_term_le(lhs, rhs)
   }
 }
 

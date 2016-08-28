@@ -241,6 +241,7 @@ dependencies = [
 name = "unroll"
 version = "0.1.0"
 dependencies = [
+ "common 0.1.0",
  "system 0.1.0",
  "term 0.1.0",
 ]

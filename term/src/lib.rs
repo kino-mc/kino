@@ -122,7 +122,7 @@ pub mod tmp ;
 mod parser ;
 pub use parser::vmt::TermAndDep ;
 mod factory ;
-pub use factory::{ Factory, ParseSts2, UnTermOps } ;
+pub use factory::{ Factory, ParseVmt2, UnTermOps } ;
 pub mod gen ;
 
 /** A model is a vector of variables with optional offset and values. */

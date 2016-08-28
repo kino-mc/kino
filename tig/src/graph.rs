@@ -7,6 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+/*! Graph representing the knowledge learnt by the invariant generation
+technique. */
+
 use std::io ;
 
 use common::Res ;
@@ -14,6 +17,7 @@ use common::Res ;
 use term::{
   Term, TermSet, TermMap,
 } ;
+// use term::tmp::TmpTerm ;
 
 use Domain ;
 use eval::Eval ;
@@ -372,7 +376,8 @@ digraph mode_graph {{
       chain = try_str!(
         chain.insert(
           try_str!(
-            eval.eval(rep), "[split_class] while evaluating representative"
+            eval.eval_term(rep),
+            "[split_class] while evaluating representative"
           ),
           rep.clone()
         ),
@@ -383,7 +388,7 @@ digraph mode_graph {{
         chain = try_str!(
           chain.insert(
             try_str!(
-              eval.eval(term),
+              eval.eval_term(term),
               "[split_class] while evaluating term for rep {}", rep
             ),
             term.clone()

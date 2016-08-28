@@ -13,7 +13,7 @@ use base::* ;
 use super::Context ;
 use super::{ Atom, Res } ;
 use super::check::* ;
-use term::{ Type, Sym, TermAndDep, Factory, ParseSts2 } ;
+use term::{ Type, Sym, TermAndDep, Factory, ParseVmt2 } ;
 
 /** Parses a multispace and a comment. */
 named!{
