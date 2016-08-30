@@ -27,6 +27,7 @@ use common::log::{ MasterLog, Formatter, Styler } ;
 
 use bmc ;
 use kind ;
+use tig ;
 
 /** Master, handles all the underlying techniques running in parallel. */
 pub struct Master ;
@@ -52,22 +53,39 @@ impl Master {
     // Launching BMC.
     match conf.bmc {
       None => (),
-      Some(conf) => match manager.launch(
-        bmc::Bmc, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
-      ) {
-        Ok(()) => (),
-        Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+      Some(conf) => if * conf.is_on() {
+        match manager.launch(
+          bmc::Bmc, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
+        ) {
+          Ok(()) => (),
+          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+        }
       },
     } ;
 
     // Launching k-induction.
     match conf.kind {
       None => (),
-      Some(conf) => match manager.launch(
-        kind::KInd, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
-      ) {
-        Ok(()) => (),
-        Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+      Some(conf) => if * conf.is_on() {
+          match manager.launch(
+          kind::KInd, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
+        ) {
+          Ok(()) => (),
+          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+        }
+      },
+    } ;
+
+    // Launching invgen.
+    match conf.tig {
+      None => (),
+      Some(conf) => if * conf.is_on() {
+        match manager.launch(
+          tig::Tig, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
+        ) {
+          Ok(()) => (),
+          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+        }
       },
     } ;
 

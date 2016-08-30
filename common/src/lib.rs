@@ -33,10 +33,6 @@ use term::smt::{
 
 use sys::{ Prop, Sys } ;
 
-pub mod msg ;
-pub mod log ;
-pub mod conf ;
-
 /** Try for `Result<T, String>`, appends something to error messages. */
 #[macro_export]
 macro_rules! try_str {
@@ -50,6 +46,26 @@ macro_rules! try_str {
       ),
     }
   ) ;
+}
+
+pub mod msg ;
+pub mod log ;
+pub mod conf ;
+
+/// Tries to run something. If `Err`, communicate error and return unit.
+#[macro_export]
+macro_rules! try_error {
+  ($e:expr, $event:expr, $($blah:expr),+) => (
+    match $e {
+      Ok(v) => v,
+      Err(e) => {
+        let blah = format!( $( $blah ),+ ) ;
+        $event.error( & format!("{}\n{}", blah, e) ) ;
+        $event.done($crate::msg::Info::Error) ;
+        return ()
+      },
+    }
+  )
 }
 
 
@@ -178,6 +194,8 @@ pub enum Tek {
   Bmc,
   /** Induction. */
   KInd,
+  /** Invgen. */
+  Tig,
   /** Custom technique.
   First string is a short description that should be a legal filename.
   Second is an arbitrarily long description. */
@@ -197,6 +215,7 @@ impl Tek {
       Kino => "master",
       Bmc => "bmc",
       KInd => "k-ind",
+      Tig => "tig",
       Tec(ref s, _) => & s,
     }
   }
@@ -208,6 +227,7 @@ impl Tek {
       Kino => "supervisor",
       Bmc => "bounded model checking",
       KInd => "k-induction",
+      Tig => "invariant generation",
       Tec(_, ref desc) => & desc,
     }
   }
@@ -219,6 +239,7 @@ impl Tek {
       Kino => panic!("thread name of supervisor requested"),
       Bmc => "kino_bmc".to_string(),
       KInd => "kino_k-induction".to_string(),
+      Tig => "kino_k-invgen".to_string(),
       Tec(ref s, _) => format!("kino_{}", s),
     }
   }

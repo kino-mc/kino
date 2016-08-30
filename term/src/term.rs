@@ -686,6 +686,26 @@ pub enum RealTerm {
   /** An application of a function symbol. */
   App(Sym, Vec<Term>),
 }
+impl RealTerm {
+  /// Returns true iff the term is the constant `true`.
+  #[inline]
+  pub fn is_true(& self) -> bool {
+    if let RealTerm::C(ref cst) = * self {
+      if let ::real_term::Cst::Bool(b) = ** cst { b } else { false }
+    } else {
+      false
+    }
+  }
+  /// Returns true iff the term is the constant `true`.
+  #[inline]
+  pub fn is_false(& self) -> bool {
+    if let RealTerm::C(ref cst) = * self {
+      if let ::real_term::Cst::Bool(b) = ** cst { ! b } else { false }
+    } else {
+      false
+    }
+  }
+}
 
 impl fmt::Display for RealTerm {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {

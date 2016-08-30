@@ -97,10 +97,11 @@ impl Print for bool {
 }
 impl Parse for bool {
   fn of(val: & str) -> Result<bool, String> {
-    match val.parse::<bool>() {
-      Ok(val) => Ok(val),
-      Err(_) => Err(
-        format!("expected int, got {}", val)
+    match val {
+      "on" | "true" => Ok(true),
+      "off" | "false" => Ok(false),
+      _ => Err(
+        format!("expected bool [on/true/off/false], got {}", val)
       ),
     }
   }
@@ -242,6 +243,13 @@ fn solver_keys() -> String {
 
 conf!{
   Bmc("Bounded Model Checking (BMC) options".to_string()) {
+    is_on (
+      bool,
+      "turn", "[on/off]".to_string(),
+      "(De)activates BMC.".to_string(),
+      true,
+      val => bool::of(val)
+    ),
     max (
       Option<usize>,
       "max", "<int>".to_string(),
@@ -276,6 +284,54 @@ conf!{
 
 conf!{
   Kind("K-induction (Kind) options".to_string()) {
+    is_on (
+      bool,
+      "turn", "[on/off]".to_string(),
+      "(De)activates Kind.".to_string(),
+      true,
+      val => bool::of(val)
+    ),
+    max (
+      Option<usize>,
+      "max", "<int>".to_string(),
+      "Maximum number of unrollings.".to_string(),
+      None,
+      val => Option::<usize>::of(val)
+    ),
+    smt (
+      SolverStyle,
+      "smt", solver_keys(),
+      "Kind of solver to use.".to_string(),
+      SolverStyle::Z3,
+      val => SolverStyle::of(val)
+    ),
+    smt_cmd (
+      Option<String>,
+      "smt_cmd", "<cmd>".to_string(),
+      "Command to run the solver with.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    ),
+    smt_log (
+      Option<String>,
+      "smt_log", "<file>".to_string(),
+      "File to log the smt trace to.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    )
+  }
+}
+
+
+conf!{
+  Tig("Template-based Invariant Generation (TIG) options".to_string()) {
+    is_on (
+      bool,
+      "turn", "[on/off]".to_string(),
+      "(De)activates TIG.".to_string(),
+      true,
+      val => bool::of(val)
+    ),
     max (
       Option<usize>,
       "max", "<int>".to_string(),
@@ -330,7 +386,8 @@ named! {
   option<(String, String)>,
   chain!(
     key: string ~
-    delimited!( opt!(multispace), char!(':'), opt!(multispace) ) ~
+    // delimited!( opt!(multispace), char!(':'), opt!(multispace) ) ~
+    multispace ~
     val: string,
     || (key, val)
   )
@@ -355,7 +412,7 @@ named! {
     Vec< (Option<String>, Vec< (String, String) >) >
   >,
 
-  separated_list!(
+  separated_nonempty_list!(
 
     comma_sep,
 
@@ -388,6 +445,8 @@ pub struct Master {
   pub bmc: Option<Bmc>,
   /// Optional Kind configuration.
   pub kind: Option<Kind>,
+  /// Optional TIG configuration.
+  pub tig: Option<Tig>,
 }
 impl Master {
   /// The scope to technique mapping.
@@ -421,6 +480,20 @@ impl Master {
           }
         } ;
         self.kind = Some(kind) ;
+        Ok(self)
+      },
+      "tig" => {
+        let mut tig = self.tig.unwrap_or_else(|| Tig::default()) ;
+        for & (ref key, ref val) in opts.iter() {
+          match tig.set(key, val) {
+            Ok(()) => (),
+            Err(e) => {
+              self.tig = Some(tig) ;
+              return Err( (e, self) )
+            },
+          }
+        } ;
+        self.tig = Some(tig) ;
         Ok(self)
       },
       "all" => {
@@ -458,9 +531,10 @@ impl Master {
   /// Default top level configuration.
   fn default() -> Self {
     Master {
-      scopes: vec![ "bmc", "kind" ],
+      scopes: vec![ "bmc", "kind", "tig" ],
       bmc: Some( Bmc::default() ),
       kind: Some( Kind::default() ),
+      tig: Some( Tig::default() ),
     }
   }
 
@@ -474,22 +548,45 @@ impl Master {
     loop {
       if let Some(nxt) = args.next() {
         if "-o" == nxt {
+          use nom::{ Err, Needed } ;
           match args.next() {
-            Some(options) => match option_parser(options.as_bytes()) {
-              IResult::Done(_, opts) => for opt in opts {
-                // println!("> {:?}", opt) ;
-                match opt {
-                  (None, args) => match conf.set("all", & args) {
-                    Ok(c) => conf = c,
-                    Err( (e, _) ) => return Err(e),
-                  },
-                  (Some(scope), args) => match conf.set(& scope, & args) {
-                    Ok(c) => conf = c,
-                    Err( (e, _) ) => return Err(e),
-                  },
-                } ;
-              },
-              _ => panic!("aaa"),
+            Some(options) => {
+              match option_parser(options.as_bytes()) {
+                IResult::Done(_, opts) => for opt in opts {
+                  match opt {
+                    (None, args) => match conf.set("all", & args) {
+                      Ok(c) => conf = c,
+                      Err( (e, _) ) => return Err(e),
+                    },
+                    (Some(scope), args) => match conf.set(& scope, & args) {
+                      Ok(c) => conf = c,
+                      Err( (e, _) ) => return Err(e),
+                    },
+                  }
+                },
+                IResult::Error(
+                  Err::Position(err, p)
+                ) => return Err(
+                  format!(
+                    "could not parse options \"{}\":\n{:?}\n{}",
+                    options, err,
+                    String::from_utf8_lossy(p)
+                  )
+                ),
+                IResult::Error(e) => return Err(
+                  format!("could not parse options \"{}\":\n{}", options, e)
+                ),
+                IResult::Incomplete(n) => return Err(
+                  format!(
+                    "incomplete ({}) options \"{}\"",
+                    match n {
+                      Needed::Unknown => format!("_"),
+                      Needed::Size(n) => format!("{}", n),
+                    },
+                    options
+                  )
+                ),
+              }
             },
             None => return Err(
               "expected options after \"-o\", found nothing".to_string()
@@ -540,6 +637,9 @@ impl Master {
       "kind" => for line in Kind::lines(log.fmt(), log.stl()) {
         println!("{}", line)
       },
+      "tig" => for line in Tig::lines(log.fmt(), log.stl()) {
+        println!("{}", line)
+      },
       "all" => {
         let mut fst = true ;
         for scope in Master::default().scopes {
@@ -572,7 +672,7 @@ where [option] can be
       Displays this message if no module is specified. Otherwise displays the
       help of the module specified, among
       > {}
-  {} \"[ <opt>: <val> | <mdl>([<opt>: <val>],+) ],+\"
+  {} \"[ <opt> <val> | <mdl>([<opt> <val>],+) ],+\"
       Sets some options globally (first version) or for a specific module
       (second version). Check the options of each module for more details.
       {}:

@@ -8,29 +8,188 @@
 // except according to those terms.
 
 #![deny(missing_docs)]
-#![allow(dead_code)]
 
 //! Tinelli-style invariant generation.
 
 extern crate term ;
 extern crate system ;
-#[ macro_use(try_str) ]
+#[macro_use]
 extern crate common ;
 extern crate unroll ;
 
+use std::sync::Arc ;
 use std::fmt::Display ;
+use std::collections::HashSet ;
 
 use term::{
-  Term, Cst, Bool, Int, Rat,
+  Factory, Term, TermSet, Cst, Bool, Int, Rat, Offset
 } ;
-
 use term::tmp::TmpTerm ;
 
+use system::{ Sys, Prop } ;
+
+use common::{ Res, SolverTrait, CanRun } ;
+use common::msg::Event ;
+use common::conf ;
+
 pub mod eval ;
+pub mod mine ;
 pub mod chain ;
 pub mod graph ;
-
 pub mod lsd ;
+
+
+/// Invgen technique.
+pub struct Tig ;
+unsafe impl Send for Tig {}
+impl CanRun<conf::Tig> for Tig {
+  fn id(& self) -> common::Tek { common::Tek::Tig }
+
+  fn run(
+    & self, conf: Arc<conf::Tig>, sys: Sys, _: Vec<Prop>, mut event: Event
+  ) {
+    event.log("starting invgen") ;
+
+    let mut solver_conf = conf.smt().clone().default().print_success() ;
+    match * conf.smt_cmd() {
+      None => (),
+      Some(ref cmd) => solver_conf = solver_conf.cmd(cmd.clone()),
+    } ;
+
+    mk_solver_run!(
+      solver_conf, conf.smt_log(), "tig", event.factory(),
+      solver => invgen(* conf.max(), solver, sys, & mut event),
+      msg => event.error(msg)
+    )
+  }
+}
+
+
+/// Runs invgen.
+fn invgen<
+  'a, S: SolverTrait<'a>
+>(
+  max_k: Option<usize>, solver: S, sys: Sys, event: & mut Event
+) {
+  use graph::* ;
+  use lsd::top_only::* ;
+
+  event.log("mining system") ;
+  let (rep, class) = mine::bool(solver.parser(), & sys) ;
+
+  event.log("creating graph") ;
+  let mut graph = Graph::<Bool>::mk(rep, class) ;
+
+  event.log("creating base checker") ;
+  let mut base = try_error!(
+    Base::mk(sys.clone(), solver, 0), event,
+    "while creating base checker"
+  ) ;
+
+  let mut cnt = 0 ;
+
+  'work: while max_k.map_or(true, |max| cnt <= max) {
+    event.log( & format!("starting invgen with {} unrollings", cnt) ) ;
+
+    event.log( & format!("starting base stabilization ({})", cnt) ) ;
+    
+    let mut base_cnt = 0 ;
+
+    'base: loop {
+      let candidates: Vec<TmpTerm> = graph.candidates().into_iter().collect() ;
+      if candidates.is_empty() {
+        event.log(
+          "no non-trivial candidate in the graph\ngraph is stale, stopping"
+        ) ;
+        break 'work
+      }
+      match try_error!(
+        base.k_falsify(candidates), event,
+        "while stabilizing base at {}, {}", cnt, base_cnt
+      ) {
+        Some(eval) => try_error!(
+          graph.split(eval), event,
+          "while splitting graph in base at {}, {}", cnt, base_cnt
+        ),
+        None => break 'base,
+      } ;
+      let file_path = format!("graph/tig_{}_{}.dot", cnt, base_cnt) ;
+      try_error!(
+        graph.dot_dump( & file_path ), event,
+        "could not dump graph to file `{}`", file_path
+      ) ;
+      base_cnt += 1
+    }
+
+    event.log(
+      & format!("done stabilizing in base ({})", cnt)
+    ) ;
+
+    let candidates: TermMap<()> = {
+      graph.candidates().into_iter().map(
+        |cand| (cand, ())
+      ).collect()
+    } ;
+
+    try_error!(
+      base.unroll(), event,
+      "could not unroll base checker ({})", cnt
+    ) ;
+
+    event.log(
+      & format!(
+        "extracting invariants from {} candidates ({})", candidates.len(), cnt
+      )
+    ) ;
+
+    let mut step = try_error!(
+      base.to_step(), event,
+      "could not morph base checker to step checker ({})", cnt
+    ) ;
+
+    let candidate_count = candidates.len() ;
+
+    let (invars, _) = try_error!(
+      step.k_split(candidates), event,
+      "could k-split candidates in step ({})", cnt
+    ) ;
+
+    let mut blah = format!(
+      "found {} invariants from {} candidates", invars.len(), candidate_count
+    ) ;
+    for (term, _) in invars.iter() {
+      blah = format!("{}\n  - {}", blah, term)
+    }
+    event.log( & blah ) ;
+
+    if invars.len() == candidate_count {
+      // Everything's invariant, stopping.
+      event.log(
+        "all terms encoded by the graph have been proved invariant\nstopping"
+      ) ;
+      break 'work
+    }
+
+    base = try_error!(
+      step.to_base(), event,
+      "could not morph step checker to base checker ({})", cnt
+    ) ;
+
+    cnt += 1 ;
+
+    ()
+
+  }
+
+  event.done_at( & Offset::of_int(cnt) ) ;
+}
+
+
+
+
+
+
+
 
 
 
@@ -40,10 +199,26 @@ pub mod lsd ;
 Domains define the type of the values the candidate terms evaluate to and a
 total order relation used for the edges in the graph. */
 pub trait Domain : PartialEq + Eq + PartialOrd + Ord + Clone + Display {
-  /** A value from a constant. */
+  /// A value from a constant.
   fn of_cst(& Cst) -> Result<Self, String> ;
-  /** Creates a term encoding a relation between terms. */
-  fn mk_cmp(Term, Term) -> TmpTerm ;
+  /// Creates a term encoding a relation between terms.
+  fn mk_cmp(& Term, & Term) -> Option<TmpTerm> ;
+  /// Creates a term encoding an equality between terms.
+  fn mk_eq(& Term, & Term) -> Option<TmpTerm> ;
+  /// Creates a term encoding a relation between terms.
+  fn insert_cmp(lhs: & Term, rhs: & Term, set: & mut HashSet<TmpTerm>) {
+    if let Some( term ) = Self::mk_cmp(lhs, rhs) {
+      set.insert(term) ;
+    }
+  }
+  /// Creates a term encoding an equality between terms.
+  fn insert_eq(lhs: & Term, rhs: & Term, set: & mut HashSet<TmpTerm>) {
+    if let Some( term ) = Self::mk_eq(lhs, rhs) {
+      set.insert(term) ;
+    }
+  }
+  /// Chooses a representative in a set, removes it from the set.
+  fn choose_rep(& Factory, TermSet) -> Res<(Term, TermSet)> ;
 }
 impl Domain for Bool {
   fn of_cst(cst: & Cst) -> Result<Self, String> {
@@ -54,8 +229,37 @@ impl Domain for Bool {
       ),
     }
   }
-  fn mk_cmp(lhs: Term, rhs: Term) -> TmpTerm {
-    TmpTerm::mk_term_impl(lhs, rhs)
+  fn mk_cmp(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
+    if ! lhs.is_false() && ! rhs.is_true() {
+      Some( TmpTerm::mk_term_impl(lhs.clone(), rhs.clone()) )
+    } else {
+      None
+    }
+  }
+  fn mk_eq(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
+    Some( TmpTerm::mk_term_eq(lhs.clone(), rhs.clone()) )
+  }
+  fn choose_rep(
+    factory: & Factory, mut set: TermSet
+  ) -> Res<(Term, TermSet)> {
+    use term::CstMaker ;
+    let tru = factory.cst(true) ;
+    let was_there = set.remove(& tru) ;
+    if was_there {
+      Ok( (tru, set) )
+    } else {
+      let rep = match set.iter().next() {
+        Some(rep) => rep.clone(),
+        None => return Err(
+          format!(
+            "[Bool::choose_rep] cannot choose representative of empty set"
+          )
+        ),
+      } ;
+      let was_there = set.remove(& rep) ;
+      debug_assert!( was_there ) ;
+      Ok( (rep, set) )
+    }
   }
 }
 impl Domain for Int  {
@@ -67,8 +271,24 @@ impl Domain for Int  {
       ),
     }
   }
-  fn mk_cmp(lhs: Term, rhs: Term) -> TmpTerm {
-    TmpTerm::mk_term_le(lhs, rhs)
+  fn mk_cmp(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
+    Some( TmpTerm::mk_term_le(lhs.clone(), rhs.clone()) )
+  }
+  fn mk_eq(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
+    Some( TmpTerm::mk_term_eq(lhs.clone(), rhs.clone()) )
+  }
+  fn choose_rep(_: & Factory, mut set: TermSet) -> Res<(Term, TermSet)> {
+    let rep = match set.iter().next() {
+      Some(rep) => rep.clone(),
+      None => return Err(
+        format!(
+          "[Int::choose_rep] cannot choose representative of empty set"
+        )
+      ),
+    } ;
+    let was_there = set.remove(& rep) ;
+    debug_assert!( was_there ) ;
+    Ok( (rep, set) )
   }
 }
 impl Domain for Rat  {
@@ -80,52 +300,23 @@ impl Domain for Rat  {
       ),
     }
   }
-  fn mk_cmp(lhs: Term, rhs: Term) -> TmpTerm {
-    TmpTerm::mk_term_le(lhs, rhs)
+  fn mk_cmp(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
+    Some( TmpTerm::mk_term_le(lhs.clone(), rhs.clone()) )
   }
-}
-
-
-
-/// Candidate term mining functions.
-pub mod mine {
-
-  use std::collections::HashSet ;
-
-  use term::{ Factory, Term } ;
-  use system::Sys ;
-
-  /// Mines a system for boolean candidate terms.
-  pub fn bool(factory: & Factory, sys: Sys) -> HashSet<Term> {
-    use term::{ VarMaker, State } ;
-
-    let svars = sys.state().args() ;
-    let mut boo_svars = Vec::with_capacity( svars.len() / 3 ) ;
-    // let int_svars = Vec::with_capacity( svars.len() / 3 ) ;
-    // let rat_svars = Vec::with_capacity( svars.len() / 3 ) ;
-
-    let mut result = HashSet::with_capacity( svars.len() * 10 ) ;
-
-    for & (ref sym, ref typ) in svars.iter() {
-      use term::Type::* ;
-      match * typ {
-        Bool => boo_svars.push( sym.clone() ),
-        _ => (),
-        // Int  => int_svars.push( sym.clone() ),
-        // Rat  => rat_svars.push( sym.clone() ),
-      }
-    }
-
-    for svar in boo_svars.into_iter() {
-      let svar = factory.svar(svar, State::Curr) ;
-      let term = factory.mk_var(svar) ;
-      let was_there = result.insert( term.clone() ) ;
-      debug_assert!( ! was_there ) ;
-      let term = factory.not(term) ;
-      let was_there = result.insert( term ) ;
-      debug_assert!( ! was_there )
-    }
-
-    result
+  fn mk_eq(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
+    Some( TmpTerm::mk_term_eq(lhs.clone(), rhs.clone()) )
+  }
+  fn choose_rep(_: & Factory, mut set: TermSet) -> Res<(Term, TermSet)> {
+    let rep = match set.iter().next() {
+      Some(rep) => rep.clone(),
+      None => return Err(
+        format!(
+          "[Rat::choose_rep] cannot choose representative of empty set"
+        )
+      ),
+    } ;
+    let was_there = set.remove(& rep) ;
+    debug_assert!( was_there ) ;
+    Ok( (rep, set) )
   }
 }

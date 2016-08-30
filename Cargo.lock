@@ -180,7 +180,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "rsmt2"
 version = "0.2.0"
-source = "git+https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git#b9c0a9d7d642de3229e0454d50ba39fd9611feb0"
+source = "git+https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git#87d68d486990efa934cd7bb5897ff4a0c726ae41"
 dependencies = [
  "nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.1.73 (registry+https://github.com/rust-lang/crates.io-index)",

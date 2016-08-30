@@ -14,8 +14,10 @@ use std::collections::{ HashSet, HashMap } ;
 
 use common::Res ;
 
-use term::Model ;
 use term::tmp::TmpTerm as Term ;
+
+use Domain ;
+use eval::Eval ;
 
 /// A set of temp terms with some info.
 pub type TermMap<Info> = HashMap<Term, Info> ;
@@ -23,18 +25,20 @@ pub type TermMap<Info> = HashMap<Term, Info> ;
 pub type TermSet = HashSet<Term> ;
 
 /// Wrapper to perform checks on a trace of reachable states.
-pub trait BaseTrait<S: StepTrait<Self>>: Lsd<Self, S>
-where Self: Sized {
+pub trait BaseTrait<
+  Val: Domain, S: StepTrait<Val, Self>
+>: Lsd<Val, Self, S> where Self: Sized {
   /// Returns a model for the last state of a trace of k (current unrolling)
   /// states falsifying at least one of the terms from the list at k.
   fn k_falsify(
     & mut self, Vec<Term>
-  ) -> Res<Option<Model>> ;
+  ) -> Res<Option<& mut Eval<Val>>> ;
 }
 
 /// Wrapper to perform checks on a trace of states.
-pub trait StepTrait<B: BaseTrait<Self>>: Lsd<B, Self>
-where Self: Sized {
+pub trait StepTrait<
+  Val: Domain, B: BaseTrait<Val, Self>
+>: Lsd<Val, B, Self> where Self: Sized {
   /// Splits the input set in two: the terms unfalsifiable terms in a
   /// k-induction check for the current depth, and the rest.
   fn k_split<Info>(
@@ -43,7 +47,9 @@ where Self: Sized {
 }
 
 /// High-level LSD features.
-pub trait Lsd<B, S> where B: BaseTrait<S>, S: StepTrait<B> {
+pub trait Lsd<
+  Val: Domain, B: BaseTrait<Val, S>, S: StepTrait<Val, B>
+> {
   /// Restarts the lsd engine. The unrollings are restored.
   fn restart(& mut self) -> Res<()> ;
   /// Turns an lsd into its base version.
@@ -64,14 +70,14 @@ pub trait Lsd<B, S> where B: BaseTrait<S>, S: StepTrait<B> {
 pub mod top_only {
 
   use common::{ SolverTrait, Res } ;
-  use term::{ Model, Offset2, Bool } ;
+  use term::{ Offset2, Bool } ;
   use term::tmp::TmpTerm as Term ;
   use term::tmp::TmpTermMker ;
   use system::Sys ;
   use unroll::{ Unroller, ActlitFactory } ;
 
+  use Domain ;
   use eval::Eval ;
-
   pub use lsd::{
     BaseTrait, StepTrait, Lsd
   } ;
@@ -79,7 +85,7 @@ pub mod top_only {
   pub use super::{ TermSet, TermMap } ;
 
   /// Base checker.
-  pub struct Base<Solver> {
+  pub struct Base<Val: Domain, Solver> {
     /// The system this checker corresponds to.
     sys: Sys,
     /// The solver process.
@@ -89,9 +95,11 @@ pub mod top_only {
     /// Actlit factory.
     actlit: ActlitFactory,
     /// Cached evaluator.
-    eval: Eval<Bool>,
+    eval: Eval<Val>,
   }
-  impl<'a, Solver: SolverTrait<'a>> Base<Solver> {
+  impl<
+    'a, Val: Domain, Solver: SolverTrait<'a>
+  > Base<Val, Solver> {
     /// Base setup for a solver.
     fn setup(sys: & Sys, solver: & mut Solver, unroll: usize) -> Res<Offset2> {
       let mut k = Offset2::init() ;
@@ -121,9 +129,9 @@ pub mod top_only {
     }
     /// Creates a base checker. Unrolls the transition relation `unroll` times.
     fn of(
-      sys: Sys, mut solver: Solver, unroll: usize, eval: Eval<Bool>
+      sys: Sys, mut solver: Solver, unroll: usize, eval: Eval<Val>
     ) -> Res<Self> {
-      Base::setup(& sys, & mut solver, unroll).map(
+      Base::<Val, Solver>::setup(& sys, & mut solver, unroll).map(
         |k| Base {
           sys: sys, solver: solver, k: k,
           actlit: ActlitFactory::mk(),
@@ -137,24 +145,24 @@ pub mod top_only {
       let factory = solver.parser().clone() ;
       Base::of(
         sys, solver, unroll, Eval::mk(
-          vec![], Step::<Solver>::check_offset(), factory
+          vec![], Step::<Val, Solver>::check_offset(), factory
         )
       )
     }
 
     /// Creates a base checker from a step checker, with the same unrolling.
     #[inline]
-    pub fn of_step(step: Step<Solver>) -> Res<Self> {
+    pub fn of_step(step: Step<Val, Solver>) -> Res<Self> {
       Self::of(step.sys, step.solver, step.k.next().to_usize(), step.eval)
     }
   }
 
   impl<
-    'a, Solver: SolverTrait<'a>
-  > BaseTrait< Step<Solver> > for Base<Solver> {
+    'a, Val: Domain, Solver: SolverTrait<'a>
+  > BaseTrait< Val, Step<Val, Solver> > for Base<Val, Solver> {
     fn k_falsify(
       & mut self, terms: Vec<Term>
-    ) -> Res<Option<Model>> {
+    ) -> Res< Option< & mut Eval<Val> > > {
       // Creating the term to check.
       let one_term_false = Term::and(terms).tmp_neg() ;
       // Creating actlit for this check.
@@ -183,7 +191,8 @@ pub mod top_only {
           self.solver.get_model(),
           "could not retrieve model"
         ) ;
-        Some(model)
+        self.eval.recycle( model, self.k.clone() ) ;
+        Some(& mut self.eval)
       } else {
         // Unsat.
         None
@@ -199,10 +208,10 @@ pub mod top_only {
   }
 
   impl<
-    'a, Solver: SolverTrait<'a>
-  > Lsd< Base<Solver>, Step<Solver> > for Base<Solver> {
+    'a, Val: Domain, Solver: SolverTrait<'a>
+  > Lsd< Val, Base<Val, Solver>, Step<Val, Solver> > for Base<Val, Solver> {
     fn restart(& mut self) -> Res<()> {
-      match Base::setup(
+      match Base::<Val, Solver>::setup(
         & self.sys, & mut self.solver, self.k.next().to_usize()
       ) {
         Ok(k) => {
@@ -212,10 +221,10 @@ pub mod top_only {
         Err(e) => Err(e),
       }
     }
-    fn to_base(self) -> Res< Base<Solver> > {
+    fn to_base(self) -> Res< Base<Val, Solver> > {
       Ok(self)
     }
-    fn to_step(self) -> Res< Step<Solver> > {
+    fn to_step(self) -> Res< Step<Val, Solver> > {
       Step::of_base(self)
     }
     fn unroll_len(& self) -> usize {
@@ -242,7 +251,7 @@ pub mod top_only {
 
 
   /// Step checker.
-  pub struct Step<Solver> {
+  pub struct Step<Val: Domain, Solver> {
     /// The system this checker corresponds to.
     sys: Sys,
     /// The solver process.
@@ -254,9 +263,9 @@ pub mod top_only {
     /// Actlit factory.
     actlit: ActlitFactory,
     /// Cached evaluator.
-    eval: Eval<Bool>,
+    eval: Eval<Val>,
   }
-  impl<'a, Solver: SolverTrait<'a>> Step<Solver> {
+  impl<'a, Val: Domain, Solver: SolverTrait<'a>> Step<Val, Solver> {
     /// The offset used by the step solver for its checks.
     #[inline]
     fn check_offset() -> Offset2 { Offset2::init().rev() }
@@ -271,7 +280,7 @@ pub mod top_only {
           "illegal number of unrolling: 0\nmust be > 0".to_string()
         )
       }
-      let check_offset = Step::<Solver>::check_offset() ;
+      let check_offset = Step::<Val, Solver>::check_offset() ;
       let mut k = check_offset.clone() ;
       try_str!(
         solver.reset(),
@@ -305,9 +314,9 @@ pub mod top_only {
     /// Creates a base checker, unrolls the system `unroll` times.
     /// `k = 0` is illegal and results in an error.
     fn of(
-      sys: Sys, mut solver: Solver, unroll: usize, eval: Eval<Bool>
+      sys: Sys, mut solver: Solver, unroll: usize, eval: Eval<Val>
     ) -> Res<Self> {
-      Step::setup(& sys, & mut solver, unroll).map(
+      Step::<Val, Solver>::setup(& sys, & mut solver, unroll).map(
         | (check, k) | Step {
           sys: sys, solver: solver, k: k, check: check.clone(),
           actlit: ActlitFactory::mk(), eval: eval
@@ -318,14 +327,14 @@ pub mod top_only {
     /// Creates a step checker from a base checker with the same number
     /// of unrollings.
     #[inline]
-    pub fn of_base(base: Base<Solver>) -> Res<Self> {
+    pub fn of_base(base: Base<Val, Solver>) -> Res<Self> {
       Self::of(base.sys, base.solver, base.k.next().to_usize(), base.eval)
     }
   }
 
   impl<
-    'a, Solver: SolverTrait<'a>
-  > StepTrait< Base<Solver> > for Step<Solver> {
+    'a, Val: Domain, Solver: SolverTrait<'a>
+  > StepTrait< Val, Base<Val, Solver> > for Step<Val, Solver> {
     fn k_split<Info>(
       & mut self, in_map: TermMap<Info>
     ) -> Res<(TermMap<Info>, TermMap<Info>)> {
@@ -405,11 +414,15 @@ pub mod top_only {
             "while retrieving the values of the candidate terms"
           ) ;
           
-          self.eval.recycle(model, Step::<Solver>::check_offset()) ;
+          let mut eval = Eval::<Bool>::mk(
+            model,
+            Step::<Val, Solver>::check_offset(),
+            self.solver.parser().clone()
+          ) ;
 
           for term in to_check.into_iter() {
             let term_is_true = try_str!(
-              self.eval.eval(& term),
+              eval.eval(& term),
               "could not evaluate term {:?} in current model", term
             ) ;
             if ! term_is_true {
@@ -447,10 +460,10 @@ pub mod top_only {
   }
 
   impl<
-    'a, Solver: SolverTrait<'a>
-  > Lsd< Base<Solver>, Step<Solver> > for Step<Solver> {
+    'a, Val: Domain, Solver: SolverTrait<'a>
+  > Lsd< Val, Base<Val, Solver>, Step<Val, Solver> > for Step<Val, Solver> {
     fn restart(& mut self) -> Res<()> {
-      match Step::setup(
+      match Step::<Val, Solver>::setup(
         & self.sys, & mut self.solver, self.k.next().to_usize()
       ) {
         Ok( (check, k) ) => {
@@ -461,10 +474,10 @@ pub mod top_only {
         Err(e) => Err(e),
       }
     }
-    fn to_base(self) -> Res< Base<Solver> > {
+    fn to_base(self) -> Res< Base<Val, Solver> > {
       Base::of_step(self)
     }
-    fn to_step(self) -> Res< Step<Solver> > {
+    fn to_step(self) -> Res< Step<Val, Solver> > {
       Ok(self)
     }
     fn unroll_len(& self) -> usize {

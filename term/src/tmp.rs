@@ -3,6 +3,7 @@
 Typically used for activation literals and conjunction of properties. */
 
 use std::collections::HashSet ;
+use std::fmt ;
 
 use rsmt2::Expr2Smt ;
 use super::{
@@ -166,6 +167,14 @@ impl TmpTerm {
     )
   }
 
+  /// Creates an `Eq` relation between two real terms.
+  pub fn mk_term_eq(lhs: Term, rhs: Term) -> TmpTerm {
+    TmpTerm::Nod(
+      Operator::Eq,
+      vec![ TmpTerm::Trm(lhs), TmpTerm::Trm(rhs) ]
+    )
+  }
+
   /** Inspects a term to write it. Pushes to the input stack if the term
   is a node. */
   fn inspect_write_stack(
@@ -186,6 +195,33 @@ impl TmpTerm {
         Ok(())
       },
     }
+  }
+}
+
+impl fmt::Display for TmpTerm {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    let mut stack = vec![ ( vec![self], "", "" ) ] ;
+    while let Some( (mut kids, sep, end) ) = stack.pop() {
+      if let Some(kid) = kids.pop() {
+        use self::TmpTerm::* ;
+        stack.push( (kids, sep, end) ) ;
+        match * kid {
+          Sym(ref s, _) => try!( write!(fmt, "{}{}", sep, s) ),
+          Trm(ref trm) => try!( write!(fmt, "{}{}", sep, trm) ),
+          Nod(ref op, ref kids) => {
+            try!( write!(fmt, "{}({}", sep, op) ) ;
+            let mut keeds = Vec::with_capacity(kids.len()) ;
+            for kid in kids.iter() {
+              keeds.push(kid)
+            }
+            stack.push( (keeds, " ", ")") )
+          },
+        }
+      } else {
+        try!( write!(fmt, "{}", end) )
+      }
+    }
+    Ok(())
   }
 }
 

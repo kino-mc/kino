@@ -22,6 +22,7 @@ extern crate system ;
 extern crate common ;
 extern crate bmc ;
 extern crate kind ;
+extern crate tig ;
 
 use std::process::exit ;
 

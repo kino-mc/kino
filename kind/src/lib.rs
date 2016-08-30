@@ -28,25 +28,11 @@ use term::smt::SolverStyle ;
 
 use common::conf ;
 use common::SolverTrait ;
-use common::msg::{ Info, Event, MsgDown, Status } ;
+use common::msg::{ Event, MsgDown, Status } ;
 
 use system::{ Sys, Prop } ;
 
 use unroll::* ;
-
-macro_rules! try_error {
-  ($e:expr, $event:expr, $($blah:expr),+) => (
-    match $e {
-      Ok(v) => v,
-      Err(e) => {
-        let blah = format!( $( $blah ),+ ) ;
-        $event.error( & format!("{}\n{:?}", blah, e) ) ;
-        $event.done(Info::Error) ;
-        return ()
-      },
-    }
-  )
-}
 
 /** K-induction. */
 pub struct KInd ;

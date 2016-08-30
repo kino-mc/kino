@@ -28,32 +28,18 @@ use std::sync::Arc ;
 use term::Offset2 ;
 use term::smt::SolverStyle ;
 
-use common::SolverTrait ;
+use common::{ SolverTrait, CanRun } ;
 use common::conf ;
-use common::msg::{ Event, MsgDown, Info } ;
+use common::msg::{ Event, MsgDown } ;
 
 use system::{ Sys, Prop } ;
 
 use unroll::* ;
 
-macro_rules! try_error {
-  ($e:expr, $event:expr, $($blah:expr),+) => (
-    match $e {
-      Ok(v) => v,
-      Err(e) => {
-        let blah = format!( $( $blah ),+ ) ;
-        $event.error( & format!("{}\n{:?}", blah, e) ) ;
-        $event.done(Info::Error) ;
-        return ()
-      },
-    }
-  )
-}
-
 /** Bounded model-checking. */
 pub struct Bmc ;
 unsafe impl Send for Bmc {}
-impl common::CanRun<conf::Bmc> for Bmc {
+impl CanRun<conf::Bmc> for Bmc {
   fn id(& self) -> common::Tek { common::Tek::Bmc }
 
   fn run(

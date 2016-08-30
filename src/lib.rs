@@ -18,7 +18,7 @@ extern crate unroll ;
 extern crate common ;
 extern crate bmc ;
 extern crate kind ;
-extern crate tig as inv_gen ;
+extern crate tig ;
 
 mod master ;
 
@@ -31,7 +31,7 @@ pub use common::* ;
 pub mod teks {
   pub use bmc::Bmc ;
   pub use kind::KInd ;
-  pub use inv_gen::* ;
+  pub use tig::* ;
 }
 
 pub use master::Master ;

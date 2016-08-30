@@ -9,6 +9,8 @@
 
 /*! Chain (result of splitting an equivalence class. */
 
+use std::fmt ;
+
 use term::{ Term, TermSet } ;
 
 use Domain ;
@@ -24,6 +26,25 @@ pub enum Chain< Val: Domain, Info: PartialEq + Eq + Clone > {
   /** Chain constructor. */
   Cons(Val, Term, Info, Box< Chain<Val, Info> >),
 }
+impl<
+  Val: Domain, Info: PartialEq + Eq + Clone
+> fmt::Display for Chain<Val, Info> {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    use self::Chain::* ;
+    let mut chain = self ;
+    try!( write!(fmt, "[") ) ;
+    loop {
+      match * chain {
+        Nil => break,
+        Cons(ref val, ref trm, _, ref tail) => {
+          chain = & ** tail ;
+          try!( write!(fmt, " {}<{}>", trm, val) )
+        },
+      }
+    }
+    write!(fmt, "]")
+  }
+}
 impl<Val: Domain, Info: PartialEq + Eq + Clone> Chain<Val, Info> {
   /** Empty chain. */
   #[inline]
@@ -32,6 +53,29 @@ impl<Val: Domain, Info: PartialEq + Eq + Clone> Chain<Val, Info> {
   #[inline]
   pub fn cons(self, v: Val, t: Term, s: Info) -> Self {
     Chain::Cons(v, t, s, Box::new(self))
+  }
+  /// Returns a pointer to the last element in the chain.
+  pub fn last(& self) -> Option<(& Val, & Term)> {
+    use self::Chain::* ;
+    let mut chain = self ;
+    let mut res = None ;
+    loop {
+      match * chain {
+        Cons(ref val, ref term, _, ref tail) => {
+          res = Some( (val, term) ) ;
+          chain = & ** tail
+        },
+        Nil => return res,
+      }
+    }
+  }
+  /// Returns a pointer to the first element in the chain.
+  pub fn first(& self) -> Option<(& Val, & Term)> {
+    use self::Chain::* ;
+    match * self {
+      Cons(ref val, ref term, _, _) => Some( (val, term) ),
+      Nil => None,
+    }
   }
   /** Checks if a chain is empty. */
   #[inline]
@@ -44,6 +88,20 @@ impl<Val: Domain, Info: PartialEq + Eq + Clone> Chain<Val, Info> {
       Cons(ref v, ref rep, _, _) => Some( (v.clone(), rep.clone()) ),
       Nil => None,
     }
+  }
+
+  /// Fold on a chain.
+  pub fn fold<
+    T, F: Fn(T, & Val, & Term, & Info) -> T
+  >(& self, init: T, f: F) -> T {
+    use self::Chain::* ;
+    let mut chain = self ;
+    let mut val = init ;
+    while let Cons(ref v, ref trm, ref inf, ref tail) = * chain {
+      val = f(val, v, trm, inf) ;
+      chain = & * tail
+    }
+    val
   }
 
   /** Returns the longest subchain of a chain the values of which are
@@ -71,6 +129,7 @@ impl<Val: Domain, Info: PartialEq + Eq + Clone> Chain<Val, Info> {
         break
       }
     }
+    res.reverse() ;
     (res, self)
   }
 
