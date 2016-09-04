@@ -9,13 +9,11 @@
 
 //! Candidate term mining functions.
 
-use std::collections::HashSet ;
-
-use term::{ Factory, Term } ;
+use term::{ Factory, Term, TermSet } ;
 use system::Sys ;
 
 /// Mines a system for boolean candidate terms.
-pub fn bool(factory: & Factory, sys: & Sys) -> (Term, HashSet<Term>) {
+pub fn bool(factory: & Factory, sys: & Sys) -> (Term, TermSet) {
   use term::{ CstMaker, VarMaker, State } ;
 
   let svars = sys.state().args() ;
@@ -23,7 +21,7 @@ pub fn bool(factory: & Factory, sys: & Sys) -> (Term, HashSet<Term>) {
   // let int_svars = Vec::with_capacity( svars.len() / 3 ) ;
   // let rat_svars = Vec::with_capacity( svars.len() / 3 ) ;
 
-  let mut result = HashSet::with_capacity( svars.len() * 10 ) ;
+  let mut result = TermSet::with_capacity( svars.len() * 10 ) ;
 
   for & (ref sym, ref typ) in svars.iter() {
     use term::Type::* ;

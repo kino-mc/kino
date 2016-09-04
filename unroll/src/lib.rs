@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-// Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+// Copyright 2016 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -17,10 +17,11 @@ extern crate system as sys ;
 extern crate common ;
 
 use std::collections::{ HashSet, HashMap } ;
+use std::iter::{ Iterator, IntoIterator } ;
 
 use term::{
-  Factory, Type, Sym, Term, Model,
-  Offset, Offset2, STerm, real_term
+  Type, Sym, Term, Model,
+  Offset, Offset2, STerm, STermSet, real_term
 } ;
 use term::smt::* ;
 use term::tmp::* ;
@@ -82,54 +83,147 @@ fn define<'a, S: SolverTrait<'a>>(
 }
 
 
-
-/** Provides helper functions for the unrolling of a transition system. */
-pub trait Unroller {
-  /** Declares/defines UFs, functions, and system init/trans predicates. */
-  fn defclare_funs<
-    'a, S: SolverTrait<'a>
-  >(& self, & mut S) -> UnitSmtRes ;
-
-  /** Declares state variables at some offset. */
-  #[inline(always)]
-  fn declare_svars<
-    'a, S: SolverTrait<'a>
-  >(& self, & mut S, & Offset) -> UnitSmtRes ;
-
-  /** Asserts the init predicate. **Declares** state variables in the current
-  offset. */
-  #[inline(always)]
-  fn assert_init<
-    'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes ;
-
-  /** Unrolls the transition relation once. **Declares** state variables in
-  the next offset if the offset is not reversed, in the current offset
-  otherwise (for backward unrolling). */
-  #[inline(always)]
-  fn unroll<
-    'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes ;
+/// Can unroll a system.
+///
+/// An `Unroller` does **not** handle the unrolling depth. This is up to the
+/// client, as many operations depend on whether the unrolling is forward or
+/// backward.
+///
+/// In particular, **adding new invariants does not assert them "from `0` to
+/// `k`"**. This depends on the direction of unrolling and is up to the client.
+///
+/// Unrolling however asserts invariants using one of these strategies:
+///
+/// - [`unroll`](struct.Unroller.html#method.unroll)
+/// - [`unroll_init`](struct.Unroller.html#method.unroll_init)
+/// - [`unroll_bak`](struct.Unroller.html#method.unroll_bak)
+pub struct Unroller<S> {
+  /// The system to unroll.
+  sys: Sys,
+  /// The solver used to unroll the system.
+  solver: S,
+  /// The invariants known on the system.
+  invs: STermSet,
+  // /// Offset of the beginning of the trace.
+  // beg_k: Offset2,
+  // /// Offset of the end of the trace.
+  // end_k: Offset2,
+  /// Actlit factory.
+  act_factory: ActlitFactory,
 }
 
-impl Unroller for sys::Sys {
-  fn defclare_funs<
-    'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S) -> UnitSmtRes {
+impl<
+  'a, S: SolverTrait<'a>
+> Unroller<S> {
+  /// Creates an unroller from a system.
+  ///
+  /// Declares everything needed at `0`.
+  #[inline]
+  pub fn mk(sys: & Sys, solver: S) -> Self {
+    Unroller {
+      sys: sys.clone(),
+      solver: solver,
+      invs: STermSet::with_capacity(107),
+      // beg_k: Offset2::init(),
+      // end_k: Offset2::init().pre(),
+      act_factory: ActlitFactory::mk(),
+    }
+  }
+
+  // /// Creates an unroller that unrolls backwards.
+  // #[inline]
+  // pub fn mk_rev(sys: & Sys, solver: S) -> Self {
+  //   let mut res = Self::mk(sys, solver) ;
+  //   res.beg_k = res.beg_k.rev() ;
+  //   res.end_k = res.end_k.rev() ;
+  //   res
+  // }
+
+  /// Accessor for the system.
+  #[inline]
+  pub fn sys(& self) -> & Sys { & self.sys }
+  /// Accessor for the solver.
+  #[inline]
+  pub fn solver(& mut self) -> & mut S { & mut self.solver }
+  /// Accessor for the invariants.
+  #[inline]
+  pub fn invs(& self) -> & STermSet { & self.invs }
+
+  /// Creates and declares a fresh activation literal.
+  #[inline]
+  pub fn fresh_actlit(& mut self) -> Res<Actlit> {
+    let actlit = self.act_factory.mk_fresh() ;
+    try_str!(
+      actlit.declare( & mut self.solver ),
+      "[Unroller::fresh_actlit] error at SMT level in declaration"
+    ) ;
+    Ok( actlit )
+  }
+
+  /// Deactivates an activation literal.
+  #[inline]
+  pub fn deactivate(& mut self, actlit: Actlit) -> Res<()> {
+    Ok(
+      try_str!(
+        actlit.deactivate(& mut self.solver),
+        "[Unroller::deactivate] error at SMT level"
+      )
+    )
+  }
+
+  /// Performs a check sat.
+  #[inline]
+  pub fn check_sat(& mut self) -> Res<bool> {
+    Ok(
+      try_str!(
+        self.solver.check_sat(),
+        "[Unroller::check_sat] error at SMT level"
+      )
+    )
+  }
+
+  /// Performs a check sat assuming.
+  #[inline]
+  pub fn check_sat_assuming(
+    & mut self, idents: & [String]
+  ) -> Res<bool> {
+    Ok(
+      try_str!(
+        self.solver.check_sat_assuming(idents, & ()),
+        "[Unroller::check_sat_assuming] error at SMT level"
+      )
+    )
+  }
+
+  /// Asserts something.
+  #[inline]
+  pub fn assert< Expr: Expr2Smt<Offset2> >(
+    & mut self, expr: & Expr, info: & Offset2
+  ) -> Res<()> {
+    Ok(
+      try_str!(
+        self.solver.assert(expr, info),
+        "[Unroller::assert] error at SMT level"
+      )
+    )
+  }
+
+  /// Declares/defines UFs, functions, and system init/trans predicates.
+  pub fn defclare_funs(& mut self) -> UnitSmtRes {
     use sys::real_sys::Callable::* ;
     // Will not really be used.
     let offset = Offset2::init() ;
 
     // Declaring UFs and defining functions.
     // println!("declaring UFs, defining funs") ;
-    for fun in self.calls().get() {
+    for fun in self.sys.calls().get() {
       // println!("defining {}", fun.sym()) ;
       match * * fun {
         Dec(ref fun) => try!(
-          solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
+          self.solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
         ),
         Def(ref fun) => try!(
-          solver.define_fun(
+          self.solver.define_fun(
             fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
           )
         ),
@@ -138,59 +232,275 @@ impl Unroller for sys::Sys {
 
     // Defining sub systems.
     // println!("defining sub systems") ;
-    for & (ref sub, _) in self.subsys() {
-      try!( define(sub, solver, & offset) )
+    for & (ref sub, _) in self.sys.subsys() {
+      try!( define(sub, & mut self.solver, & offset) )
     } ;
 
     // Define current system.
     // println!("defining top system") ;
-    define(self, solver, & offset)
+    define(& self.sys, & mut self.solver, & offset)
   }
 
-  fn declare_svars<
-    'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S, o: & Offset) -> UnitSmtRes {
-    for & (ref var, ref typ) in self.init().1.iter() {
+  /// Declares state variables at some offset.
+  #[inline]
+  pub fn declare_svars(& mut self, o: & Offset) -> UnitSmtRes {
+    for & (ref var, ref typ) in self.sys.init().1.iter() {
       try!(
-        solver.declare_fun(var, & vec![], typ, o)
+        self.solver.declare_fun(var, & vec![], typ, o)
       )
     } ;
     Ok(())
   }
 
-  fn assert_init<
-    'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes {
-    try!(
-      self.declare_svars(solver, o.curr())
-    ) ;
-    solver.assert(self.init_term(), o)
+  /// Asserts one state invariants at `off.curr()`.
+  #[inline]
+  pub fn assert_os_invs(& mut self, off: & Offset2) -> Res<()> {
+    for inv in self.invs.iter() {
+      if let STerm::One(ref curr, _) = * inv {
+        try!(
+          self.solver.assert(curr, off).map_err(
+            |err| format!(
+              "[Unroller::assert_os_invs] \
+              while asserting one-state inv {} at {}\n{}", curr, off, err
+            )
+          )
+        )
+      }
+    }
+    Ok(())
   }
-  fn unroll<
-    'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S, o: & Offset2) -> UnitSmtRes {
+
+  /// Asserts the init predicate. **Declares** state variables in the current
+  /// offset.
+  #[inline]
+  pub fn assert_init(& mut self, o: & Offset2) -> UnitSmtRes {
+    try!(
+      self.declare_svars( o.curr() )
+    ) ;
+    self.solver.assert( self.sys.init_term(), o )
+  }
+
+  /// Unrolls the transition relation once. **Declares** state variables in
+  /// the next offset if the offset is not reversed, in the current offset
+  /// otherwise (for backward unrolling).
+  fn just_unroll(& mut self, o: & Offset2) -> Res<()> {
     let off = if o.is_rev() { o.curr() } else { o.next() } ;
     try!(
-      self.declare_svars(solver, off)
+      self.declare_svars(off).map_err(
+        |err| format!(
+          "[Unroller::unroll] \
+          while declaring state at {}\n{}", off, err
+        )
+      )
     ) ;
-    solver.assert(self.trans_term(), o)
+    self.solver.assert(self.sys.trans_term(), o).map_err(
+      |err| format!(
+        "[Unroller::unroll] \
+        while asserting trans at {}\n{}", o, err
+      )
+    )
   }
-}
 
-/// Can retrieve a model corresponding to a precise state of a system.
-pub trait SysModel {
-  /// The variables to aske the value of for `get_model`.
-  fn get_model_vars(& self, & Factory) -> Vec< Term > ;
+  /// Unrolls the transition relation once. **Declares** state variables in
+  /// the next offset if the offset is not reversed, in the current offset
+  /// otherwise (for backward unrolling).
+  ///
+  /// Asserts all invariants in the next state.
+  pub fn unroll(& mut self, o: & Offset2) -> Res<()> {
+    try!( self.just_unroll(o) ) ;
+    for inv in self.invs.iter() {
+      try!(
+        self.solver.assert(inv.next(), o).map_err(
+          |err| format!(
+            "[Unroller::unroll] \
+            while asserting inv {} at {}\n{}", inv, o, err
+          )
+        )
+      ) ;
+    }
+    Ok(())
+  }
+
+  /// Unrolls the transition relation once. **Declares** state variables in
+  /// the next offset if the offset is not reversed, in the current offset
+  /// otherwise (for backward unrolling).
+  ///
+  /// Asserts all invariants in the next state, and one-state invariants in
+  /// the current state.
+  ///
+  /// Used
+  ///
+  /// - in **BMC** at init, to assert one-state invariants at `0` and all
+  ///   invariants at `1`.
+  /// - in **Kind** for the first (backward) unrolling, to assert all
+  ///   invariants at `0` (the last state of the trace) and one-state
+  ///   invariants at `1` (the second to last state of the trace).
+  pub fn unroll_init(& mut self, o: & Offset2) -> Res<()> {
+    try!( self.just_unroll(o) ) ;
+    for inv in self.invs.iter() {
+      let inv = match * inv {
+        STerm::One(ref curr, ref next) => {
+          try!(
+            self.solver.assert(curr, o).map_err(
+              |err| format!(
+                "[Unroller::unroll] \
+                while asserting one-state inv {} at {}\n{}", inv, o.curr(), err
+              )
+            )
+          ) ;
+          next
+        },
+        STerm::Two(ref next) => next,
+      } ;
+      try!(
+        self.solver.assert(inv, o).map_err(
+          |err| format!(
+            "[Unroller::unroll] \
+            while asserting inv {} at {}\n{}", inv, o, err
+          )
+        )
+      )
+    }
+    Ok(())
+  }
+
+  /// Unrolls the transition relation once. **Declares** state variables in
+  /// the next offset if the offset is not reversed, in the current offset
+  /// otherwise (for backward unrolling).
+  ///
+  /// Asserts two-state invariants in the next state, and one-state invariants
+  /// in the current state.
+  ///
+  /// Typically used by **Kind** for backward unrolling, to assert one-state
+  /// invariants in the first state of the trace (greater offset) and two-state
+  /// invariants in the second state of the trace.
+  pub fn unroll_bak(& mut self, o: & Offset2) -> Res<()> {
+    try!( self.just_unroll(o) ) ;
+    for inv in self.invs.iter() {
+      let inv = match * inv {
+        STerm::One(ref curr, ref next) => {
+          try!(
+            self.solver.assert(curr, o).map_err(
+              |err| format!(
+                "[Unroller::unroll] \
+                while asserting one-state inv {} at {}\n{}", inv, o.curr(), err
+              )
+            )
+          ) ;
+          next
+        },
+        STerm::Two(ref next) => next,
+      } ;
+      try!(
+        self.solver.assert(inv, o).map_err(
+          |err| format!(
+            "[Unroller::unroll] \
+            while asserting inv {} at {}\n{}", inv, o, err
+          )
+        )
+      )
+    }
+    Ok(())
+  }
+
+  /// Memorizes some invariants. **Does not assert anything.**
+  #[inline]
+  pub fn just_add_invs<
+    Collec: IntoIterator< Item = STerm >
+  >(& mut self, invs: Collec) {
+    use std::iter::Extend ;
+    self.invs.extend(invs)
+  }
+
+  /// Memorizes some invariants, asserts them between some ranges.
+  /// Does nothing if `begin > end`. Causes panic in `debug`.
+  ///
+  /// It is a logical error if `begin.is_rev() != end.is_rev()`. Causes panic
+  /// in `debug`.
+  ///
+  /// **If the offsets are not reversed**, asserts one state invariants at
+  /// `begin.curr()`, and all invariants for all offsets between `begin` and
+  /// `end`. **Inclusive**.
+  ///
+  /// **If the offsets are reversed**, asserts one state invariants at
+  /// `begin.curr()`, and all invariants for all offsets between `begin` and
+  /// `end`. **Inclusive**.
+  pub fn add_invs(
+    & mut self, invs: Vec<STerm>, begin: & Offset2, end: & Offset2
+  ) -> Res<()> {
+    debug_assert!( begin.is_rev() == end.is_rev() ) ;
+    debug_assert!( begin <= end ) ;
+    let init_off = if begin.is_rev() { begin } else { end } ;
+    for inv in invs.iter() {
+      let next = match * inv {
+        STerm::One(ref curr, ref next) => {
+          try!(
+            self.solver.assert(curr, init_off).map_err(
+              |err| format!(
+                "[Unroller::add_invs] \
+                while asserting one-state inv {} at {}\n{}",
+                curr, init_off, err
+              )
+            )
+          ) ;
+          next
+        },
+        STerm::Two(ref next) => next,
+      } ;
+      let mut low = begin.clone() ;
+      while end >= & low {
+        try!(
+          self.solver.assert(next, & low).map_err(
+            |err| format!(
+              "[Unroller::add_invs] \
+              while asserting inv {} at {}\n{}",
+              next, low, err
+            )
+          )
+        ) ;
+        low = low.nxt()
+      }
+    }
+    self.just_add_invs(invs) ;
+    Ok(())
+  }
+
+  /// The variables to ask the value of for `get_model`.
+  pub fn get_model_vars(& self) -> Vec<Term> {
+    use term::{ VarMaker, State } ;
+    use sys::real_sys::Callable::* ;
+
+    let mut to_get = Vec::with_capacity( self.sys.state().len() ) ;
+
+    // Retrieve global UFs.
+    for fun in self.sys.calls().get() {
+      match * * fun {
+        Dec(ref fun) => to_get.push(
+          self.solver.parser().var( fun.sym().clone() )
+        ),
+        Def(_) => (),
+      }
+    }
+
+    // Push state.
+    for & (ref sym, _) in self.sys.state().args().iter() {
+      to_get.push(
+        self.solver.parser().svar( sym.clone(), State::Curr )
+      ) ;
+      to_get.push(
+        self.solver.parser().svar( sym.clone(), State::Next )
+      ) ;
+    }
+
+    to_get
+  }
+
   /// A model for a precise state (or pair of states) of a system.
-  fn get_model<
-    'a, S: SolverTrait<'a> + QueryExprInfo<'a, Factory, Term>
-  >(
-    & self, solver: & mut S, off: & Offset2
-  ) -> Res<Model> {
+  pub fn get_model(& mut self, off: & Offset2) -> Res<Model> {
     use term::Smt2Offset ;
-    let vars = self.get_model_vars( solver.parser() ) ;
+    let vars = self.get_model_vars() ;
     let values = try_str!(
-      solver.get_values( & vars, off ),
+      self.solver.get_values( & vars, off ),
       "could not get values of (state) vars"
     ) ;
     let mut model = Vec::with_capacity( values.len() ) ;
@@ -216,30 +526,6 @@ pub trait SysModel {
       }
     }
     Ok(model)
-  }
-}
-impl SysModel for Sys {
-  fn get_model_vars(& self, factory: & Factory) -> Vec<Term> {
-    use term::{ VarMaker, State } ;
-    use sys::real_sys::Callable::* ;
-
-    let mut to_get = Vec::with_capacity( (** self).state().args().len() ) ;
-
-    // Retrieve global UFs.
-    for fun in self.calls().get() {
-      match * * fun {
-        Dec(ref fun) => to_get.push( factory.var(fun.sym().clone()) ),
-        Def(_) => (),
-      }
-    }
-
-    // Push state.
-    for & (ref sym, _) in (** self).state().args().iter() {
-      to_get.push( factory.svar( sym.clone(), State::Curr ) ) ;
-      to_get.push( factory.svar( sym.clone(), State::Next ) ) ;
-    }
-
-    to_get
   }
 }
 

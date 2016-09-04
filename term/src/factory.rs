@@ -9,6 +9,9 @@
 
 /*! Term factory stuff. */
 
+use std::collections::HashMap ;
+use std::sync::{ Mutex, Arc } ;
+
 use nom::IResult ;
 
 use rsmt2::ParseSmt2 ;
@@ -21,7 +24,7 @@ use var::{ Var, VarConsign, VarMaker } ;
 use term::{
   TermConsign, Operator, Term, RealTerm,
   CstMaker, VariableMaker, OpMaker, AppMaker, BindMaker,
-  bump
+  bump, debump
 } ;
 use parser ;
 use parser::vmt::TermAndDep ;
@@ -39,17 +42,27 @@ macro_rules! try_parse {
   ) ;
 }
 
-/** Factory for terms. */
+/// Factory for terms.
 #[derive(Clone)]
 pub struct Factory {
-  /** Hash cons table for function symbols. */
+  /// Hash cons table for function symbols.
   sym: SymConsign,
-  /** Hash cons table for variabls. */
+  /// Hash cons table for variables.
   var: VarConsign,
-  /** Hash cons table for constants. */
+  /// Hash cons table for constants.
   cst: CstConsign,
-  /** Hash cons table for terms. */
+  /// Hash cons table for terms.
   term: TermConsign,
+  /// Maps terms to types, scoped. Lazy, computes types on demand.
+  ///
+  /// To use, make sure you manually insert the type of variables.
+  scoped_types: Arc< Mutex< HashMap<(Sym, Term), Type> > >,
+  /// Maps terms to types, global. Lazy, computes types on demand.
+  ///
+  /// To use, make sure you manually insert the type of variables.
+  unscoped_types: Arc< Mutex< HashMap<Term, Type> > >,
+  /// Maps function symbols to their type.
+  fun_types: Arc< Mutex< HashMap<Sym, Type> > >,
 }
 
 // /** Helper macro to create operators. */
@@ -81,32 +94,151 @@ pub struct Factory {
 // }
 
 impl Factory {
-  /** Creates an empty term factory. */
+  /// Creates an empty term factory.
   pub fn mk() -> Self {
     Factory {
       sym: SymConsign::mk(),
       var: VarConsign::mk(),
       cst: CstConsign::mk(),
       term: TermConsign::mk(),
+      scoped_types: Arc::new(
+        Mutex::new( HashMap::with_capacity(107) )
+      ),
+      unscoped_types: Arc::new(
+        Mutex::new( HashMap::with_capacity(107) )
+      ),
+      fun_types: Arc::new(
+        Mutex::new( HashMap::with_capacity(107) )
+      ),
     }
   }
 
-  /** Parses a type. */
+  /// Inserts a type for a variable without doing anything else.
+  pub fn set_fun_type(
+    & self, sym: Sym, typ: Type
+  ) -> Result<(), String> {
+    let sym_bak = sym.clone() ;
+    match self.fun_types.lock().unwrap().insert( sym, typ ) {
+      Some(t) if t != typ => Err(
+        format!(
+          "trying to redefine type of function {} from {} to {}",
+          sym_bak, t, typ
+        )
+      ),
+      _ => Ok(())
+    }
+  }
+
+  /// Inserts a type for a variable without doing anything else.
+  fn set_type_unsafe(
+    & self, sym: Option<Sym>, term: Term, typ: Type
+  ) -> Result<(), String> {
+    let t_bak = term.clone() ;
+    match sym {
+      Some(sym) => {
+        let sym_bak = sym.clone() ;
+        match self.scoped_types.lock().unwrap().insert( (sym, term), typ ) {
+          Some(t) if t != typ => Err(
+            format!(
+              "trying to redefine type of {}::{} from {} to {}",
+              sym_bak, t_bak, t, typ
+            )
+          ),
+          _ => Ok(())
+        }
+      },
+      None => match self.unscoped_types.lock().unwrap().insert( term, typ ) {
+        Some(t) if t != typ => Err(
+          format!(
+            "trying to redefine type of {} from {} to {}",
+            t_bak, t, typ
+          )
+        ),
+        _ => Ok(())
+      },
+    }
+  }
+
+  /// Inserts a type for a variable, under a scope.
+  ///
+  /// For state variables, automatically also adds the next (current) version
+  /// when inserting the current (next) version.
+  ///
+  /// Setting a different type for an already typed variable is an error.
+  pub fn set_var_type(
+    & self, sym: Option<Sym>, v: Var, typ: Type
+  ) -> Result<(), String> {
+    match v.state() {
+      None => {
+        let var = self.mk_var(v) ;
+        self.set_type_unsafe(sym, var, typ)
+      },
+      Some(state) => {
+        let var: Term = self.mk_var(v) ;
+        try!( self.set_type_unsafe(sym.clone(), var.clone(), typ) ) ;
+        let var: Term = try!(
+          match state {
+            // Neither of these two can be an error.
+            State::Curr => self.bump(var),
+            State::Next => self.debump(var),
+          }
+        ) ;
+        self.set_type_unsafe(sym, var, typ)
+      },
+    }
+  }
+
+  /// Returns the type of a term under some scope. Cached.
+  ///
+  /// **Mostly unimplemented currently. Can only type the variables added with
+  /// `set_var_type`.**
+  ///
+  /// To use, make sure you manually insert the type of variables and the
+  /// function symbols.
+  ///
+  /// Can result in an error if some type information about some leaves of
+  /// the term is unknown.
+  pub fn type_of(
+    & self, term: & Term, scope: Option<Sym>
+  ) -> Result<Type, String> {
+    match scope {
+      Some(scope) => {
+        match self.scoped_types.lock().unwrap().get(
+          & (scope.clone(), term.clone())
+        ) {
+          Some(typ) => Ok(* typ),
+          None => Err(
+            format!("can't type unknown term {} under scope {}", term, scope)
+          ),
+        }
+      },
+      None => {
+        match self.unscoped_types.lock().unwrap().get( term ) {
+          Some(typ) => Ok(* typ),
+          None => Err(
+            format!("can't type unknown term {}", term)
+          ),
+        }
+      },
+    }
+  }
+
+  /// Parses a type.
   pub fn parse_type<'a>(bytes: & 'a [u8]) -> IResult<& 'a [u8], Type> {
     parser::type_parser(bytes)
   }
 
-  /** Creates a variable from a `Var`. */
+  /// Creates a variable from a `Var`.
   pub fn mk_var(& self, var: Var) -> Term {
     self.term.var(var)
   }
 
-  /** Creates a constant from a `Cst`. */
+  /// Creates a constant from a `Cst`.
   pub fn mk_cst(& self, cst: Cst) -> Term {
     self.term.cst(cst)
   }
 
-  /** Creates a constant from a real `Cst`. */
+  /// Creates a constant from a real `Cst`.
   pub fn mk_rcst(& self, cst: ::real_term::Cst) -> Cst {
     use cst::ConstMaker ;
     self.cst.constant(cst)
@@ -114,13 +246,13 @@ impl Factory {
 
 
 
-  /** Creates an n-ary equality. */
+  /// Creates an n-ary equality.
   pub fn eq(& self, kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 1) ;
     self.op(Operator::Eq, kids)
   }
 
-  /** Creates an if-then-else. */
+  /// Creates an if-then-else.
   pub fn ite(& self, condition: Term, then: Term, els3: Term) -> Term {
     if then == els3 {
       return then
@@ -137,7 +269,7 @@ impl Factory {
     self.op(Operator::Ite, vec![ condition, then, els3 ])
   }
 
-  /** Creates a negation. */
+  /// Creates a negation.
   pub fn not(& self, term: Term) -> Term {
     match * term.get() {
       RealTerm::C( ref c ) => match * c.get() {
@@ -178,7 +310,7 @@ impl Factory {
     self.op(Operator::Not, vec![ term ])
   }
 
-  /** Creates a conjunction. */
+  /// Creates a conjunction.
   pub fn and(& self, mut kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
@@ -186,7 +318,7 @@ impl Factory {
     }
   }
 
-  /** Creates a conjunction. */
+  /// Creates a conjunction.
   pub fn or(& self, mut kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
@@ -194,7 +326,7 @@ impl Factory {
     }
   }
 
-  /** Creates a conjunction. */
+  /// Creates a conjunction.
   pub fn xor(& self, mut kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
@@ -202,12 +334,12 @@ impl Factory {
     }
   }
 
-  /** Creates an implication. */
+  /// Creates an implication.
   pub fn imp(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Impl, vec![lhs, rhs])
   }
 
-  /** Creates an addition. */
+  /// Creates an addition.
   pub fn add(& self, mut kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
@@ -215,7 +347,7 @@ impl Factory {
     }
   }
 
-  /** Creates a substraction. */
+  /// Creates a substraction.
   pub fn sub(& self, mut kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
@@ -223,7 +355,7 @@ impl Factory {
     }
   }
 
-  /** Creates a numeric negation. */
+  /// Creates a numeric negation.
   pub fn neg(& self, term: Term) -> Term {
     match * term.get() {
       RealTerm::C( ref c ) => match * c.get() {
@@ -236,7 +368,7 @@ impl Factory {
     self.op(Operator::Neg, vec![ term ])
   }
 
-  /** Creates a multiplication. */
+  /// Creates a multiplication.
   pub fn mul(& self, mut kids: Vec<Term>) -> Term {
     debug_assert!(kids.len() > 0) ;
     if kids.len() == 1 { kids.pop().unwrap() } else {
@@ -244,44 +376,44 @@ impl Factory {
     }
   }
 
-  /** Creates a division. */
+  /// Creates a division.
   pub fn div(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Div, vec![ lhs, rhs ])
   }
 
-  /** Creates a less than or equal. */
+  /// Creates a less than or equal.
   pub fn le(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Le, vec![ lhs, rhs])
   }
 
-  /** Creates a greater than or equal. */
+  /// Creates a greater than or equal.
   pub fn ge(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Gt, vec![ lhs, rhs])
   }
 
-  /** Creates a less than. */
+  /// Creates a less than.
   pub fn lt(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Lt, vec![ lhs, rhs])
   }
 
-  /** Creates a greater than. */
+  /// Creates a greater than.
   pub fn gt(& self, lhs: Term, rhs: Term) -> Term {
     self.op(Operator::Gt, vec![ lhs, rhs])
   }
 
-  /** Evaluates a term. */
+  /// Evaluates a term.
   pub fn eval(
-    & self, term: & Term, off: & Offset2, model: & ::Model
+    & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
   ) -> Result<Cst, String> {
-    ::term::eval::eval(& self, term, off, model)
+    ::term::eval::eval(& self, term, off, model, scope)
   }
 
-  /** Evaluates a term to a bool value. */
+  /// Evaluates a term to a bool value.
   pub fn eval_bool(
-    & self, term: & Term, off: & Offset2, model: & ::Model
+    & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
   ) -> Result<Bool, String> {
     use ::real_term::Cst::* ;
-    match ::term::eval::eval(& self, term, off, model) {
+    match ::term::eval::eval(& self, term, off, model, scope) {
       Ok(val) => match * val.get() {
         Bool(ref b) => Ok(* b),
         Int(ref i) => Err(
@@ -295,12 +427,12 @@ impl Factory {
     }
   }
 
-  /** Evaluates a term to an integer value. */
+  /// Evaluates a term to an integer value.
   pub fn eval_int(
-    & self, term: & Term, off: & Offset2, model: & ::Model
+    & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
   ) -> Result<Int, String> {
     use ::real_term::Cst::* ;
-    match ::term::eval::eval(& self, term, off, model) {
+    match ::term::eval::eval(& self, term, off, model, scope) {
       Ok(val) => match * val.get() {
         Int(ref i) => Ok(i.clone()),
         Bool(ref b) => Err(
@@ -314,12 +446,12 @@ impl Factory {
     }
   }
 
-  /** Evaluates a term to an integer value. */
+  /// Evaluates a term to an integer value.
   pub fn eval_rat(
-    & self, term: & Term, off: & Offset2, model: & ::Model
+    & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
   ) -> Result<Rat, String> {
     use ::real_term::Cst::* ;
-    match ::term::eval::eval(& self, term, off, model) {
+    match ::term::eval::eval(& self, term, off, model, scope) {
       Ok(val) => match * val.get() {
         Rat(ref r) => Ok(r.clone()),
         Bool(ref b) => Err(
@@ -486,25 +618,48 @@ impl ::term::Factory for Factory {}
 
 /* |===| Factory can perform unary operations on terms. */
 
-/** Unary operations on terms. */
+/// Unary operations on terms.
 pub trait UnTermOps<Trm> {
   /** Bumps a term.
 
   * changes all `SVar(sym, State::curr)` to `SVar(sym, State::next)`,
   * returns `Err(())` if input term contains a `SVar(_, State::next)`. */
-  fn bump(& self, Trm) -> Result<Term,()> ;
+  fn bump(& self, Trm) -> Result<Term,String> ;
+  /** Bumps a term.
+
+  * changes all `SVar(sym, State::next)` to `SVar(sym, State::curr)`,
+  * returns `Err(())` if input term contains a `SVar(_, State::curr)`. */
+  fn debump(& self, Trm) -> Result<Term,String> ;
 }
-impl<
-  'a, Trm: Clone, T: UnTermOps<Trm> + Sized
-> UnTermOps<& 'a Trm> for T {
-  #[inline(always)]
-  fn bump(& self, term: & 'a Trm) -> Result<Term,()> {
-    (self as & UnTermOps<Trm>).bump(term.clone())
+// impl<
+//   'a, Trm: Clone, T: UnTermOps<Trm> + Sized
+// > UnTermOps<& 'a Trm> for T {
+//   #[inline(always)]
+//   fn bump(& self, term: & 'a Trm) -> Result<Term,String> {
+//     (self as & UnTermOps<Trm>).bump(term.clone())
+//   }
+//   #[inline(always)]
+//   fn debump(& self, term: & 'a Trm) -> Result<Term,String> {
+//     (self as & UnTermOps<Trm>).debump(term.clone())
+//   }
+// }
+
+impl UnTermOps<Term> for Factory {
+  fn bump(& self, term: Term) -> Result<Term,String> {
+    bump(self, term)
+  }
+  fn debump(& self, term: Term) -> Result<Term,String> {
+    debump(self, term)
   }
 }
 
-impl UnTermOps<Term> for Factory {
-  fn bump(& self, term: Term) -> Result<Term,()> { bump(self, term) }
+impl<'a> UnTermOps<& 'a Term> for Factory {
+  fn bump(& self, term: & 'a Term) -> Result<Term,String> {
+    self.bump( term.clone() )
+  }
+  fn debump(& self, term: & 'a Term) -> Result<Term,String> {
+    self.debump( term.clone() )
+  }
 }
 
 

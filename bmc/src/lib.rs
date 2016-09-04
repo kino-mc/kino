@@ -1,4 +1,3 @@
-#![deny(missing_docs)]
 // Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
@@ -7,6 +6,7 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![deny(missing_docs)]
 
 /*! Bounded model-checking.
 
@@ -71,9 +71,8 @@ fn bmc<
 >(
   mut solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
+  let init_off = Offset2::init() ;
   let mut k = Offset2::init() ;
-
-  let mut actlit_factory = ActlitFactory::mk() ;
 
   // event.log("creating manager, declaring actlits") ;
   let mut props = try_error!(
@@ -83,19 +82,28 @@ fn bmc<
   ) ;
 
   if props.none_left() {
+    event.log("no properties to run on, stopping") ;
     event.done_at(k.curr()) ;
     return ()
   }
 
+  let mut unroller = Unroller::mk(& sys, solver) ;
+
   // event.log("declaring functions, init and trans") ;
   try_error!(
-    sys.defclare_funs(& mut solver), event,
+    unroller.defclare_funs(), event,
     "while declaring UFs, init and trans"
   ) ;
 
   // event.log("declare svar@0 and assert init@0") ;
   try_error!(
-    sys.assert_init(& mut solver, & k), event,
+    unroller.assert_init(& k), event,
+    "while asserting init"
+  ) ;
+
+  // event.log("asserting one-state invariants") ;
+  try_error!(
+    unroller.assert_os_invs(& k), event,
     "while asserting init"
   ) ;
 
@@ -109,7 +117,7 @@ fn bmc<
 
     if ! doing_init {
       try_error!(
-        sys.unroll(& mut solver, & k), event,
+        unroller.unroll(& k), event,
         "while unrolling system at {}", k
       ) ;
     }
@@ -121,13 +129,17 @@ fn bmc<
       Some(msgs) => for msg in msgs {
         match msg {
           MsgDown::Forget(ps, _) => try_error!(
-            props.forget(& mut solver, ps.iter()),
+            props.forget(unroller.solver(), ps.iter()),
             event,
             "while forgetting property in manager"
           ),
-          MsgDown::Invariants(_,_) => event.warning(
-            "received invariants, skipping"
-          ),
+          MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+            event.log("received {} invariants") ;
+            try_error!(
+              unroller.add_invs(invs, & init_off, & k), event,
+              "while adding invariants from supervisor"
+            )
+          },
           _ => event.error("unknown message")
         }
       },
@@ -140,7 +152,7 @@ fn bmc<
 
     // Check that the unrolling is satisfiable by itself.
     if ! try_error!(
-      solver.check_sat(), event,
+      unroller.check_sat(), event,
       "could not perform `check-sat`"
     ) {
       // No more transitions can be taken, all remaining properties
@@ -163,16 +175,14 @@ fn bmc<
       } else { props.one_false_next() } {
 
         // Setting up the negative actlit.
-        let actlit = actlit_factory.mk_fresh() ;
-        actlit.declare(& mut solver).expect(
-          & format!(
-            "while declaring activation literal at {}", k
-          )
+        let actlit = try_error!(
+          unroller.fresh_actlit(), event,
+          "while declaring activation literal at {}", k
         ) ;
         let implication = actlit.activate_term(one_prop_false) ;
 
         try_error!(
-          solver.assert(& implication, & k), event,
+          unroller.assert(& implication, & k), event,
           "while asserting implication at {} (2)", k
         ) ;
 
@@ -182,26 +192,26 @@ fn bmc<
 
         // Check sat.
         let is_sat = try_error!(
-          solver.check_sat_assuming( & actlits, & () ), event,
+          unroller.check_sat_assuming( & actlits ), event,
           "during a `check_sat_assuming` query at {}", k
         ) ;
 
         if is_sat {
           // event.log("sat, getting falsified properties") ;
           let falsified = try_error!(
-            props.get_false_next(& mut solver, & k), event,
+            props.get_false_next(unroller.solver(), & k), event,
             "could not retrieve falsified properties"
           ) ;
           let model = try_error!(
-            solver.get_model(), event,
+            unroller.solver().get_model(), event,
             "could not retrieve model"
           ) ;
           try_error!(
-            props.forget(& mut solver, falsified.iter()), event,
+            props.forget(unroller.solver(), falsified.iter()), event,
             "while forgetting property in manager"
           ) ;
           try_error!(
-            actlit.deactivate(& mut solver), event,
+            unroller.deactivate(actlit), event,
             "could not deactivate negative actlit"
           ) ;
           event.disproved_at(model, falsified, k.curr())
@@ -209,7 +219,7 @@ fn bmc<
           // event.log("unsat") ;
           event.k_true(props.not_inhibited(), k.curr()) ;
           try_error!(
-            actlit.deactivate(& mut solver), event,
+            unroller.deactivate(actlit), event,
             "could not deactivate negative actlit"
           ) ;
           break 'this_k

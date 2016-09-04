@@ -234,6 +234,10 @@ pub fn check_fun_dec(
 ) -> Result<Callable, Error> {
   let desc = super::uf_desc ;
   check_sym!(ctxt, sym, desc) ;
+  match ctxt.factory().set_fun_type(sym.clone(), typ) {
+    Ok(()) => (),
+    Err(e) => return Err( Error::TypeCheck(e) ),
+  } ;
   Ok( Callable::Dec( Uf::mk(sym, sig, typ) ) )
 }
 
@@ -283,6 +287,11 @@ pub fn check_fun_def(
       expected {}, got {}",
     typ, t
   ) ;
+
+  match ctxt.factory().set_fun_type(sym.clone(), typ) {
+    Ok(()) => (),
+    Err(e) => return Err( Error::TypeCheck(e) ),
+  } ;
 
   Ok(
     Callable::Def( Fun::mk(sym, args, typ, body.term, calls) )
@@ -639,6 +648,14 @@ pub fn check_sys(
     ctxt.factory().app(init_sym.clone(), init_params),
     ctxt.factory().app(trans_sym.clone(), trans_params)
   ) ;
+
+  for & (ref v_sym, ref typ) in state.args() {
+    let svar = ctxt.factory().svar(v_sym.clone(), Curr) ;
+    match ctxt.factory().set_var_type(Some(sym.clone()), svar, * typ) {
+      Ok(()) => (),
+      Err(e) => return Err( Error::TypeCheck(e) ),
+    }
+  }
 
   Ok(
     Sys::mk(

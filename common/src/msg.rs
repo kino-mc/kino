@@ -18,14 +18,14 @@ use std::collections::HashMap ;
 use std::sync::Arc ;
 
 use term::{
-  Offset, Sym, Factory, Model, STerm
+  Offset, Sym, Factory, Model, STerm, STermSet
 } ;
 
 use sys::{ Prop, Sys } ;
 
 use ::{ Tek, CanRun } ;
 
-/** Wrapper around master and kids receive and send channels. */
+/// Wrapper around master and kids receive and send channels.
 pub struct KidManager {
   /** Receives messages from kids. */
   r: mpsc::Receiver<MsgUp>,
@@ -138,7 +138,7 @@ pub enum MsgDown {
 /** Message from the techniques to kino. */
 pub enum MsgUp {
   /** Invariants discovered. */
-  Invariants,
+  Invariants(Tek, STermSet),
   /** Not implemented. */
   Unimplemented,
   /** Log message. */
@@ -160,7 +160,13 @@ impl fmt::Display for MsgUp {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     use msg::MsgUp::* ;
     match * self {
-      Invariants => write!(fmt, "Invariants"),
+      Invariants(ref t, ref invs) => {
+        try!( write!(fmt, "Invariants({},", t) ) ;
+        for inv in invs {
+          try!( write!(fmt, " {}", inv) )
+        }
+        write!(fmt, " )")
+      },
       Unimplemented => write!(fmt, "Unimplemented"),
       Done(ref t, _) => write!(fmt, "Done({})", t),
       Bla(ref t, _) => write!(fmt, "Bla({})", t),
@@ -201,65 +207,73 @@ impl Event {
     } ;
     Event { s: s, r: r, t: t, f: f, k_true: k_true }
   }
-  /** Sends a done message upwards. */
+
+  /// Sends an invariant message upwards.
+  pub fn invariants(& self, invs: STermSet) {
+    self.s.send(
+      MsgUp::Invariants(self.t, invs)
+    ).unwrap()
+  }
+
+  /// Sends a done message upwards.
   pub fn done(& self, info: Info) {
     self.s.send(
       MsgUp::Done(self.t, info)
     ).unwrap()
   }
-  /** Sends a done message upwards. */
+  /// Sends a done message upwards.
   pub fn done_at(& self, o: & Offset) {
     self.done(Info::At(o.clone()))
   }
-  /** Sends a proved message upwards. */
+  /// Sends a proved message upwards.
   pub fn proved(& self, props: Vec<Sym>, info: Info) {
     self.s.send(
       MsgUp::Proved(props, self.t, info)
     ).unwrap()
   }
-  /** Sends a proved message upwards. */
+  /// Sends a proved message upwards.
   pub fn proved_at(& self, props: Vec<Sym>, o: & Offset) {
     self.proved(props, Info::At(o.clone()))
   }
-  /** Sends a falsification message upwards. */
+  /// Sends a falsification message upwards.
   pub fn disproved(& self, model: Model, props: Vec<Sym>, info: Info) {
     self.s.send(
       MsgUp::Disproved(model, props, self.t, info)
     ).unwrap()
   }
-  /** Sends a falsification message upwards. */
+  /// Sends a falsification message upwards.
   pub fn disproved_at(& self, model: Model, props: Vec<Sym>, o: & Offset) {
     self.disproved(model, props, Info::At(o.clone()))
   }
-  /** Sends some k-true properties. */
+  /// Sends some k-true properties.
   pub fn k_true(& self, props: Vec<Sym>, o: & Offset) {
     self.s.send(
       MsgUp::KTrue(props, self.t, o.clone())
     ).unwrap()
   }
-  /** Sends a log message upwards. */
+  /// Sends a log message upwards.
   pub fn log(& self, s: & str) {
     self.s.send(
       MsgUp::Bla(self.t, s.to_string())
     ).unwrap()
   }
-  /** Sends an error upwards. */
+  /// Sends an error upwards.
   pub fn error(& self, s: & str) {
     self.s.send(
       MsgUp::Error(self.t, s.to_string())
     ).unwrap()
   }
-  /** Sends a warning upwards. */
+  /// Sends a warning upwards.
   pub fn warning(& self, s: & str) {
     self.s.send(
       MsgUp::Warning(self.t, s.to_string())
     ).unwrap()
   }
-  /** The factory in an `Event`. */
+  /// The factory in an `Event`.
   pub fn factory(& self) -> & Factory {
     & self.f
   }
-  /** Returns the offset a property is k_true for. */
+  /// Returns the offset a property is k_true for.
   #[inline(always)]
   pub fn get_k_true(& self, p: & Sym) -> & Option<Offset> {
     match self.k_true.get(p) {
@@ -267,7 +281,7 @@ impl Event {
       None => panic!("[event.k_true] unknown property"),
     }
   }
-  /** Receive messages from the master. */
+  /// Receive messages from the master.
   pub fn recv(& mut self) -> Option<Vec<MsgDown>> {
     let mut vec = vec![] ;
     loop {

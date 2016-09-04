@@ -10,19 +10,12 @@
 /*! Lock Step Driver (LSD): a wrapper around some SMT solvers providing
 invariant-generation-oriented operations. */
 
-use std::collections::{ HashSet, HashMap } ;
-
 use common::Res ;
 
-use term::tmp::TmpTerm as Term ;
+use term::tmp::{ TmpTerm, TmpTermMap } ;
 
 use Domain ;
 use eval::Eval ;
-
-/// A set of temp terms with some info.
-pub type TermMap<Info> = HashMap<Term, Info> ;
-/// A set of temp terms.
-pub type TermSet = HashSet<Term> ;
 
 /// Wrapper to perform checks on a trace of reachable states.
 pub trait BaseTrait<
@@ -31,7 +24,7 @@ pub trait BaseTrait<
   /// Returns a model for the last state of a trace of k (current unrolling)
   /// states falsifying at least one of the terms from the list at k.
   fn k_falsify(
-    & mut self, Vec<Term>
+    & mut self, Vec<TmpTerm>
   ) -> Res<Option<& mut Eval<Val>>> ;
 }
 
@@ -42,8 +35,8 @@ pub trait StepTrait<
   /// Splits the input set in two: the terms unfalsifiable terms in a
   /// k-induction check for the current depth, and the rest.
   fn k_split<Info>(
-    & mut self, TermMap<Info>
-  ) -> Res<(TermMap<Info>, TermMap<Info>)> ;
+    & mut self, TmpTermMap<Info>
+  ) -> Res<(TmpTermMap<Info>, TmpTermMap<Info>)> ;
 }
 
 /// High-level LSD features.
@@ -72,9 +65,9 @@ pub mod top_only {
   use common::{ SolverTrait, Res } ;
   use term::{ Offset2, Bool } ;
   use term::tmp::TmpTerm as Term ;
-  use term::tmp::TmpTermMker ;
+  use term::tmp::{ TmpTermMker, TmpTermMap } ;
   use system::Sys ;
-  use unroll::{ Unroller, ActlitFactory } ;
+  use unroll::Unroller ;
 
   use Domain ;
   use eval::Eval ;
@@ -82,18 +75,12 @@ pub mod top_only {
     BaseTrait, StepTrait, Lsd
   } ;
 
-  pub use super::{ TermSet, TermMap } ;
-
   /// Base checker.
   pub struct Base<Val: Domain, Solver> {
-    /// The system this checker corresponds to.
-    sys: Sys,
-    /// The solver process.
-    solver: Solver,
+    /// The underlying unroller.
+    unroller: Unroller<Solver>,
     /// The current unrolling depth.
     k: Offset2,
-    /// Actlit factory.
-    actlit: ActlitFactory,
     /// Cached evaluator.
     eval: Eval<Val>,
   }
@@ -101,18 +88,20 @@ pub mod top_only {
     'a, Val: Domain, Solver: SolverTrait<'a>
   > Base<Val, Solver> {
     /// Base setup for a solver.
-    fn setup(sys: & Sys, solver: & mut Solver, unroll: usize) -> Res<Offset2> {
+    fn setup(
+      unroller: & mut Unroller<Solver>, unroll: usize
+    ) -> Res<Offset2> {
       let mut k = Offset2::init() ;
       try_str!(
-        solver.reset(),
+        unroller.solver().reset(),
         "while `reset`ing the solver"
       ) ;
       try_str!(
-        sys.defclare_funs(solver),
+        unroller.defclare_funs(),
         "while declaring UFs, init and trans"
       ) ;
       try_str!(
-        sys.assert_init(solver, & k),
+        unroller.assert_init(& k),
         "while asserting init"
       ) ;
       // Init is asserted, we need to decrease `k` so that it accounts
@@ -121,7 +110,7 @@ pub mod top_only {
       for _ in 0..unroll {
         k = k.nxt() ;
         try_str!(
-          sys.unroll(solver, & k),
+          unroller.unroll(& k),
           "while unrolling system at {}", k.next()
         )
       }
@@ -129,23 +118,22 @@ pub mod top_only {
     }
     /// Creates a base checker. Unrolls the transition relation `unroll` times.
     fn of(
-      sys: Sys, mut solver: Solver, unroll: usize, eval: Eval<Val>
+      mut unroller: Unroller<Solver>, unroll: usize, eval: Eval<Val>
     ) -> Res<Self> {
-      Base::<Val, Solver>::setup(& sys, & mut solver, unroll).map(
+      Base::<Val, Solver>::setup(& mut unroller, unroll).map(
         |k| Base {
-          sys: sys, solver: solver, k: k,
-          actlit: ActlitFactory::mk(),
-          eval: eval
+          unroller: unroller, k: k, eval: eval
         }
       )
     }
 
     /// Creates a base checker, unrolls the transition relation `unroll` times.
-    pub fn mk(sys: Sys, solver: Solver, unroll: usize) -> Res<Self> {
+    pub fn mk(sys: & Sys, solver: Solver, unroll: usize) -> Res<Self> {
       let factory = solver.parser().clone() ;
+      let unroller = Unroller::mk(sys, solver) ;
       Base::of(
-        sys, solver, unroll, Eval::mk(
-          vec![], Step::<Val, Solver>::check_offset(), factory
+        unroller, unroll, Eval::mk(
+          sys.clone(), vec![], Step::<Val, Solver>::check_offset(), factory
         )
       )
     }
@@ -153,7 +141,7 @@ pub mod top_only {
     /// Creates a base checker from a step checker, with the same unrolling.
     #[inline]
     pub fn of_step(step: Step<Val, Solver>) -> Res<Self> {
-      Self::of(step.sys, step.solver, step.k.next().to_usize(), step.eval)
+      Self::of(step.unroller, step.k.next().to_usize(), step.eval)
     }
   }
 
@@ -166,29 +154,27 @@ pub mod top_only {
       // Creating the term to check.
       let one_term_false = Term::and(terms).tmp_neg() ;
       // Creating actlit for this check.
-      let actlit = self.actlit.mk_fresh() ;
-      actlit.declare(& mut self.solver).expect(
-        & format!(
-          "while declaring activation literal at {}", self.k
-        )
+      let actlit = try_str!(
+        self.unroller.fresh_actlit(),
+        "while declaring activation literal at {}", self.k
       ) ;
       let implication = actlit.activate_term(one_term_false) ;
 
       try_str!(
-        self.solver.assert(& implication, & self.k),
+        self.unroller.assert(& implication, & self.k),
         "while asserting implication at {}", self.k
       ) ;
 
       // Check sat.
       let is_sat = try_str!(
-        self.solver.check_sat_assuming( & [ actlit.name() ], & () ),
+        self.unroller.check_sat_assuming( & [ actlit.name() ] ),
         "during a `check_sat_assuming` query at {}", self.k
       ) ;
 
       let res = if is_sat {
         // Sat, getting model.
         let model = try_str!(
-          self.solver.get_model(),
+          self.unroller.solver().get_model(),
           "could not retrieve model"
         ) ;
         self.eval.recycle( model, self.k.clone() ) ;
@@ -199,7 +185,7 @@ pub mod top_only {
       } ;
       
       try_str!(
-        actlit.deactivate(& mut self.solver),
+        self.unroller.deactivate(actlit),
         "could not deactivate negative actlit"
       ) ;
 
@@ -212,7 +198,7 @@ pub mod top_only {
   > Lsd< Val, Base<Val, Solver>, Step<Val, Solver> > for Base<Val, Solver> {
     fn restart(& mut self) -> Res<()> {
       match Base::<Val, Solver>::setup(
-        & self.sys, & mut self.solver, self.k.next().to_usize()
+        & mut self.unroller, self.k.next().to_usize()
       ) {
         Ok(k) => {
           debug_assert!(k == self.k) ;
@@ -233,7 +219,7 @@ pub mod top_only {
     fn unroll(& mut self) -> Res<usize> {
       self.k = self.k.nxt() ;
       try_str!(
-        self.sys.unroll(& mut self.solver, & self.k),
+        self.unroller.unroll(& self.k),
         "while unrolling system at {}", self.k.next()
       ) ;
       Ok( self.unroll_len() )
@@ -252,16 +238,12 @@ pub mod top_only {
 
   /// Step checker.
   pub struct Step<Val: Domain, Solver> {
-    /// The system this checker corresponds to.
-    sys: Sys,
-    /// The solver process.
-    solver: Solver,
+    /// The underlying unroller.
+    unroller: Unroller<Solver>,
     /// The current unrolling depth.
     k: Offset2,
     /// The offset corresponding to the checks. (Unrolling backwards.)
     check: Offset2,
-    /// Actlit factory.
-    actlit: ActlitFactory,
     /// Cached evaluator.
     eval: Eval<Val>,
   }
@@ -273,7 +255,7 @@ pub mod top_only {
     ///
     /// Returns the check offset and the unrolling offset.
     fn setup(
-      sys: & Sys, solver: & mut Solver, unroll: usize
+      unroller: & mut Unroller<Solver>, unroll: usize
     ) -> Res<(Offset2, Offset2)> {
       if unroll < 1 {
         return Err(
@@ -283,21 +265,21 @@ pub mod top_only {
       let check_offset = Step::<Val, Solver>::check_offset() ;
       let mut k = check_offset.clone() ;
       try_str!(
-        solver.reset(),
+        unroller.solver().reset(),
         "while `reset`ing the solver"
       ) ;
       try_str!(
-        sys.defclare_funs(solver),
+        unroller.defclare_funs(),
         "while declaring UFs, init and trans"
       ) ;
       try_str!(
-        sys.declare_svars(solver, check_offset.next()),
+        unroller.declare_svars(check_offset.next()),
         // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~~~^^^^
         "while declaring state variables"
       ) ;
       // First unrolling, to be consistent with the value of `k`.
       try_str!(
-        sys.unroll(solver, & k),
+        unroller.unroll(& k),
         "while unrolling system at {}", k.next()
       ) ;
       // Unrolling loop, `unroll - 1` iterations because of the previous
@@ -305,7 +287,7 @@ pub mod top_only {
       for _ in 1..unroll {
         k = k.nxt() ;
         try_str!(
-          sys.unroll(solver, & k),
+          unroller.unroll(& k),
           "while unrolling system at {}", k.next()
         )
       }
@@ -314,12 +296,11 @@ pub mod top_only {
     /// Creates a base checker, unrolls the system `unroll` times.
     /// `k = 0` is illegal and results in an error.
     fn of(
-      sys: Sys, mut solver: Solver, unroll: usize, eval: Eval<Val>
+      mut unroller: Unroller<Solver>, unroll: usize, eval: Eval<Val>
     ) -> Res<Self> {
-      Step::<Val, Solver>::setup(& sys, & mut solver, unroll).map(
+      Step::<Val, Solver>::setup(& mut unroller, unroll).map(
         | (check, k) | Step {
-          sys: sys, solver: solver, k: k, check: check.clone(),
-          actlit: ActlitFactory::mk(), eval: eval
+          unroller: unroller, k: k, check: check.clone(), eval: eval
         }
       )
     }
@@ -328,7 +309,7 @@ pub mod top_only {
     /// of unrollings.
     #[inline]
     pub fn of_base(base: Base<Val, Solver>) -> Res<Self> {
-      Self::of(base.sys, base.solver, base.k.next().to_usize(), base.eval)
+      Self::of(base.unroller, base.k.next().to_usize(), base.eval)
     }
   }
 
@@ -336,21 +317,19 @@ pub mod top_only {
     'a, Val: Domain, Solver: SolverTrait<'a>
   > StepTrait< Val, Base<Val, Solver> > for Step<Val, Solver> {
     fn k_split<Info>(
-      & mut self, in_map: TermMap<Info>
-    ) -> Res<(TermMap<Info>, TermMap<Info>)> {
+      & mut self, in_map: TmpTermMap<Info>
+    ) -> Res<(TmpTermMap<Info>, TmpTermMap<Info>)> {
       let len = in_map.len() ;
       let tenth_of_len = 1 + len / 10 ;
-      let mut rest = TermMap::with_capacity( len - tenth_of_len ) ;
+      let mut rest = TmpTermMap::with_capacity( len - tenth_of_len ) ;
 
       // Creating one actlit per term to maximize solver learning.
-      let mut map = TermMap::with_capacity(len) ;
+      let mut map = TmpTermMap::with_capacity(len) ;
       let mut positive = Vec::with_capacity(len) ;
       for (term, info) in in_map.into_iter() {
-        let actlit = self.actlit.mk_fresh() ;
-        actlit.declare(& mut self.solver).expect(
-          & format!(
-            "while declaring activation literal at {}", self.k
-          )
+        let actlit = try_str!(
+          self.unroller.fresh_actlit(),
+          "while declaring activation literal at {}", self.k
         ) ;
         positive.push( actlit.activate_term( term.clone() ) ) ;
         let prev = map.insert(term, (info, actlit.name())) ;
@@ -364,7 +343,7 @@ pub mod top_only {
       while unroll <= self.k {
         unroll = unroll.nxt() ;
         try_str!(
-          self.solver.assert(& positive, & unroll),
+          self.unroller.assert(& positive, & unroll),
           "while asserting positive implications at {}", unroll
         )
       }
@@ -386,38 +365,35 @@ pub mod top_only {
         let one_term_false = Term::and( to_check.clone() ).tmp_neg() ;
 
         // Creating actlit for this check.
-        let actlit = self.actlit.mk_fresh() ;
-        actlits.push( actlit.name() ) ;
-        actlit.declare(& mut self.solver).expect(
-          & format!(
-            "while declaring activation literal at {}", self.k
-          )
+        let actlit = try_str!(
+          self.unroller.fresh_actlit(),
+          "while declaring activation literal at {}", self.k
         ) ;
+        actlits.push( actlit.name() ) ;
         let implication = actlit.activate_term(one_term_false) ;
 
         try_str!(
-          self.solver.assert(& implication, & self.check),
+          self.unroller.assert(& implication, & self.check),
           "while asserting implication at {}", self.k
         ) ;
 
         // Check sat.
         let is_sat = try_str!(
-          self.solver.check_sat_assuming( & actlits, & () ),
+          self.unroller.check_sat_assuming( & actlits ),
           "during a `check_sat_assuming` query at {}", self.k
         ) ;
 
         if is_sat {
-          use unroll::SysModel ;
           // Evaluate terms and update `rest`.
           let model = try_str!(
-            self.sys.get_model( & mut self.solver, & self.check),
+            self.unroller.get_model(& self.check),
             "while retrieving the values of the candidate terms"
           ) ;
           
           let mut eval = Eval::<Bool>::mk(
-            model,
+            self.unroller.sys().clone(), model,
             Step::<Val, Solver>::check_offset(),
-            self.solver.parser().clone()
+            self.unroller.solver().parser().clone()
           ) ;
 
           for term in to_check.into_iter() {
@@ -441,7 +417,7 @@ pub mod top_only {
         }
 
         try_str!(
-          actlit.deactivate(& mut self.solver),
+          self.unroller.deactivate(actlit),
           "could not deactivate negative actlit"
         ) ;
 
@@ -464,7 +440,7 @@ pub mod top_only {
   > Lsd< Val, Base<Val, Solver>, Step<Val, Solver> > for Step<Val, Solver> {
     fn restart(& mut self) -> Res<()> {
       match Step::<Val, Solver>::setup(
-        & self.sys, & mut self.solver, self.k.next().to_usize()
+        & mut self.unroller, self.k.next().to_usize()
       ) {
         Ok( (check, k) ) => {
           debug_assert!(k == self.k) ;
@@ -486,7 +462,7 @@ pub mod top_only {
     fn unroll(& mut self) -> Res<usize> {
       self.k = self.k.nxt() ;
       try_str!(
-        self.sys.unroll(& mut self.solver, & self.k),
+        self.unroller.unroll(& self.k),
         "while unrolling system at {}", self.k.next()
       ) ;
       Ok( self.unroll_len() )

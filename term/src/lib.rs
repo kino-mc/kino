@@ -125,19 +125,23 @@ mod factory ;
 pub use factory::{ Factory, ParseVmt2, UnTermOps } ;
 pub mod gen ;
 
-/** A model is a vector of variables with optional offset and values. */
+/// A model is a vector of variables with optional offset and values.
 pub type Model = Vec<( (Var, Option<Offset>), Cst )> ;
 
-/** A set of constants. */
+/// A set of constants.
 pub type CstSet = HashSet<Cst> ;
-/** A set of variables. */
+/// A set of variables.
 pub type VarSet = HashSet<Var> ;
-/** A set of terms. */
+/// A set of terms.
 pub type TermSet = HashSet<Term> ;
-/** A map from terms to something. */
+/// A map from terms to something.
 pub type TermMap<Val> = HashMap<Term, Val> ;
+/// A set of state terms.
+pub type STermSet = HashSet<STerm> ;
+/// A map from state terms to something.
+pub type STermMap<Val> = HashMap<STerm, Val> ;
 
-/** Real, underlying representation of symbols, constants and terms. */
+/// Real, underlying representation of symbols, constants and terms.
 pub mod real_term {
   pub use sym::RealSym as Sym ;
   pub use var::RealVar as Var ;
@@ -145,7 +149,7 @@ pub mod real_term {
   pub use term::RealTerm as Term ;
 }
 
-/** Zipper on terms. */
+/// Zipper on terms.
 pub mod zip {
   pub use term::zip2::{ Step, fold, fold_info, extract } ;
 }

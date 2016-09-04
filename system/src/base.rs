@@ -14,6 +14,7 @@ use std::iter::Iterator ;
 // use std::collections::HashSet ;
 
 use term::{ Sym, Var, Type, Term, STerm } ;
+use term::real_term::Cst ;
 
 /** Set of callables. */
 #[derive(Debug,Clone,PartialEq,Eq)]
@@ -490,6 +491,16 @@ impl Sys {
   /** Calls of a system. */
   #[inline(always)]
   pub fn calls(& self) -> & CallSet { & self.calls }
+
+  /// Default value for a symbol.
+  pub fn default_value(& self, sym: & Sym) -> Result<Cst, String> {
+    for & (ref sym, ref typ) in self.state().args() {
+      if sym == sym {
+        return Ok( typ.default() )
+      }
+    }
+    Err( format!("[sys] unknown symbol {}", sym) )
+  }
 
   /** String representation of a system as lines. */
   pub fn lines(& self) -> String {

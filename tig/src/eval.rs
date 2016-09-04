@@ -17,6 +17,8 @@ use term::{
 } ;
 use term::tmp::{ TmpTerm } ;
 
+use system::Sys ;
+
 use common::Res ;
 
 /// Cache: map from temp terms to constants.
@@ -44,6 +46,8 @@ use Domain ;
   pub struct Eval<Val: Domain> {
     /// Phantom data for the type we evaluate things to.
     phantom: PhantomData<Val>,
+    /// The system we're evaluating for.
+    sys: Sys,
     /// The model we're evaluating with.
     model: Model,
     /// The offset we're evaluating with.
@@ -56,9 +60,12 @@ use Domain ;
   impl<Val: Domain> Eval<Val> {
     /** Builds a new evaluator. Only call once, then call `recycle` for optimal
     cache allocation. */
-    pub fn mk(model: Model, offset: Offset2, factory: Factory) -> Self {
+    pub fn mk(
+      sys: Sys, model: Model, offset: Offset2, factory: Factory
+    ) -> Self {
       Eval {
         phantom: PhantomData,
+        sys: sys,
         model: model, offset: offset,
         cache: TTermCache::with_capacity(100), factory: factory
       }
@@ -67,6 +74,16 @@ use Domain ;
     /** Resets the evaluator with a new model. The cache is reset but its
     capacity is kept. */
     pub fn recycle(& mut self, model: Model, offset: Offset2) {
+      self.model = model ;
+      self.offset = offset ;
+      self.cache.clear() ;
+      ()
+    }
+
+    /** Resets the evaluator with a new model for a new system. The cache is
+    reset but its capacity is kept. */
+    pub fn recycle_sys(& mut self, sys: Sys, model: Model, offset: Offset2) {
+      self.sys = sys ;
       self.model = model ;
       self.offset = offset ;
       self.cache.clear() ;
@@ -122,9 +139,21 @@ use Domain ;
 
               // Actual term, evaluate.
               Trm(ref trm) => {
+                // println!("trying to evaluate {} at {} on", trm, self.offset) ;
+                // for & ((ref v, ref o), ref cst) in self.model.iter() {
+                //   println!(
+                //     "  {} | {} -> {}", v,
+                //     match * o {
+                //       None => format!("_"),
+                //       Some(ref o) => format!("{}", o),
+                //     }, cst
+                //   )
+                // }
                 let value = try_str!(
-                  self.factory.eval(trm, & self.offset, & self.model),
-                  "could not evaluate term\n{}", trm
+                  self.factory.eval(
+                    trm, & self.offset, & self.model, self.sys.sym().clone()
+                  ),
+                  "could not evaluate term {}", trm
                 ) ;
                 self.cache.insert( Trm(trm.clone()), value.clone() ) ;
                 values.push(value)

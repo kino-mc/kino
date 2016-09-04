@@ -14,25 +14,25 @@
   ;; State signature.
   ( (in Bool) (out Int) )
   ;; Local definitions.
-  ()
+  ;; ()
   ;; Init.
-  (ite (_ state in) (= (_ state out) 1) (= (_ state out) 0))
+  (ite (_ curr in) (= (_ curr out) 1) (= (_ curr out) 0))
   ;; Trans.
   (ite
-    (not (= (_ next in) (_ state in)))
-    (= (_ next out) (+ (_ state out) 1))
-    (= (_ next out) (_ state out))
+    (not (= (_ next in) (_ curr in)))
+    (= (_ next out) (+ (_ curr out) 1))
+    (= (_ next out) (_ curr out))
   )
   ;; Composition.
   ()
 )
 
-;; Defines a property over a state.
+;; Defines a property over a curr.
 (define-prop out_le_10 sys_a
-  (<= (_ state out) 10)
+  (<= (_ curr out) 10)
 )
 (define-prop out_pos sys_a
-  (>= (_ state out) 0)
+  (>= (_ curr out) 0)
 )
 
 (define-fun act () Bool true)

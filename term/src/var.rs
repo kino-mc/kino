@@ -27,6 +27,15 @@ pub enum RealVar {
   SVar(Sym, State),
 }
 impl RealVar {
+  /// The state of variable.
+  #[inline]
+  pub fn state(& self) -> Option<State> {
+    match * self {
+      RealVar::SVar(_, ref state) => Some(* state),
+      _ => None,
+    }
+  }
+
   /** Bumps a variable in the current state to the next state. */
   #[inline(always)]
   pub fn bump(& self) -> Result<Self,bool> {

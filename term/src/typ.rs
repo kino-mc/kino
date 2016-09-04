@@ -13,6 +13,7 @@ use std::io ;
 use std::fmt ;
 
 use base::{ Writable } ;
+use real_term::Cst ;
 
 /** A primitive type. */
 #[derive(Clone,Copy,Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
@@ -46,6 +47,22 @@ impl Type {
       Type::Bool => "Bool",
       Type::Int => "Int",
       Type::Rat => "Real",
+    }
+  }
+  /// Default value of a type.
+  #[inline]
+  pub fn default(& self) -> Cst {
+    match * self {
+      Type::Bool => Cst::Bool(false),
+      Type::Int => Cst::Int(
+        Int::parse_bytes(b"0", 10).unwrap()
+      ),
+      Type::Rat => Cst::Rat(
+        Rat::new(
+          Int::parse_bytes(b"0", 10).unwrap(),
+          Int::parse_bytes(b"1", 10).unwrap(),
+        )
+      ),
     }
   }
 }

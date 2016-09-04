@@ -2,7 +2,7 @@
 
 Typically used for activation literals and conjunction of properties. */
 
-use std::collections::HashSet ;
+use std::collections::{ HashSet, HashMap } ;
 use std::fmt ;
 
 use rsmt2::Expr2Smt ;
@@ -11,6 +11,11 @@ use super::{
 } ;
 
 use Factory ;
+
+/// A set of temporary terms.
+pub type TmpTermSet = HashSet<TmpTerm> ;
+/// A map from temporary terms to something.
+pub type TmpTermMap<Val> = HashMap<TmpTerm, Val> ;
 
 /** *Temporary* terms that are not hashconsed.
 

@@ -1,4 +1,4 @@
-// Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+// Copyright 2016 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -203,6 +203,15 @@ impl Offset2 {
   pub fn next(& self) -> & Offset {
     & self.next
   }
+
+  /// Creates an iterable range between two offsets.
+  #[inline]
+  pub fn to<'a>(& self, end: & 'a Offset2) -> OffRange<'a> {
+    OffRange {
+      beg: self.clone(),
+      end: end.next(),
+    }
+  }
 }
 
 impl fmt::Display for Offset2 {
@@ -210,7 +219,6 @@ impl fmt::Display for Offset2 {
     write!(fmt, "({},{})", self.curr(), self.next())
   }
 }
-
 
 impl<Sym: SymWritable> SVarWriter<Sym> for Offset2 {
   fn sv_write(
@@ -255,6 +263,29 @@ impl<Sym: SymWritable> SVarWriter<Sym> for () {
     write!(writer, "|)")
   }
 }
+
+
+/// A range between two offsets.
+pub struct OffRange<'a> {
+  /// Starting point. Will increase.
+  beg: Offset2,
+  /// End point. Won't increase.
+  end: & 'a Offset,
+}
+impl<'a> OffRange<'a> {
+  pub fn next(& mut self) -> Option< & Offset2 > {
+    if self.beg.curr() < self.end {
+      self.beg = self.beg.nxt() ;
+      Some(& self.beg)
+    } else {
+      None
+    }
+  }
+}
+
+
+
+
 
 
 

@@ -29,21 +29,21 @@ use super::{
 
 trait TermApply: Sized {
   fn apply<
-    F: Fn(Term) -> Result<Term,()>
-  >(& self, F) -> Result<Self, ()> ;
+    F: Fn(Term) -> Result<Term,String>
+  >(& self, F) -> Result<Self, String> ;
 }
 impl TermApply for Term {
   fn apply<
-    F: Fn(Term) -> Result<Term,()>
-  >(& self, f: F) -> Result<Self, ()> { f(self.clone()) }
+    F: Fn(Term) -> Result<Term,String>
+  >(& self, f: F) -> Result<Self, String> { f(self.clone()) }
 }
 impl TermApply for (Sym, Term) {
   fn apply<
-    F: Fn(Term) -> Result<Term,()>
-  >(& self, f: F) -> Result<Self, ()> {
+    F: Fn(Term) -> Result<Term,String>
+  >(& self, f: F) -> Result<Self, String> {
     match f(self.1.clone()) {
       Ok(t) => Ok( (self.0.clone(), t) ),
-      Err(()) => Err(()),
+      Err(s) => Err(s),
     }
   }
 }
@@ -89,7 +89,7 @@ fn check_offsets<
             res.push(
               match f.bump(term.clone()) {
                 Ok(t) => something.merge(t),
-                Err(()) => panic!("cannot bump {:?}", term),
+                Err(e) => panic!("cannot bump {}, {}", term, e),
               }
             )
           } else {
@@ -99,8 +99,8 @@ fn check_offsets<
                 res.into_iter().map(
                   |t| match t.apply(|t| f.bump(t)) {
                     Ok(t) => t,
-                    Err(()) => panic!(
-                      "cannot bump {:?}", t
+                    Err(e) => panic!(
+                      "cannot bump {:?}, {}", t, e
                     ),
                   }
                 )
@@ -111,7 +111,7 @@ fn check_offsets<
           }
         }
         None => {
-          panic!("cannot merge {:?} and {:?}", off, info)
+          panic!("cannot merge {} and {}", off, info)
         },
       }
     } else { break }
@@ -180,7 +180,7 @@ fn mk_let(
           // Term is in next step, need to bump.
           match f.bump(term.clone()) {
             Ok(t) => (bindings, t),
-            Err(()) => panic!("can't bump {:?}", term),
+            Err(e) => panic!("can't bump {:?}: {}", term, e),
           }
         } else {
           if off_b.is_next_of(& nu_off) {
@@ -189,8 +189,8 @@ fn mk_let(
               bindings.into_iter().map(
                 |t| match t.apply(|t| f.bump(t)) {
                   Ok(t) => t,
-                  Err(()) => panic!(
-                    "cannot bump {:?}", t
+                  Err(e) => panic!(
+                    "cannot bump {:?}: {}", t, e
                   ),
                 }
               )

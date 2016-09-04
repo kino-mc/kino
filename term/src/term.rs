@@ -80,7 +80,7 @@ impl Operator {
     }
   }
 
-  /** Returns its return type if its arguments type check. */
+  /// Returns its return type if its arguments type check.
   pub fn type_check(& self, sig: & [Type]) -> Result<
     Type, (Option<Vec<usize>>, String)
   > {
@@ -1006,7 +1006,7 @@ pub trait Factory :
   BindMaker<Term> {
 }
 
-pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,()> {
+pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
   use var::RealVar::* ;
   zip::var_map(
     f,
@@ -1014,11 +1014,32 @@ pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,()> {
       V(ref var) => match * var.get() {
         SVar(ref s, State::Curr) => {
           let nu = factory.svar(s.clone(), State::Next) ;
-          Ok(
-            Some( nu )
-          )
+          Ok( Some(nu) )
         },
-        SVar(_,_) => Err(()),
+        SVar(_,_) => Err(
+          format!("[bump] illegal svar {}", var)
+        ),
+        _ => Ok(None),
+      },
+      _ => Ok(None),
+    },
+    term
+  )
+}
+
+pub fn debump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
+  use var::RealVar::* ;
+  zip::var_map(
+    f,
+    |factory, t| match * t.get() {
+      V(ref var) => match * var.get() {
+        SVar(ref s, State::Next) => {
+          let nu = factory.svar(s.clone(), State::Curr) ;
+          Ok( Some(nu) )
+        },
+        SVar(_,_) => Err(
+          format!("[debump] illegal svar {}", var)
+        ),
         _ => Ok(None),
       },
       _ => Ok(None),
@@ -1555,6 +1576,7 @@ pub mod eval {
     step: Step<Cst>,
     bindings: & [ HashMap<Sym, Cst> ],
     quantified: & [ HashMap<Sym, Type> ],
+    scope: & Sym
   ) -> Result<Cst, String> {
     match step {
 
@@ -1579,9 +1601,17 @@ pub mod eval {
               Some(_) => Err(
                 format!("cannot evaluate quantified variable {}", var)
               ),
-              None => Err(
-                format!("unknown variable {}", var)
-              ),
+              None => match factory.type_of(& var, Some(scope.clone())) {
+                Ok(typ) => Ok(
+                  factory.mk_rcst(typ.default())
+                ),
+                Err(e) => Err(
+                  format!(
+                    "variable {} not found in model\n\
+                    or in type cache\n{}", var, e
+                  )
+                ),
+              },
             },
           },
         }
@@ -1593,7 +1623,8 @@ pub mod eval {
 
   /** Evaluates a term. */
   pub fn eval(
-    factory: & Factory, term: & Term, offset: & Offset2, model: & ::Model
+    factory: & Factory, term: & Term, offset: & Offset2,
+    model: & ::Model, scope: Sym
   ) -> Result<Cst, String> {
     let mut map = HashMap::new() ;
     for & ( (ref v, ref o), ref cst ) in model.iter() {
@@ -1614,7 +1645,7 @@ pub mod eval {
     } ;
     fold_info(
       |step, bindings, quantified| eval_term(
-        factory, & map, step, bindings, quantified
+        factory, & map, step, bindings, quantified, & scope
       ),
       term
     )

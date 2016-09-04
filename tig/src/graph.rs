@@ -11,14 +11,13 @@
 technique. */
 
 use std::io ;
-use std::collections::HashSet ;
 
 use common::Res ;
 
 use term::{
-  Term, TermSet, TermMap,
+  Term, TermSet, TermMap
 } ;
-use term::tmp::TmpTerm ;
+use term::tmp::TmpTermSet ;
 
 use Domain ;
 use eval::Eval ;
@@ -110,8 +109,8 @@ impl<Val: Domain> Graph<Val> {
   }
 
   /// All candidate invariants the graph represents.
-  pub fn candidates(& self) -> HashSet<TmpTerm> {
-    let mut set = HashSet::with_capacity( self.classes.len() * 5 ) ;
+  pub fn candidates(& self) -> TmpTermSet {
+    let mut set = TmpTermSet::with_capacity( self.classes.len() * 5 ) ;
     for (ref rep, ref class) in self.classes.iter() {
       for term in class.iter() {
         Val::insert_eq(rep, term, & mut set)
@@ -707,6 +706,11 @@ digraph mode_graph {{
   pub fn insert_chain(
     & mut self, rep: & Term, chain: Chain<Val, ()>
   ) -> Res<()> {
+    if chain.is_empty() {
+      return Err(
+        format!("cannot insert an empty chain")
+      )
+    }
 
     let (kids, to_update) = try_str!(
       self.isolate(rep), "while link breaking"

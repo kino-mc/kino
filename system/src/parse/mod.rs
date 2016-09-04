@@ -307,13 +307,6 @@ impl Cex {
 
 Input is read line per line.
 
-## Does **not** check
-
-* function symbol application arity checking
-* type checking
-
-These will be done elsewhere for efficiency.
-
 ## Checks
 
 During parsing, checks the errors corresponding to [`Error`][error].

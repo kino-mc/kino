@@ -93,6 +93,8 @@ impl Master {
     loop {
       // Stopping if no more kids running.
       if manager.kids_done() { break } ;
+      // Stopping if no property left to prove.
+      if proved_set.len() + disproved_set.len() == props.len() { break } ;
 
       // Receiving a message.
       match manager.recv() {
