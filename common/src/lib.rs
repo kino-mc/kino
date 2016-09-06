@@ -48,6 +48,19 @@ macro_rules! try_str {
   ) ;
 }
 
+/** Try for `Option<T>`. */
+#[macro_export]
+macro_rules! try_str_opt {
+  ($e:expr, $($blah:expr),+) => (
+    match $e {
+      Some(res) => res,
+      None => return Err(
+        format!( $($blah),+ )
+      ),
+    }
+  ) ;
+}
+
 pub mod msg ;
 pub mod log ;
 pub mod conf ;

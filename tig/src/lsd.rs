@@ -94,7 +94,7 @@ pub mod top_only {
       let mut k = Offset2::init() ;
       try_str!(
         unroller.solver().reset(),
-        "while `reset`ing the solver"
+        "while `reset`ing the solver {}", k
       ) ;
       try_str!(
         unroller.defclare_funs(),
@@ -162,20 +162,20 @@ pub mod top_only {
 
       try_str!(
         self.unroller.assert(& implication, & self.k),
-        "while asserting implication at {}", self.k
+        "[Base::k_falsify] while asserting implication at {}", self.k
       ) ;
 
       // Check sat.
       let is_sat = try_str!(
         self.unroller.check_sat_assuming( & [ actlit.name() ] ),
-        "during a `check_sat_assuming` query at {}", self.k
+        "[Base::k_falsify] during a `check_sat_assuming` query at {}", self.k
       ) ;
 
       let res = if is_sat {
         // Sat, getting model.
         let model = try_str!(
           self.unroller.solver().get_model(),
-          "could not retrieve model"
+          "[Base::k_falsify] could not retrieve model"
         ) ;
         self.eval.recycle( model, self.k.clone() ) ;
         Some(& mut self.eval)
@@ -186,7 +186,7 @@ pub mod top_only {
       
       try_str!(
         self.unroller.deactivate(actlit),
-        "could not deactivate negative actlit"
+        "[Base::k_falsify] could not deactivate negative actlit"
       ) ;
 
       Ok(res)
@@ -319,6 +319,10 @@ pub mod top_only {
     fn k_split<Info>(
       & mut self, in_map: TmpTermMap<Info>
     ) -> Res<(TmpTermMap<Info>, TmpTermMap<Info>)> {
+      if in_map.is_empty() {
+        return Ok(( TmpTermMap::new(), TmpTermMap::new() ))
+      }
+
       let len = in_map.len() ;
       let tenth_of_len = 1 + len / 10 ;
       let mut rest = TmpTermMap::with_capacity( len - tenth_of_len ) ;
@@ -329,7 +333,7 @@ pub mod top_only {
       for (term, info) in in_map.into_iter() {
         let actlit = try_str!(
           self.unroller.fresh_actlit(),
-          "while declaring activation literal at {}", self.k
+          "[Step::k_split] while declaring activation literal at {}", self.k
         ) ;
         positive.push( actlit.activate_term( term.clone() ) ) ;
         let prev = map.insert(term, (info, actlit.name())) ;
@@ -344,12 +348,12 @@ pub mod top_only {
         unroll = unroll.nxt() ;
         try_str!(
           self.unroller.assert(& positive, & unroll),
-          "while asserting positive implications at {}", unroll
+          "[Step::k_split] while asserting positive implications at {}", unroll
         )
       }
 
       // Splitting loop.
-      'split: loop {
+      'split: while ! map.is_empty() {
 
         // Terms to check at this iteration.
         let mut to_check = Vec::with_capacity( map.len() ) ;
@@ -367,27 +371,28 @@ pub mod top_only {
         // Creating actlit for this check.
         let actlit = try_str!(
           self.unroller.fresh_actlit(),
-          "while declaring activation literal at {}", self.k
+          "[Step::k_split] while declaring activation literal at {}", self.k
         ) ;
         actlits.push( actlit.name() ) ;
         let implication = actlit.activate_term(one_term_false) ;
 
         try_str!(
           self.unroller.assert(& implication, & self.check),
-          "while asserting implication at {}", self.k
+          "[Step::k_split] while asserting implication for {} terms at {}",
+          to_check.len(), self.k
         ) ;
 
         // Check sat.
         let is_sat = try_str!(
           self.unroller.check_sat_assuming( & actlits ),
-          "during a `check_sat_assuming` query at {}", self.k
+          "[Step::k_split] during a `check_sat_assuming` query at {}", self.k
         ) ;
 
         if is_sat {
           // Evaluate terms and update `rest`.
           let model = try_str!(
             self.unroller.get_model(& self.check),
-            "while retrieving the values of the candidate terms"
+            "[Step::k_split] while retrieving the values of the candidate terms"
           ) ;
           
           let mut eval = Eval::<Bool>::mk(
@@ -399,7 +404,7 @@ pub mod top_only {
           for term in to_check.into_iter() {
             let term_is_true = try_str!(
               eval.eval(& term),
-              "could not evaluate term {:?} in current model", term
+              "[Step::k_split] could not evaluate term {:?} in current model", term
             ) ;
             if ! term_is_true {
               // Falsified, remove from `map` and put in `rest`.
@@ -409,7 +414,9 @@ pub mod top_only {
                   debug_assert!( pre.is_none() )
                 },
                 None => return Err(
-                  format!("unknown term {:?} in `to_check`", term)
+                  format!(
+                    "[Step::k_split] unknown term {:?} in `to_check`", term
+                  )
                 ),
               }
             }
@@ -418,7 +425,7 @@ pub mod top_only {
 
         try_str!(
           self.unroller.deactivate(actlit),
-          "could not deactivate negative actlit"
+          "[Step::k_split] could not deactivate negative actlit"
         ) ;
 
         // If we got unsat then we're done.

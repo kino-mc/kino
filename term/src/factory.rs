@@ -95,6 +95,7 @@ pub struct Factory {
 
 impl Factory {
   /// Creates an empty term factory.
+  #[inline]
   pub fn mk() -> Self {
     Factory {
       sym: SymConsign::mk(),
@@ -111,6 +112,16 @@ impl Factory {
         Mutex::new( HashMap::with_capacity(107) )
       ),
     }
+  }
+
+  /// An iterator over the constants in the factory.
+  #[inline]
+  pub fn cst_fold<
+    T, F: Fn(T, & Cst) -> T
+  >(& self, init: T, f: F) -> T {
+    self.cst.lock().unwrap().iter().fold(
+      init, | data, (_, snd) | f(data, snd)
+    )
   }
 
   /// Inserts a type for a variable without doing anything else.

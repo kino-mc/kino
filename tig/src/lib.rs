@@ -80,6 +80,12 @@ fn invgen<
   // event.log("mining system") ;
   let (rep, class) = mine::bool(& factory, & sys) ;
 
+  let mut blah = format!("{} ->", rep) ;
+  for t in class.iter() {
+    blah = format!("{}\n    {}", blah, t)
+  } ;
+  event.log(& blah) ;
+
   // event.log("creating graph") ;
   let mut graph = Graph::<Bool>::mk(rep, class) ;
 
@@ -91,6 +97,8 @@ fn invgen<
 
   let mut cnt = 1 ;
 
+  let mut known = TmpTermSet::with_capacity(103) ;
+
   'work: while max_k.map_or(true, |max| cnt <= max) {
     // event.log( & format!("starting invgen with {} unrollings", cnt) ) ;
     // event.log( & format!("starting base stabilization ({})", cnt) ) ;
@@ -98,7 +106,9 @@ fn invgen<
     let mut base_cnt = 0 ;
 
     'base: loop {
-      let candidates: Vec<TmpTerm> = graph.candidates().into_iter().collect() ;
+      let candidates: Vec<TmpTerm> = graph.candidates(
+        |cand| known.contains(cand)
+      ).into_iter().collect() ;
       if candidates.is_empty() {
         event.log(
           & format!(
@@ -132,11 +142,12 @@ fn invgen<
     //   & format!("done stabilizing in base ({})", cnt)
     // ) ;
 
-    let candidates: TmpTermMap<()> = {
-      graph.candidates().into_iter().map(
-        |cand| (cand, ())
-      ).collect()
-    } ;
+    let candidates: TmpTermMap<()> = try_error!(
+      graph.all_candidates( |cand| known.contains(cand) ), event,
+      "while generating all candidates of graph ({})", cnt
+    ).into_iter().map(
+      |cand| (cand, ())
+    ).collect() ;
 
     try_error!(
       base.unroll(), event,
@@ -158,12 +169,13 @@ fn invgen<
 
     let (invars, _) = try_error!(
       step.k_split(candidates), event,
-      "could not k-split candidates in step ({})", cnt
+      "could not k-split {} candidates in step ({})", candidate_count, cnt
     ) ;
     let invar_count = invars.len() ;
 
     let mut invariants = STermSet::with_capacity(invars.len()) ;
     for (invar, _) in invars.into_iter() {
+      known.insert(invar.clone()) ;
       use term::UnTermOps ;
       let invar = try_error!(
         invar.to_term_safe(& factory), event,
@@ -180,18 +192,20 @@ fn invgen<
       ) ;
       ()
     }
-    event.invariants(invariants) ;
+    if ! invariants.is_empty() {
+      event.invariants(sys.sym(), invariants)
+    }
 
-    let blah = format!(
-      "on {} at {}\n\
-      found {} invariants for system {} from {} candidates",
-      sys.sym(), cnt,
-      invar_count, sys.sym(), candidate_count
-    ) ;
+    // let blah = format!(
+    //   "on {} at {}\n\
+    //   found {} invariants for system {} from {} candidates",
+    //   sys.sym(), cnt,
+    //   invar_count, sys.sym(), candidate_count
+    // ) ;
     // for (term, _) in invars.iter() {
     //   blah = format!("{}\n  - {}", blah, term)
     // }
-    event.log( & blah ) ;
+    // event.log( & blah ) ;
 
     if invar_count == candidate_count {
       // Everything's invariant, stopping.
@@ -239,15 +253,19 @@ pub trait Domain : PartialEq + Eq + PartialOrd + Ord + Clone + Display {
   /// Creates a term encoding an equality between terms.
   fn mk_eq(& Term, & Term) -> Option<TmpTerm> ;
   /// Creates a term encoding a relation between terms.
-  fn insert_cmp(lhs: & Term, rhs: & Term, set: & mut TmpTermSet) {
+  fn insert_cmp<
+    Ignore: Fn(& TmpTerm) -> bool
+  >(lhs: & Term, rhs: & Term, set: & mut TmpTermSet, ignore: Ignore) {
     if let Some( term ) = Self::mk_cmp(lhs, rhs) {
-      set.insert(term) ;
+      if ! ignore(& term) { set.insert(term) ; () }
     }
   }
   /// Creates a term encoding an equality between terms.
-  fn insert_eq(lhs: & Term, rhs: & Term, set: & mut TmpTermSet) {
+  fn insert_eq<
+    Ignore: Fn(& TmpTerm) -> bool
+  >(lhs: & Term, rhs: & Term, set: & mut TmpTermSet, ignore: Ignore) {
     if let Some( term ) = Self::mk_eq(lhs, rhs) {
-      set.insert(term) ;
+      if ! ignore(& term) { set.insert(term) ; () }
     }
   }
   /// Chooses a representative in a set, removes it from the set.

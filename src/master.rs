@@ -150,6 +150,21 @@ impl Master {
           MsgDown::KTrue(props, o)
         ),
 
+        Ok( Invariants(from, sym, set) ) => {
+          let mut blah = format!(
+            "{} invariant{} discovered:",
+            set.len(),
+            if set.len() == 1 { "" } else { "s" }
+          ) ;
+          for inv in set.iter() {
+            blah = format!("{}\n  {}", blah, inv)
+          }
+          log.log(& from, & blah) ;
+          manager.broadcast(
+            MsgDown::Invariants( sym, set.into_iter().collect() )
+          )
+        },
+
         Ok( Done(from, Info::At(_)) ) => manager.forget(& from),
 
         Ok( Done(from, info) ) => {

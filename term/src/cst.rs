@@ -18,7 +18,9 @@ use typ ;
 use self::RealCst::* ;
 
 /** Underlying representation of constants. */
-#[derive(Debug,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
+#[derive(
+  Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash
+)]
 pub enum RealCst {
   /** Boolean constant. */
   Bool(typ::Bool),

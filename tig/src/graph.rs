@@ -17,7 +17,7 @@ use common::Res ;
 use term::{
   Term, TermSet, TermMap
 } ;
-use term::tmp::TmpTermSet ;
+use term::tmp::{TmpTerm, TmpTermSet } ;
 
 use Domain ;
 use eval::Eval ;
@@ -108,20 +108,68 @@ impl<Val: Domain> Graph<Val> {
     graph
   }
 
-  /// All candidate invariants the graph represents.
-  pub fn candidates(& self) -> TmpTermSet {
+  /// Minimal set of candidate invariants the graph represents.
+  pub fn candidates<
+    Ignore: Fn(& TmpTerm) -> bool
+  >(& self, ignore: Ignore) -> TmpTermSet {
     let mut set = TmpTermSet::with_capacity( self.classes.len() * 5 ) ;
     for (ref rep, ref class) in self.classes.iter() {
       for term in class.iter() {
-        Val::insert_eq(rep, term, & mut set)
+        // println!("  {} = {}", rep, term) ;
+        Val::insert_eq(rep, term, & mut set, & ignore)
       }
     }
+    // println!("") ;
     for (ref rep, ref kids) in self.map_for.iter() {
       for kid in kids.iter() {
-        Val::insert_cmp(rep, kid, & mut set)
+        Val::insert_cmp(rep, kid, & mut set, & ignore)
       }
     }
     set
+  }
+
+  /// All candidate invariants the graph represents.
+  pub fn all_candidates<
+    Ignore: Fn(& TmpTerm) -> bool
+  >(& self, ignore: Ignore) -> Res<TmpTermSet> {
+    let mut set = TmpTermSet::with_capacity( self.classes.len() * 5 ) ;
+    for (ref rep, ref class) in self.classes.iter() {
+      let mut class = class.iter() ;
+      while let Some(term) = class.next() {
+        // Equality with rep.
+        Val::insert_eq(rep, term, & mut set, & ignore) ;
+        // Equality with other terms.
+        for other_term in class.clone() {
+          Val::insert_eq(term, other_term, & mut set, & ignore)
+        }
+      }
+    }
+    for (ref rep, ref kids) in self.map_for.iter() {
+      let class = try_str_opt!(
+        self.classes.get(rep),
+        "[Graph::all_candidates] could not retrieve class of rep {}", rep
+      ) ;
+      for kid in kids.iter() {
+        let kid_class = try_str_opt!(
+          self.classes.get(kid),
+          "[Graph::all_candidates] could not retrieve class of rep {}", rep
+        ) ;
+        // Comparison rep/kid.
+        Val::insert_cmp(rep, kid, & mut set, & ignore) ;
+        // Comparison rep/kid_class.
+        for kid in kid_class.iter() {
+          Val::insert_cmp(rep, kid, & mut set, & ignore)
+        }
+        // Rest.
+        for parent in class.iter() {
+          Val::insert_cmp(parent, kid, & mut set, & ignore) ;
+          for kid in kid_class.iter() {
+            Val::insert_cmp(parent, kid, & mut set, & ignore)
+          }
+        }
+      }
+    }
+    Ok(set)
   }
 
   /// Isolates a representative. Returns the old kids and parents of the rep.

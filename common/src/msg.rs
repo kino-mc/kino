@@ -138,7 +138,7 @@ pub enum MsgDown {
 /** Message from the techniques to kino. */
 pub enum MsgUp {
   /** Invariants discovered. */
-  Invariants(Tek, STermSet),
+  Invariants(Tek, Sym, STermSet),
   /** Not implemented. */
   Unimplemented,
   /** Log message. */
@@ -160,8 +160,8 @@ impl fmt::Display for MsgUp {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     use msg::MsgUp::* ;
     match * self {
-      Invariants(ref t, ref invs) => {
-        try!( write!(fmt, "Invariants({},", t) ) ;
+      Invariants(ref t, ref sym, ref invs) => {
+        try!( write!(fmt, "Invariants[{}]({},", sym, t) ) ;
         for inv in invs {
           try!( write!(fmt, " {}", inv) )
         }
@@ -209,9 +209,9 @@ impl Event {
   }
 
   /// Sends an invariant message upwards.
-  pub fn invariants(& self, invs: STermSet) {
+  pub fn invariants(& self, sys: & Sym, invs: STermSet) {
     self.s.send(
-      MsgUp::Invariants(self.t, invs)
+      MsgUp::Invariants(self.t, sys.clone(), invs)
     ).unwrap()
   }
 
