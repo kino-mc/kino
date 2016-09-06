@@ -57,7 +57,7 @@ impl common::CanRun<conf::Kind> for KInd {
 
     mk_solver_run!(
       solver_conf, conf.smt_log(), "kind", event.factory(),
-      solver => kind(solver, sys, props, & mut event),
+      solver => kind(solver, conf.clone(), sys, props, & mut event),
       msg => event.error(msg)
     )
   }
@@ -67,7 +67,8 @@ fn kind<
   'a,
   S: SolverTrait<'a>
 >(
-  solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
+  solver: S, conf: Arc<conf::Kind>,
+  sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
 
   // Reversed to unroll backwards.
@@ -107,11 +108,18 @@ fn kind<
 
   // event.log( & format!("unroll {}", k) ) ;
   try_error!(
-    unroller.unroll(& k), event,
+    unroller.unroll_init(& k), event,
     "while unrolling system"
   ) ;
 
   'out: loop {
+
+    if let Some(ref max) = * conf.max() {
+      if max < & k.curr().to_usize() {
+        event.done_at( & k.next() ) ;
+        break 'out
+      }
+    }
 
     // event.log(
     //   & format!("checking for {}-induction", k.curr())
@@ -135,7 +143,10 @@ fn kind<
             because of a `Forget` message (1)"
           ),
           MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
-            event.log("received {} invariants") ;
+            // event.log(
+            //   & format!("received {} invariants", invs.len())
+            // ) ;
+            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
             try_error!(
               unroller.add_invs(invs, & check_offset, & k), event,
               "while adding invariants from supervisor"
@@ -148,7 +159,7 @@ fn kind<
 
     if props.none_left() {
       event.done_at(& k.curr()) ;
-      break
+      break 'out
     }
 
     // event.log("splitting") ;
@@ -253,7 +264,12 @@ fn kind<
                       }
                     },
                     MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
-                      event.log("received {} invariants") ;
+                      // event.log(
+                      //   & format!("received {} invariants", invs.len())
+                      // ) ;
+                      // event.log(
+                      //   & format!("add_invs [{}, {}]", check_offset, k)
+                      // ) ;
                       try_error!(
                         unroller.add_invs(invs, & check_offset, & k), event,
                         "while adding invariants from supervisor"
@@ -289,7 +305,10 @@ fn kind<
               because of a `Forget` message (1)"
             ),
             MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
-              event.log("received {} invariants") ;
+              // event.log(
+              //   & format!("received {} invariants", invs.len())
+              // ) ;
+              // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
               try_error!(
                 unroller.add_invs(invs, & check_offset, & k), event,
                 "while adding invariants from supervisor"

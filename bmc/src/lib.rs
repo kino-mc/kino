@@ -131,7 +131,9 @@ fn bmc<
             "while forgetting property in manager"
           ),
           MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
-            event.log("received {} invariants") ;
+            // event.log(
+            //   & format!("received {} invariants", invs.len())
+            // ) ;
             try_error!(
               unroller.add_invs(invs, & init_off, & k), event,
               "while adding invariants from supervisor"

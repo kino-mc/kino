@@ -115,7 +115,7 @@ fn invgen<
   let mut known = TmpTermSet::with_capacity(103) ;
 
   'work: while max_k.map_or(true, |max| cnt <= max) {
-    // event.log( & format!("starting invgen with {} unrollings", cnt) ) ;
+    event.log( & format!("starting invgen with {} unrollings", cnt) ) ;
     // event.log( & format!("starting base stabilization ({})", cnt) ) ;
     
     let mut base_cnt = 0 ;
@@ -144,12 +144,13 @@ fn invgen<
           "while splitting graph in base at {}, {}", cnt, base_cnt
         ),
         None => break 'base,
-      } ;
-      let file_path = format!("{}/tig_{}_{}.dot", graph_dir, cnt, base_cnt) ;
-      try_error!(
-        graph.dot_dump( & file_path ), event,
-        "could not dump graph to file `{}`", file_path
-      ) ;
+      }
+      
+      // let file_path = format!("{}/tig_{}_{}.dot", graph_dir, cnt, base_cnt) ;
+      // try_error!(
+      //   graph.dot_dump( & file_path ), event,
+      //   "could not dump graph to file `{}`", file_path
+      // ) ;
       base_cnt += 1
     }
 

@@ -26,7 +26,7 @@ use term::{
 use term::smt::* ;
 use term::tmp::* ;
 
-use sys::{ Prop, Sys } ;
+use sys::{ Prop, Sys, Callable } ;
 
 use common::{ Res, SolverTrait } ;
 
@@ -212,46 +212,129 @@ impl<
     )
   }
 
+  fn defclare_funs_iter<'b, T: Iterator<Item = & 'b Callable>>(
+    solver: & mut S, funs: T, offset: & Offset2,
+    known: & mut HashSet<Sym>,
+    rest: & mut HashSet<& 'b Callable>
+  ) -> UnitSmtRes {
+    use sys::real_sys::Callable::* ;
+    for fun in funs {
+      println!("{}, known:", fun.sym()) ;
+      for known in known.iter() { println!("  {}", known) }
+      // println!("defining {}", fun.sym()) ;
+      match * * fun {
+        Dec(ref fun_dec) => if ! known.contains(fun_dec.sym()) {
+          known.insert( fun_dec.sym().clone() ) ;
+          try!(
+            solver.declare_fun(
+              fun_dec.sym(), fun_dec.sig(), fun_dec.typ(), offset
+            )
+          )
+        },
+        Def(ref fun_def) => if ! known.contains(fun_def.sym()) {
+          let declare = {
+            let mut ok = true ;
+            for sub in fun_def.calls().get() {
+              if ! known.contains(sub.sym()) {
+                ok = false ;
+                break
+              }
+            }
+            ok
+          } ;
+          if declare {
+            known.insert( fun_def.sym().clone() ) ;
+            try!(
+              solver.define_fun(
+                fun_def.sym(), fun_def.args(),
+                fun_def.typ(), fun_def.body(), offset
+              )
+            )
+          } else {
+            rest.insert(fun) ; ()
+          }
+        },
+      }
+    } ;
+    Ok(())
+  }
+
+  fn defclare_sys_iter<'b, U: 'b, T: Iterator<Item = & 'b (Sys, U)>>(
+    solver: & mut S, syss: T, offset: & Offset2,
+    known: & mut HashSet<Sym>,
+    rest: & mut Vec< (Sys, ()) >
+  ) -> UnitSmtRes {
+    for & (ref sys, _) in syss {
+      if ! known.contains( sys.sym() ) {
+        let declare = {
+          let mut ok = true ;
+          for &(ref sys, _) in sys.subsys() {
+            if ! known.contains(sys.sym()) {
+              ok = false ;
+              break
+            }
+          }
+          ok
+        } ;
+        if declare {
+          known.insert( sys.sym().clone() ) ;
+          try!( define(sys, solver, & offset) )
+        } else {
+          rest.push( (sys.clone(), ()) ) ; ()
+        }
+      }
+    }
+    Ok(())
+  }
+
   /// Declares/defines UFs, functions, and system init/trans predicates.
   pub fn defclare_funs(& mut self) -> UnitSmtRes {
-    use sys::real_sys::Callable::* ;
     // Will not really be used.
     let offset = Offset2::init() ;
 
     let mut known = HashSet::with_capacity(7) ;
+    let mut rest = HashSet::with_capacity(7) ;
     // Declaring UFs and defining functions.
     // println!("declaring UFs, defining funs") ;
-    for fun in self.sys.calls().get() {
-      // println!("defining {}", fun.sym()) ;
-      match * * fun {
-        Dec(ref fun) => if ! known.contains(fun.sym()) {
-          try!({
-            known.insert( fun.sym().clone() ) ;
-            self.solver.declare_fun(
-              fun.sym(), fun.sig(), fun.typ(), & offset
-            )
-          })
-        },
-        Def(ref fun) => if ! known.contains(fun.sym()) {
-          try!({
-            known.insert( fun.sym().clone() ) ;
-            self.solver.define_fun(
-              fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
-            )
-          })
-        },
-      }
+    try!(
+      Self::defclare_funs_iter(
+        & mut self.solver, self.sys.calls().get().iter(),
+        & offset, & mut known, & mut rest
+      )
+    ) ;
+    while ! rest.is_empty() {
+      use std::mem::swap ;
+      let mut calls = HashSet::with_capacity(7) ;
+      swap(& mut calls, & mut rest) ;
+      try!(
+        Self::defclare_funs_iter(
+          & mut self.solver, calls.into_iter(),
+          & offset, & mut known, & mut rest
+        )
+      )
     } ;
 
     // Defining sub systems.
     // println!("defining sub systems") ;
     let mut known = HashSet::with_capacity(7) ;
-    for & (ref sub, _) in self.sys.subsys() {
-      if ! known.contains( sub.sym() ) {
-        known.insert( sub.sym().clone() ) ;
-        try!( define(sub, & mut self.solver, & offset) )
-      }
-    } ;
+    let mut rest = Vec::with_capacity(7) ;
+    try!(
+      Self::defclare_sys_iter(
+        & mut self.solver, self.sys.subsys().iter(),
+        & offset, & mut known, & mut rest
+      )
+    ) ;
+    while ! rest.is_empty() {
+      use std::mem::swap ;
+      let mut syss = Vec::with_capacity(7) ;
+      swap(& mut syss, & mut rest) ;
+      try!(
+        Self::defclare_sys_iter(
+          & mut self.solver, syss.iter(),
+          & offset, & mut known, & mut rest
+        )
+      ) ;
+    }
 
     // Define current system.
     // println!("defining top system") ;
@@ -395,17 +478,7 @@ impl<
     try!( self.just_unroll(o) ) ;
     for inv in self.invs.iter() {
       let inv = match * inv {
-        STerm::One(ref curr, ref next) => {
-          try!(
-            self.solver.assert(curr, o).map_err(
-              |err| format!(
-                "[Unroller::unroll] \
-                while asserting one-state inv {} at {}\n{}", inv, o.curr(), err
-              )
-            )
-          ) ;
-          next
-        },
+        STerm::One(ref curr, _) => curr,
         STerm::Two(ref next) => next,
       } ;
       try!(
@@ -440,14 +513,15 @@ impl<
   /// `end`. **Inclusive**.
   ///
   /// **If the offsets are reversed**, asserts one state invariants at
-  /// `begin.curr()`, and all invariants for all offsets between `begin` and
+  /// `end.curr()`, and all invariants for all offsets between `begin` and
   /// `end`. **Inclusive**.
   pub fn add_invs(
     & mut self, invs: Vec<STerm>, begin: & Offset2, end: & Offset2
   ) -> Res<()> {
     debug_assert!( begin.is_rev() == end.is_rev() ) ;
     debug_assert!( begin <= end ) ;
-    let init_off = if begin.is_rev() { begin } else { end } ;
+    let is_rev = begin.is_rev() ;
+    let init_off = if ! is_rev { begin } else { end } ;
     for inv in invs.iter() {
       let next = match * inv {
         STerm::One(ref curr, ref next) => {
@@ -868,10 +942,11 @@ impl PropManager {
     'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, o: & Offset2
-  ) -> SmtRes<Vec<Sym>> {
+  ) -> Res<Vec<Sym>> {
     let mut terms = Vec::with_capacity(
       (self.props_1.len() * 2) + self.props_2.len()
     ) ;
+    // Maps terms back to the property they correspond to.
     let mut back_map = HashMap::with_capacity(
       self.props_1.len() + self.props_2.len()
     ) ;
@@ -882,7 +957,14 @@ impl PropManager {
           prop.body().next().clone(), prop.sym().clone()
         ) {
           None => (),
-          Some(_) => unreachable!(),
+          Some(old) => return Err(
+            format!(
+              "term {}\n\
+              already mapped to property {}\n\
+              trying to map it to {}",
+              prop.body().next(), old, prop
+            )
+          ),
         } ;
         // We also insert state. If there is no two-state property, one-state
         // ones will be parsed as state.
@@ -890,7 +972,14 @@ impl PropManager {
           prop.body().state().unwrap().clone(), prop.sym().clone()
         ) {
           None => (),
-          Some(_) => unreachable!(),
+          Some(old) => return Err(
+            format!(
+              "term {}\n\
+              already mapped to property {}\n\
+              trying to map it to {}",
+              prop.body().state().unwrap(), old, prop
+            )
+          ),
         } ;
       }
     } ;
@@ -899,33 +988,39 @@ impl PropManager {
         terms.push(prop.body().next().clone()) ;
         match back_map.insert(prop.body().next().clone(), prop.sym().clone()) {
           None => (),
-          Some(_) => unreachable!(),
+          Some(old) => return Err(
+            format!(
+              "term {}\n\
+              already mapped to property {}\n\
+              trying to map it to {}",
+              prop.body().next(), old, prop
+            )
+          ),
         }
       }
     } ;
-    match solver.get_values(& terms, o) {
-      Ok(vec) => {
-        let mut syms = Vec::with_capacity(7) ;
-        for ((t, _), v) in vec {
-          match * v.get() {
-            real_term::Cst::Bool(true) => (),
-            real_term::Cst::Bool(false) => match back_map.remove(& t) {
-              Some(sym) => syms.push(sym),
-              None => {
-                let mut s = format!("unknown {}", t) ;
-                for (ref t, ref sym) in back_map.iter() {
-                  s = format!("{}\n  {} -> {}", s, t, sym) ;
-                } ;
-                panic!("{}", s)
-              },
-            },
-            _ => panic!("[unroller.get_values] unexpected prop value {}", v)
-          }
-        } ;
-        Ok(syms)
-      },
-      Err(e) => Err(e),
-    }
+    let vec = try_str!(
+      solver.get_values(& terms, o),
+      "while retrieving values of properties at {}", o
+    ) ;
+    let mut syms = Vec::with_capacity(7) ;
+    for ((t, _), v) in vec {
+      match * v.get() {
+        real_term::Cst::Bool(true) => (),
+        real_term::Cst::Bool(false) => match back_map.remove(& t) {
+          Some(sym) => syms.push(sym),
+          None => {
+            let mut s = format!("unknown {}", t) ;
+            for (ref t, ref sym) in back_map.iter() {
+              s = format!("{}\n  {} -> {}", s, t, sym) ;
+            } ;
+            panic!("{}", s)
+          },
+        },
+        _ => panic!("[unroller.get_values] unexpected prop value {}", v)
+      }
+    } ;
+    Ok(syms)
   }
 
   /** Inhibits some properties, meaning `one_false`, `actlits` and `get_false`

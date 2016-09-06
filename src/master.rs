@@ -42,6 +42,7 @@ impl Master {
   ) -> Result<(Sys, HashMap<Sym, STermSet>), ()> {
 
     let mut invar_map = HashMap::new() ;
+    invar_map.insert(sys.sym().clone(), STermSet::new()) ;
     for sub in sys.subsys_syms().into_iter() {
       invar_map.insert(sub, STermSet::new()) ; ()
     }
@@ -175,13 +176,23 @@ impl Master {
           for inv in set.iter() {
             blah = format!("{}\n  {}", blah, inv)
           }
-          log.log(& from, & blah) ;
+          log.log(
+            & from,
+            & format!(
+              "{} invariant{} discovered",
+              set.len(),
+              if set.len() == 1 { "" } else { "s" }
+            )
+          ) ;
           manager.broadcast(
             MsgDown::Invariants( sym, set.into_iter().collect() )
           )
         },
 
-        Ok( Done(from, Info::At(_)) ) => manager.forget(& from),
+        Ok( Done(from, Info::At(k)) ) => {
+          log.log( & from, & format!("done at {}", k) ) ;
+          manager.forget(& from)
+        },
 
         Ok( Done(from, info) ) => {
           log.log(& from, & format!("done {}", info)) ;

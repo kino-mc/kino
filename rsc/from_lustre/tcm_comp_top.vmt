@@ -1,0 +1,3397 @@
+(define-sys
+  has_been_true_reset (
+    (has_been_true_reset.usr.in Bool)
+    (has_been_true_reset.usr.reset Bool)
+    (has_been_true_reset.usr.out Bool)
+    (has_been_true_reset.res.init_flag Bool)
+  ) (
+    (and
+     (=
+      (_ curr has_been_true_reset.usr.out)
+      (and
+       (_ curr has_been_true_reset.usr.in)
+       (not (_ curr has_been_true_reset.usr.reset))))
+     (_ curr has_been_true_reset.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next has_been_true_reset.usr.out)
+      (and
+       (or
+        (_ next has_been_true_reset.usr.in)
+        (_ curr has_been_true_reset.usr.out))
+       (not (_ next has_been_true_reset.usr.reset))))
+     (not (_ next has_been_true_reset.res.init_flag)))
+  ) (
+    
+  )
+)
+
+
+(define-sys
+  duration (
+    (duration.usr.in Bool)
+    (duration.usr.out Int)
+    (duration.res.init_flag Bool)
+    (duration.impl.usr.always_true Bool)
+  ) (
+    (and
+     (= (_ curr duration.impl.usr.always_true) (_ curr duration.usr.in))
+     (=
+      (_ curr duration.usr.out)
+      (ite (_ curr duration.impl.usr.always_true) 1 0))
+     (_ curr duration.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next duration.impl.usr.always_true)
+      (and (_ next duration.usr.in) (_ curr duration.impl.usr.always_true)))
+     (=
+      (_ next duration.usr.out)
+      (ite
+       (_ next duration.impl.usr.always_true)
+       (+ (_ curr duration.usr.out) 1)
+       0))
+     (not (_ next duration.res.init_flag)))
+  ) (
+    
+  )
+)
+
+
+(define-sys
+  fall (
+    (fall.usr.in Bool)
+    (fall.usr.out Bool)
+    (fall.res.init_flag Bool)
+  ) (
+    (and (= (_ curr fall.usr.out) false) (_ curr fall.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next fall.usr.out)
+      (and (not (_ next fall.usr.in)) (_ curr fall.usr.in)))
+     (not (_ next fall.res.init_flag)))
+  ) (
+    
+  )
+)
+
+
+(define-sys
+  abs (
+    (abs.usr.in Real)
+    (abs.usr.out Real)
+    (abs.res.init_flag Bool)
+  ) (
+    (and
+     (=
+      (_ curr abs.usr.out)
+      (ite
+       (< (_ curr abs.usr.in) 0.0)
+       (- (_ curr abs.usr.in))
+       (_ curr abs.usr.in)))
+     (_ curr abs.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next abs.usr.out)
+      (ite
+       (< (_ next abs.usr.in) 0.0)
+       (- (_ next abs.usr.in))
+       (_ next abs.usr.in)))
+     (not (_ next abs.res.init_flag)))
+  ) (
+    
+  )
+)
+
+
+(define-sys
+  PseudoContinuous (
+    (PseudoContinuous.usr.in Real)
+    (PseudoContinuous.usr.inc Real)
+    (PseudoContinuous.usr.out Bool)
+    (PseudoContinuous.res.init_flag Bool)
+    (PseudoContinuous.res.abs_0 Real)
+    (PseudoContinuous.res.abs_1 Real)
+    (PseudoContinuous.res.inst_0 Bool)
+  ) (
+    (and
+     (=
+      (_ curr PseudoContinuous.res.abs_0)
+      (- (_ curr PseudoContinuous.usr.in) (_ curr PseudoContinuous.usr.in)))
+     (=
+      (_ curr PseudoContinuous.usr.out)
+      (<=
+       (_ curr PseudoContinuous.res.abs_1)
+       (_ curr PseudoContinuous.usr.inc)))
+     (_ curr PseudoContinuous.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next PseudoContinuous.res.abs_0)
+      (- (_ next PseudoContinuous.usr.in) (_ curr PseudoContinuous.usr.in)))
+     (=
+      (_ next PseudoContinuous.usr.out)
+      (<=
+       (_ next PseudoContinuous.res.abs_1)
+       (_ next PseudoContinuous.usr.inc)))
+     (not (_ next PseudoContinuous.res.init_flag)))
+  ) (
+    (abs (_ curr PseudoContinuous.res.abs_0) (_ curr PseudoContinuous.res.abs_1) (_ curr PseudoContinuous.res.inst_0))
+  )
+)
+
+
+(define-sys
+  LONGITUDINAL_CONTROLLER (
+    (LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.AltEng_1_1 Bool)
+    (LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1 Bool)
+    (LONGITUDINAL_CONTROLLER.usr.AltCmd_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.Alt_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.qDeg_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.GsKts_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.hdot_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.VT_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.Gamma_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.CAS_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.ElevStick_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.usr.alt_cmd_out Real)
+    (LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out Real)
+    (LONGITUDINAL_CONTROLLER.usr.ElevCmd_1_1 Real)
+    (LONGITUDINAL_CONTROLLER.res.init_flag Bool)
+    (LONGITUDINAL_CONTROLLER.contract.usr.rising Bool)
+    (LONGITUDINAL_CONTROLLER.contract.usr.lowering Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_0 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_1 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_2 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_3 Real)
+    (LONGITUDINAL_CONTROLLER.res.abs_4 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_5 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_6 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_7 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_8 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_9 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_10 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_11 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_12 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_13 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_14 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_15 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_16 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_17 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_18 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_19 Real)
+    (LONGITUDINAL_CONTROLLER.res.abs_20 Real)
+    (LONGITUDINAL_CONTROLLER.res.abs_21 Real)
+    (LONGITUDINAL_CONTROLLER.res.abs_22 Real)
+    (LONGITUDINAL_CONTROLLER.res.abs_23 Real)
+    (LONGITUDINAL_CONTROLLER.res.abs_24 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_25 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_26 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_27 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_28 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_29 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_30 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_31 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_32 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_33 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_35 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_36 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_37 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_38 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_39 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_40 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_41 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_42 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_43 Bool)
+    (LONGITUDINAL_CONTROLLER.res.abs_44 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_22 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_21 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_20 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_19 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_18 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_17 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_16 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_15 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_14 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_13 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_12 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_11 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_10 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_9 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_8 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_7 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_6 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_5 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_4 Real)
+    (LONGITUDINAL_CONTROLLER.res.inst_3 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_2 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_1 Bool)
+    (LONGITUDINAL_CONTROLLER.res.inst_0 Bool)
+  ) (
+    (and
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_0)
+      (>= (_ curr LONGITUDINAL_CONTROLLER.usr.VT_1_1) 0.0))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_1)
+      (>= (_ curr LONGITUDINAL_CONTROLLER.usr.GsKts_1_1) 0.0))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_2)
+      (>= (_ curr LONGITUDINAL_CONTROLLER.usr.CAS_1_1) 0.0))
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_3) 1.0)
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_9) true)
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_10)
+      (=>
+       (or
+        (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ curr LONGITUDINAL_CONTROLLER.usr.VT_1_1) 100.0)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_11)
+      (=>
+       (or
+        (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ curr LONGITUDINAL_CONTROLLER.usr.GsKts_1_1) 100.0)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_12)
+      (=>
+       (or
+        (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ curr LONGITUDINAL_CONTROLLER.usr.CAS_1_1) 100.0)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_13)
+      (=>
+       (or
+        (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ curr LONGITUDINAL_CONTROLLER.usr.AltCmd_1_1) 0.0)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_14)
+      (=>
+       (or
+        (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (= (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_15)
+      (not
+       (and
+        (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_17)
+      (=>
+       (_ curr LONGITUDINAL_CONTROLLER.res.abs_16)
+       (not (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))))
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_18) true)
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_24) true)
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_19) 0.0)
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_22) 0.0)
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_21)
+      (-
+       (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+       (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_25) true)
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_26)
+      (not (= (_ curr LONGITUDINAL_CONTROLLER.usr.ElevStick_1_1) 0.0)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_27)
+      (=
+       (_ curr LONGITUDINAL_CONTROLLER.usr.ElevCmd_1_1)
+       (_ curr LONGITUDINAL_CONTROLLER.usr.ElevStick_1_1)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_28)
+      (not (_ curr LONGITUDINAL_CONTROLLER.res.abs_26)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_29)
+      (> (_ curr LONGITUDINAL_CONTROLLER.usr.CAS_1_1) 500.0))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_30)
+      (= (_ curr LONGITUDINAL_CONTROLLER.usr.ElevCmd_1_1) 0.0))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_31)
+      (not
+       (and
+        (_ curr LONGITUDINAL_CONTROLLER.res.abs_29)
+        (_ curr LONGITUDINAL_CONTROLLER.res.abs_28))))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_32)
+      (not (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)))
+     (=
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_33)
+      (not (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1)))
+     (= (_ curr LONGITUDINAL_CONTROLLER.res.abs_35) false)
+     (and
+      (=
+       (_ curr LONGITUDINAL_CONTROLLER.res.abs_36)
+       (>
+        (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+      (and
+       (=
+        (_ curr LONGITUDINAL_CONTROLLER.contract.usr.rising)
+        (or
+         (or
+          (>
+           (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+           (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+          (>=
+           (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+           (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+         (<=
+          (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+          (+ (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1) 0.0))))
+       (=
+        (_ curr LONGITUDINAL_CONTROLLER.res.abs_39)
+        (_ curr LONGITUDINAL_CONTROLLER.contract.usr.rising))
+       (=
+        (_ curr LONGITUDINAL_CONTROLLER.res.abs_37)
+        (<=
+         (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+         (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+       (=
+        (_ curr LONGITUDINAL_CONTROLLER.res.abs_38)
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+         (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+       (and
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.res.abs_40)
+         (<
+          (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.contract.usr.lowering)
+         (or
+          (or
+           (<
+            (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+            (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+           (<=
+            (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+            (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+          (>=
+           (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+           (+ (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1) 0.0))))
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.res.abs_42)
+         (_ curr LONGITUDINAL_CONTROLLER.contract.usr.lowering))
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.res.abs_41)
+         (>=
+          (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.res.abs_43)
+         (>=
+          (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (_ curr LONGITUDINAL_CONTROLLER.res.abs_44)
+         (<=
+          (+ (_ curr LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (_ curr LONGITUDINAL_CONTROLLER.res.init_flag)
+        (=>
+         (and
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (and
+                   (and
+                    (and
+                     (and
+                      (and
+                       (and
+                        (and
+                         (and
+                          (_ curr LONGITUDINAL_CONTROLLER.res.abs_0)
+                          (_ curr LONGITUDINAL_CONTROLLER.res.abs_1))
+                         (_ curr LONGITUDINAL_CONTROLLER.res.abs_2))
+                        (_ curr LONGITUDINAL_CONTROLLER.res.abs_4))
+                       (_ curr LONGITUDINAL_CONTROLLER.res.abs_5))
+                      (_ curr LONGITUDINAL_CONTROLLER.res.abs_6))
+                     (_ curr LONGITUDINAL_CONTROLLER.res.abs_7))
+                    (_ curr LONGITUDINAL_CONTROLLER.res.abs_8))
+                   (_ curr LONGITUDINAL_CONTROLLER.res.abs_9))
+                  (_ curr LONGITUDINAL_CONTROLLER.res.abs_10))
+                 (_ curr LONGITUDINAL_CONTROLLER.res.abs_11))
+                (_ curr LONGITUDINAL_CONTROLLER.res.abs_12))
+               (_ curr LONGITUDINAL_CONTROLLER.res.abs_13))
+              (_ curr LONGITUDINAL_CONTROLLER.res.abs_14))
+             (_ curr LONGITUDINAL_CONTROLLER.res.abs_15))
+            (_ curr LONGITUDINAL_CONTROLLER.res.abs_17))
+           (_ curr LONGITUDINAL_CONTROLLER.res.abs_18))
+          (_ curr LONGITUDINAL_CONTROLLER.res.abs_24))
+         (and
+          (and
+           (and
+            (and
+             (=>
+              (and
+               (and
+                (and
+                 (and
+                  (_ curr LONGITUDINAL_CONTROLLER.res.abs_40)
+                  (_ curr LONGITUDINAL_CONTROLLER.res.abs_35))
+                 (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))
+                (_ curr LONGITUDINAL_CONTROLLER.res.abs_31))
+               (_ curr LONGITUDINAL_CONTROLLER.res.abs_28))
+              (_ curr LONGITUDINAL_CONTROLLER.res.abs_42))
+             (=>
+              (and
+               (and
+                (and
+                 (and
+                  (_ curr LONGITUDINAL_CONTROLLER.res.abs_36)
+                  (_ curr LONGITUDINAL_CONTROLLER.res.abs_35))
+                 (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))
+                (_ curr LONGITUDINAL_CONTROLLER.res.abs_31))
+               (_ curr LONGITUDINAL_CONTROLLER.res.abs_28))
+              (_ curr LONGITUDINAL_CONTROLLER.res.abs_39)))
+            (=>
+             (and
+              (and
+               (and
+                (_ curr LONGITUDINAL_CONTROLLER.res.abs_33)
+                (_ curr LONGITUDINAL_CONTROLLER.res.abs_32))
+               (_ curr LONGITUDINAL_CONTROLLER.res.abs_31))
+              (_ curr LONGITUDINAL_CONTROLLER.res.abs_28))
+             (_ curr LONGITUDINAL_CONTROLLER.res.abs_30)))
+           (=>
+            (and
+             (_ curr LONGITUDINAL_CONTROLLER.res.abs_29)
+             (_ curr LONGITUDINAL_CONTROLLER.res.abs_28))
+            (_ curr LONGITUDINAL_CONTROLLER.res.abs_30)))
+          (=>
+           (_ curr LONGITUDINAL_CONTROLLER.res.abs_26)
+           (_ curr LONGITUDINAL_CONTROLLER.res.abs_27))))))))
+  ) (
+    (and
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_0)
+      (>= (_ next LONGITUDINAL_CONTROLLER.usr.VT_1_1) 0.0))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_1)
+      (>= (_ next LONGITUDINAL_CONTROLLER.usr.GsKts_1_1) 0.0))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_2)
+      (>= (_ next LONGITUDINAL_CONTROLLER.usr.CAS_1_1) 0.0))
+     (= (_ next LONGITUDINAL_CONTROLLER.res.abs_3) 1.0)
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_9)
+      (=
+       (_ next LONGITUDINAL_CONTROLLER.usr.Alt_1_1)
+       (+
+        (_ next LONGITUDINAL_CONTROLLER.usr.hdot_1_1)
+        (_ curr LONGITUDINAL_CONTROLLER.usr.Alt_1_1))))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_10)
+      (=>
+       (or
+        (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ next LONGITUDINAL_CONTROLLER.usr.VT_1_1) 100.0)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_11)
+      (=>
+       (or
+        (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ next LONGITUDINAL_CONTROLLER.usr.GsKts_1_1) 100.0)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_12)
+      (=>
+       (or
+        (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ next LONGITUDINAL_CONTROLLER.usr.CAS_1_1) 100.0)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_13)
+      (=>
+       (or
+        (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (>= (_ next LONGITUDINAL_CONTROLLER.usr.AltCmd_1_1) 0.0)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_14)
+      (=>
+       (or
+        (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))
+       (= (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1) 0.0)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_15)
+      (not
+       (and
+        (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+        (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1))))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_17)
+      (=>
+       (_ next LONGITUDINAL_CONTROLLER.res.abs_16)
+       (not (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_18)
+      (and
+       (and
+        (=
+         (>
+          (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+         (>
+          (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (<
+          (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+         (<
+          (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+          (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1))))
+       (=
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+         (_ curr LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+         (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_22)
+      (_ curr LONGITUDINAL_CONTROLLER.res.abs_21))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_19)
+      (-
+       (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+       (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_24)
+      (=>
+       (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)
+       (<=
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_20)
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_23))))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_21)
+      (-
+       (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+       (_ next LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+     (= (_ next LONGITUDINAL_CONTROLLER.res.abs_25) true)
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_26)
+      (not (= (_ next LONGITUDINAL_CONTROLLER.usr.ElevStick_1_1) 0.0)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_27)
+      (=
+       (_ next LONGITUDINAL_CONTROLLER.usr.ElevCmd_1_1)
+       (_ next LONGITUDINAL_CONTROLLER.usr.ElevStick_1_1)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_28)
+      (not (_ next LONGITUDINAL_CONTROLLER.res.abs_26)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_29)
+      (> (_ next LONGITUDINAL_CONTROLLER.usr.CAS_1_1) 500.0))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_30)
+      (= (_ next LONGITUDINAL_CONTROLLER.usr.ElevCmd_1_1) 0.0))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_31)
+      (not
+       (and
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_29)
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_28))))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_32)
+      (not (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_33)
+      (not (_ next LONGITUDINAL_CONTROLLER.usr.AltEng_1_1)))
+     (=
+      (_ next LONGITUDINAL_CONTROLLER.res.abs_35)
+      (_ curr LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))
+     (and
+      (=
+       (_ next LONGITUDINAL_CONTROLLER.res.abs_36)
+       (>
+        (+
+         (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+         (*
+          (+ (- (/ 16 5)) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+          (/ 17 50)))
+        (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+      (and
+       (=
+        (_ next LONGITUDINAL_CONTROLLER.contract.usr.rising)
+        (or
+         (or
+          (>
+           (_ next LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+           (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+          (>=
+           (_ next LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+           (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+         (<=
+          (+
+           (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+           (*
+            (+ (- (/ 16 5)) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+            (/ 17 50)))
+          (+
+           (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+           (-
+            (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+            (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1))))))
+       (=
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_39)
+        (or
+         (or
+          (or
+           (_ curr LONGITUDINAL_CONTROLLER.res.abs_37)
+           (_ curr LONGITUDINAL_CONTROLLER.res.abs_38))
+          (_ next LONGITUDINAL_CONTROLLER.contract.usr.rising))
+         (_ curr LONGITUDINAL_CONTROLLER.contract.usr.rising)))
+       (=
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_37)
+        (<=
+         (+
+          (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+          (*
+           (+ (- (/ 16 5)) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+           (/ 17 50)))
+         (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+       (=
+        (_ next LONGITUDINAL_CONTROLLER.res.abs_38)
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1)
+         (_ next LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+       (and
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.res.abs_40)
+         (<
+          (+
+           (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+           (*
+            (+ (/ 16 5) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+            (/ 17 50)))
+          (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.contract.usr.lowering)
+         (or
+          (or
+           (<
+            (_ next LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+            (_ next LONGITUDINAL_CONTROLLER.usr.thetaDeg_1_1))
+           (<=
+            (_ next LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)
+            (_ curr LONGITUDINAL_CONTROLLER.usr.pitch_cmd_out)))
+          (>=
+           (+
+            (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+            (*
+             (+ (/ 16 5) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+             (/ 17 50)))
+           (+
+            (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+            (-
+             (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)
+             (_ curr LONGITUDINAL_CONTROLLER.usr.Gamma_1_1))))))
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.res.abs_42)
+         (or
+          (or
+           (or
+            (_ curr LONGITUDINAL_CONTROLLER.res.abs_41)
+            (_ curr LONGITUDINAL_CONTROLLER.res.abs_38))
+           (_ next LONGITUDINAL_CONTROLLER.contract.usr.lowering))
+          (_ curr LONGITUDINAL_CONTROLLER.contract.usr.lowering)))
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.res.abs_41)
+         (>=
+          (+
+           (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+           (*
+            (+ (/ 16 5) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+            (/ 17 50)))
+          (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.res.abs_43)
+         (>=
+          (+
+           (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+           (*
+            (+ (- (/ 16 5)) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+            (/ 17 50)))
+          (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (=
+         (_ next LONGITUDINAL_CONTROLLER.res.abs_44)
+         (<=
+          (+
+           (_ next LONGITUDINAL_CONTROLLER.usr.FPACmd_1_1)
+           (*
+            (+ (/ 16 5) (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1))
+            (/ 17 50)))
+          (_ next LONGITUDINAL_CONTROLLER.usr.Gamma_1_1)))
+        (not (_ next LONGITUDINAL_CONTROLLER.res.init_flag))
+        (=>
+         (and
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (and
+                   (and
+                    (and
+                     (and
+                      (and
+                       (and
+                        (and
+                         (and
+                          (_ next LONGITUDINAL_CONTROLLER.res.abs_0)
+                          (_ next LONGITUDINAL_CONTROLLER.res.abs_1))
+                         (_ next LONGITUDINAL_CONTROLLER.res.abs_2))
+                        (_ next LONGITUDINAL_CONTROLLER.res.abs_4))
+                       (_ next LONGITUDINAL_CONTROLLER.res.abs_5))
+                      (_ next LONGITUDINAL_CONTROLLER.res.abs_6))
+                     (_ next LONGITUDINAL_CONTROLLER.res.abs_7))
+                    (_ next LONGITUDINAL_CONTROLLER.res.abs_8))
+                   (_ next LONGITUDINAL_CONTROLLER.res.abs_9))
+                  (_ next LONGITUDINAL_CONTROLLER.res.abs_10))
+                 (_ next LONGITUDINAL_CONTROLLER.res.abs_11))
+                (_ next LONGITUDINAL_CONTROLLER.res.abs_12))
+               (_ next LONGITUDINAL_CONTROLLER.res.abs_13))
+              (_ next LONGITUDINAL_CONTROLLER.res.abs_14))
+             (_ next LONGITUDINAL_CONTROLLER.res.abs_15))
+            (_ next LONGITUDINAL_CONTROLLER.res.abs_17))
+           (_ next LONGITUDINAL_CONTROLLER.res.abs_18))
+          (_ next LONGITUDINAL_CONTROLLER.res.abs_24))
+         (and
+          (and
+           (and
+            (and
+             (=>
+              (and
+               (and
+                (and
+                 (and
+                  (_ next LONGITUDINAL_CONTROLLER.res.abs_40)
+                  (_ next LONGITUDINAL_CONTROLLER.res.abs_35))
+                 (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))
+                (_ next LONGITUDINAL_CONTROLLER.res.abs_31))
+               (_ next LONGITUDINAL_CONTROLLER.res.abs_28))
+              (_ next LONGITUDINAL_CONTROLLER.res.abs_42))
+             (=>
+              (and
+               (and
+                (and
+                 (and
+                  (_ next LONGITUDINAL_CONTROLLER.res.abs_36)
+                  (_ next LONGITUDINAL_CONTROLLER.res.abs_35))
+                 (_ next LONGITUDINAL_CONTROLLER.usr.FpaEng_1_1))
+                (_ next LONGITUDINAL_CONTROLLER.res.abs_31))
+               (_ next LONGITUDINAL_CONTROLLER.res.abs_28))
+              (_ next LONGITUDINAL_CONTROLLER.res.abs_39)))
+            (=>
+             (and
+              (and
+               (and
+                (_ next LONGITUDINAL_CONTROLLER.res.abs_33)
+                (_ next LONGITUDINAL_CONTROLLER.res.abs_32))
+               (_ next LONGITUDINAL_CONTROLLER.res.abs_31))
+              (_ next LONGITUDINAL_CONTROLLER.res.abs_28))
+             (_ next LONGITUDINAL_CONTROLLER.res.abs_30)))
+           (=>
+            (and
+             (_ next LONGITUDINAL_CONTROLLER.res.abs_29)
+             (_ next LONGITUDINAL_CONTROLLER.res.abs_28))
+            (_ next LONGITUDINAL_CONTROLLER.res.abs_30)))
+          (=>
+           (_ next LONGITUDINAL_CONTROLLER.res.abs_26)
+           (_ next LONGITUDINAL_CONTROLLER.res.abs_27))))))))
+  ) (
+    (PseudoContinuous (_ curr LONGITUDINAL_CONTROLLER.usr.Alt_1_1) (_ curr LONGITUDINAL_CONTROLLER.res.abs_3) (_ curr LONGITUDINAL_CONTROLLER.res.abs_4) (_ curr LONGITUDINAL_CONTROLLER.res.inst_22) (_ curr LONGITUDINAL_CONTROLLER.res.inst_21) (_ curr LONGITUDINAL_CONTROLLER.res.inst_20) (_ curr LONGITUDINAL_CONTROLLER.res.inst_19))
+    (PseudoContinuous (_ curr LONGITUDINAL_CONTROLLER.usr.hdot_1_1) (_ curr LONGITUDINAL_CONTROLLER.res.abs_3) (_ curr LONGITUDINAL_CONTROLLER.res.abs_5) (_ curr LONGITUDINAL_CONTROLLER.res.inst_18) (_ curr LONGITUDINAL_CONTROLLER.res.inst_17) (_ curr LONGITUDINAL_CONTROLLER.res.inst_16) (_ curr LONGITUDINAL_CONTROLLER.res.inst_15))
+    (PseudoContinuous (_ curr LONGITUDINAL_CONTROLLER.usr.VT_1_1) (_ curr LONGITUDINAL_CONTROLLER.res.abs_3) (_ curr LONGITUDINAL_CONTROLLER.res.abs_6) (_ curr LONGITUDINAL_CONTROLLER.res.inst_14) (_ curr LONGITUDINAL_CONTROLLER.res.inst_13) (_ curr LONGITUDINAL_CONTROLLER.res.inst_12) (_ curr LONGITUDINAL_CONTROLLER.res.inst_11))
+    (PseudoContinuous (_ curr LONGITUDINAL_CONTROLLER.usr.GsKts_1_1) (_ curr LONGITUDINAL_CONTROLLER.res.abs_3) (_ curr LONGITUDINAL_CONTROLLER.res.abs_7) (_ curr LONGITUDINAL_CONTROLLER.res.inst_10) (_ curr LONGITUDINAL_CONTROLLER.res.inst_9) (_ curr LONGITUDINAL_CONTROLLER.res.inst_8) (_ curr LONGITUDINAL_CONTROLLER.res.inst_7))
+    (PseudoContinuous (_ curr LONGITUDINAL_CONTROLLER.usr.CAS_1_1) (_ curr LONGITUDINAL_CONTROLLER.res.abs_3) (_ curr LONGITUDINAL_CONTROLLER.res.abs_8) (_ curr LONGITUDINAL_CONTROLLER.res.inst_6) (_ curr LONGITUDINAL_CONTROLLER.res.inst_5) (_ curr LONGITUDINAL_CONTROLLER.res.inst_4) (_ curr LONGITUDINAL_CONTROLLER.res.inst_3))
+    (abs (_ curr LONGITUDINAL_CONTROLLER.res.abs_19) (_ curr LONGITUDINAL_CONTROLLER.res.abs_20) (_ curr LONGITUDINAL_CONTROLLER.res.inst_1))
+    (abs (_ curr LONGITUDINAL_CONTROLLER.res.abs_22) (_ curr LONGITUDINAL_CONTROLLER.res.abs_23) (_ curr LONGITUDINAL_CONTROLLER.res.inst_0))
+    (fall (_ curr LONGITUDINAL_CONTROLLER.usr.AltEng_1_1) (_ curr LONGITUDINAL_CONTROLLER.res.abs_16) (_ curr LONGITUDINAL_CONTROLLER.res.inst_2))
+  )
+)
+
+
+(define-sys
+  rise (
+    (rise.usr.in Bool)
+    (rise.usr.out Bool)
+    (rise.res.init_flag Bool)
+    (rise.res.abs_0 Bool)
+  ) (
+    (and
+     (= (_ curr rise.usr.out) false)
+     (= (_ curr rise.res.abs_0) (not (_ curr rise.usr.in)))
+     (_ curr rise.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next rise.usr.out)
+      (and (_ next rise.usr.in) (_ curr rise.res.abs_0)))
+     (= (_ next rise.res.abs_0) (not (_ next rise.usr.in)))
+     (not (_ next rise.res.init_flag)))
+  ) (
+    
+  )
+)
+
+
+(define-sys
+  since (
+    (since.usr.in Bool)
+    (since.usr.out Int)
+    (since.res.init_flag Bool)
+  ) (
+    (and
+     (= (_ curr since.usr.out) (ite (_ curr since.usr.in) 1 0))
+     (_ curr since.res.init_flag))
+  ) (
+    (and
+     (=
+      (_ next since.usr.out)
+      (ite (_ next since.usr.in) (+ (_ curr since.usr.out) 1) 0))
+     (not (_ next since.res.init_flag)))
+  ) (
+    
+  )
+)
+
+
+(define-sys
+  MODE_LOGIC (
+    (MODE_LOGIC.usr.HeadMode_1_1 Real)
+    (MODE_LOGIC.usr.ailStick_1_1 Real)
+    (MODE_LOGIC.usr.elevStick_1_1 Real)
+    (MODE_LOGIC.usr.AltMode_1_1 Real)
+    (MODE_LOGIC.usr.FPAMode_1_1 Real)
+    (MODE_LOGIC.usr.ATMode_1_1 Real)
+    (MODE_LOGIC.usr.AltCmd_1_1 Real)
+    (MODE_LOGIC.usr.Altitude_1_1 Real)
+    (MODE_LOGIC.usr.CAS_1_1 Real)
+    (MODE_LOGIC.usr.CASCmdMCP_1_1 Real)
+    (MODE_LOGIC.usr.HeadEng_1_1 Bool)
+    (MODE_LOGIC.usr.AltEng_2_1 Bool)
+    (MODE_LOGIC.usr.FPAEng_3_1 Bool)
+    (MODE_LOGIC.usr.ATEng_4_1 Bool)
+    (MODE_LOGIC.usr.CASCmd_5_1 Real)
+    (MODE_LOGIC.res.init_flag Bool)
+    (MODE_LOGIC.contract.usr.disengage Bool)
+    (MODE_LOGIC.contract.usr.head_req Bool)
+    (MODE_LOGIC.res.abs_0 Bool)
+    (MODE_LOGIC.res.abs_1 Bool)
+    (MODE_LOGIC.res.abs_2 Bool)
+    (MODE_LOGIC.res.abs_3 Int)
+    (MODE_LOGIC.res.abs_4 Bool)
+    (MODE_LOGIC.res.abs_5 Int)
+    (MODE_LOGIC.res.abs_6 Bool)
+    (MODE_LOGIC.res.abs_7 Bool)
+    (MODE_LOGIC.res.abs_8 Int)
+    (MODE_LOGIC.res.abs_9 Bool)
+    (MODE_LOGIC.res.abs_10 Int)
+    (MODE_LOGIC.res.abs_11 Bool)
+    (MODE_LOGIC.res.abs_12 Bool)
+    (MODE_LOGIC.res.abs_13 Bool)
+    (MODE_LOGIC.res.abs_14 Bool)
+    (MODE_LOGIC.res.abs_15 Bool)
+    (MODE_LOGIC.res.abs_16 Int)
+    (MODE_LOGIC.res.abs_17 Bool)
+    (MODE_LOGIC.res.abs_18 Bool)
+    (MODE_LOGIC.res.abs_19 Bool)
+    (MODE_LOGIC.res.abs_20 Bool)
+    (MODE_LOGIC.contract.usr.alt_requested Bool)
+    (MODE_LOGIC.res.abs_21 Bool)
+    (MODE_LOGIC.res.abs_22 Bool)
+    (MODE_LOGIC.res.abs_23 Bool)
+    (MODE_LOGIC.contract.usr.fpa_requested Bool)
+    (MODE_LOGIC.res.abs_24 Bool)
+    (MODE_LOGIC.res.abs_25 Bool)
+    (MODE_LOGIC.res.abs_26 Bool)
+    (MODE_LOGIC.contract.usr.wide_altitude_gap Bool)
+    (MODE_LOGIC.res.abs_27 Real)
+    (MODE_LOGIC.res.abs_28 Real)
+    (MODE_LOGIC.contract.usr.tiny_altitude_gap Bool)
+    (MODE_LOGIC.res.abs_29 Int)
+    (MODE_LOGIC.res.abs_30 Bool)
+    (MODE_LOGIC.res.abs_31 Int)
+    (MODE_LOGIC.res.abs_32 Bool)
+    (MODE_LOGIC.res.abs_33 Bool)
+    (MODE_LOGIC.res.abs_34 Int)
+    (MODE_LOGIC.res.abs_35 Bool)
+    (MODE_LOGIC.res.abs_36 Int)
+    (MODE_LOGIC.res.abs_37 Bool)
+    (MODE_LOGIC.res.abs_38 Bool)
+    (MODE_LOGIC.res.abs_39 Bool)
+    (MODE_LOGIC.res.abs_40 Bool)
+    (MODE_LOGIC.res.abs_41 Bool)
+    (MODE_LOGIC.res.abs_42 Bool)
+    (MODE_LOGIC.res.abs_43 Bool)
+    (MODE_LOGIC.res.abs_44 Bool)
+    (MODE_LOGIC.res.abs_45 Int)
+    (MODE_LOGIC.res.abs_46 Bool)
+    (MODE_LOGIC.res.abs_47 Bool)
+    (MODE_LOGIC.res.abs_48 Bool)
+    (MODE_LOGIC.res.abs_49 Bool)
+    (MODE_LOGIC.res.abs_50 Bool)
+    (MODE_LOGIC.res.abs_51 Bool)
+    (MODE_LOGIC.res.abs_52 Bool)
+    (MODE_LOGIC.res.abs_53 Bool)
+    (MODE_LOGIC.res.abs_54 Bool)
+    (MODE_LOGIC.res.inst_19 Bool)
+    (MODE_LOGIC.res.inst_18 Bool)
+    (MODE_LOGIC.res.inst_17 Bool)
+    (MODE_LOGIC.res.inst_16 Bool)
+    (MODE_LOGIC.res.inst_15 Bool)
+    (MODE_LOGIC.res.inst_14 Bool)
+    (MODE_LOGIC.res.inst_13 Bool)
+    (MODE_LOGIC.res.inst_12 Bool)
+    (MODE_LOGIC.res.inst_11 Bool)
+    (MODE_LOGIC.res.inst_10 Bool)
+    (MODE_LOGIC.res.inst_9 Bool)
+    (MODE_LOGIC.res.inst_8 Bool)
+    (MODE_LOGIC.res.inst_7 Bool)
+    (MODE_LOGIC.res.inst_6 Bool)
+    (MODE_LOGIC.res.inst_5 Bool)
+    (MODE_LOGIC.res.inst_4 Bool)
+    (MODE_LOGIC.res.inst_3 Bool)
+    (MODE_LOGIC.res.inst_2 Bool)
+    (MODE_LOGIC.res.inst_1 Bool)
+    (MODE_LOGIC.res.inst_0 Bool)
+  ) (
+    (and
+     (=
+      (_ curr MODE_LOGIC.res.abs_1)
+      (and false (not (not (= (_ curr MODE_LOGIC.usr.HeadMode_1_1) 0.0)))))
+     (=
+      (_ curr MODE_LOGIC.res.abs_0)
+      (not (= (_ curr MODE_LOGIC.usr.HeadMode_1_1) 0.0)))
+     (=
+      (_ curr MODE_LOGIC.contract.usr.head_req)
+      (_ curr MODE_LOGIC.res.abs_2))
+     (=
+      (_ curr MODE_LOGIC.contract.usr.disengage)
+      (or
+       (not (= (_ curr MODE_LOGIC.usr.ailStick_1_1) 0.0))
+       (not (= (_ curr MODE_LOGIC.usr.elevStick_1_1) 0.0))))
+     (=
+      (_ curr MODE_LOGIC.res.abs_4)
+      (not (not (= (_ curr MODE_LOGIC.usr.HeadMode_1_1) 0.0))))
+     (= (_ curr MODE_LOGIC.res.abs_6) true)
+     (= (_ curr MODE_LOGIC.res.abs_7) true)
+     (= (_ curr MODE_LOGIC.res.abs_11) true)
+     (=
+      (_ curr MODE_LOGIC.res.abs_9)
+      (not (_ curr MODE_LOGIC.contract.usr.disengage)))
+     (= (_ curr MODE_LOGIC.res.abs_12) true)
+     (=
+      (_ curr MODE_LOGIC.res.abs_15)
+      (not
+       (and (_ curr MODE_LOGIC.res.abs_13) (_ curr MODE_LOGIC.res.abs_14))))
+     (= (_ curr MODE_LOGIC.res.abs_17) (> (_ curr MODE_LOGIC.res.abs_16) 0))
+     (=
+      (_ curr MODE_LOGIC.res.abs_18)
+      (not (_ curr MODE_LOGIC.usr.HeadEng_1_1)))
+     (= (_ curr MODE_LOGIC.res.abs_19) (not (_ curr MODE_LOGIC.res.abs_17)))
+     (=
+      (_ curr MODE_LOGIC.res.abs_20)
+      (not (_ curr MODE_LOGIC.contract.usr.head_req)))
+     (and
+      (=
+       (_ curr MODE_LOGIC.res.abs_22)
+       (and false (not (not (= (_ curr MODE_LOGIC.usr.AltMode_1_1) 0.0)))))
+      (=
+       (_ curr MODE_LOGIC.res.abs_21)
+       (not (= (_ curr MODE_LOGIC.usr.AltMode_1_1) 0.0)))
+      (=
+       (_ curr MODE_LOGIC.contract.usr.alt_requested)
+       (_ curr MODE_LOGIC.res.abs_23))
+      (=
+       (_ curr MODE_LOGIC.res.abs_25)
+       (and false (not (not (= (_ curr MODE_LOGIC.usr.FPAMode_1_1) 0.0)))))
+      (=
+       (_ curr MODE_LOGIC.res.abs_24)
+       (not (= (_ curr MODE_LOGIC.usr.FPAMode_1_1) 0.0)))
+      (=
+       (_ curr MODE_LOGIC.contract.usr.fpa_requested)
+       (_ curr MODE_LOGIC.res.abs_26))
+      (=
+       (_ curr MODE_LOGIC.res.abs_27)
+       (-
+        (_ curr MODE_LOGIC.usr.Altitude_1_1)
+        (_ curr MODE_LOGIC.usr.AltCmd_1_1)))
+      (=
+       (_ curr MODE_LOGIC.contract.usr.wide_altitude_gap)
+       (> (_ curr MODE_LOGIC.res.abs_28) 200.0))
+      (=
+       (_ curr MODE_LOGIC.contract.usr.tiny_altitude_gap)
+       (not (_ curr MODE_LOGIC.contract.usr.wide_altitude_gap)))
+      (= (_ curr MODE_LOGIC.res.abs_32) true)
+      (=
+       (_ curr MODE_LOGIC.res.abs_30)
+       (not (not (= (_ curr MODE_LOGIC.usr.AltMode_1_1) 0.0))))
+      (= (_ curr MODE_LOGIC.res.abs_33) true)
+      (= (_ curr MODE_LOGIC.res.abs_37) true)
+      (=
+       (_ curr MODE_LOGIC.res.abs_35)
+       (not (not (= (_ curr MODE_LOGIC.usr.FPAMode_1_1) 0.0))))
+      (= (_ curr MODE_LOGIC.res.abs_38) true)
+      (=
+       (_ curr MODE_LOGIC.res.abs_40)
+       (=>
+        (_ curr MODE_LOGIC.res.abs_39)
+        (not (_ curr MODE_LOGIC.res.abs_14))))
+      (=
+       (_ curr MODE_LOGIC.res.abs_42)
+       (=>
+        (_ curr MODE_LOGIC.res.abs_41)
+        (not (_ curr MODE_LOGIC.res.abs_14))))
+      (=
+       (_ curr MODE_LOGIC.res.abs_43)
+       (not
+        (and
+         (_ curr MODE_LOGIC.usr.AltEng_2_1)
+         (_ curr MODE_LOGIC.usr.FPAEng_3_1))))
+      (=
+       (_ curr MODE_LOGIC.res.abs_44)
+       (not
+        (or
+         (not (= (_ curr MODE_LOGIC.usr.AltMode_1_1) 0.0))
+         (not (= (_ curr MODE_LOGIC.usr.FPAMode_1_1) 0.0)))))
+      (= (_ curr MODE_LOGIC.res.abs_46) (> (_ curr MODE_LOGIC.res.abs_45) 0))
+      (=
+       (_ curr MODE_LOGIC.res.abs_47)
+       (not
+        (or
+         (_ curr MODE_LOGIC.usr.AltEng_2_1)
+         (_ curr MODE_LOGIC.usr.FPAEng_3_1))))
+      (= (_ curr MODE_LOGIC.res.abs_48) (not (_ curr MODE_LOGIC.res.abs_46)))
+      (=
+       (_ curr MODE_LOGIC.res.abs_49)
+       (not (_ curr MODE_LOGIC.contract.usr.alt_requested)))
+      (=
+       (_ curr MODE_LOGIC.res.abs_50)
+       (not (_ curr MODE_LOGIC.contract.usr.fpa_requested)))
+      (= (_ curr MODE_LOGIC.res.abs_52) true)
+      (=
+       (_ curr MODE_LOGIC.res.abs_51)
+       (and
+        (_ curr MODE_LOGIC.contract.usr.fpa_requested)
+        (_ curr MODE_LOGIC.contract.usr.wide_altitude_gap)))
+      (= (_ curr MODE_LOGIC.res.abs_54) true)
+      (=
+       (_ curr MODE_LOGIC.res.abs_53)
+       (and
+        (_ curr MODE_LOGIC.contract.usr.alt_requested)
+        (_ curr MODE_LOGIC.contract.usr.tiny_altitude_gap)))
+      (_ curr MODE_LOGIC.res.init_flag)
+      (=>
+       (and
+        (and
+         (and
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (and
+                   (_ curr MODE_LOGIC.res.abs_6)
+                   (_ curr MODE_LOGIC.res.abs_7))
+                  (_ curr MODE_LOGIC.res.abs_11))
+                 (_ curr MODE_LOGIC.res.abs_12))
+                (_ curr MODE_LOGIC.res.abs_15))
+               (_ curr MODE_LOGIC.res.abs_32))
+              (_ curr MODE_LOGIC.res.abs_33))
+             (_ curr MODE_LOGIC.res.abs_37))
+            (_ curr MODE_LOGIC.res.abs_38))
+           (_ curr MODE_LOGIC.res.abs_11))
+          (_ curr MODE_LOGIC.res.abs_12))
+         (_ curr MODE_LOGIC.res.abs_40))
+        (_ curr MODE_LOGIC.res.abs_42))
+       (and
+        (and
+         (and
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (=>
+                   (and
+                    (_ curr MODE_LOGIC.contract.usr.alt_requested)
+                    (_ curr MODE_LOGIC.contract.usr.tiny_altitude_gap))
+                   (_ curr MODE_LOGIC.usr.AltEng_2_1))
+                  (=>
+                   (and
+                    (and
+                     (_ curr MODE_LOGIC.res.abs_49)
+                     (_ curr MODE_LOGIC.contract.usr.fpa_requested))
+                    (_ curr MODE_LOGIC.contract.usr.tiny_altitude_gap))
+                   (_ curr MODE_LOGIC.usr.FPAEng_3_1)))
+                 (=>
+                  (and
+                   (_ curr MODE_LOGIC.contract.usr.fpa_requested)
+                   (_ curr MODE_LOGIC.contract.usr.wide_altitude_gap))
+                  (_ curr MODE_LOGIC.usr.FPAEng_3_1)))
+                (=>
+                 (and
+                  (and
+                   (_ curr MODE_LOGIC.res.abs_50)
+                   (_ curr MODE_LOGIC.contract.usr.alt_requested))
+                  (_ curr MODE_LOGIC.contract.usr.wide_altitude_gap))
+                 (_ curr MODE_LOGIC.usr.AltEng_2_1)))
+               (=>
+                (and
+                 (and
+                  (_ curr MODE_LOGIC.res.abs_50)
+                  (_ curr MODE_LOGIC.res.abs_49))
+                 (_ curr MODE_LOGIC.res.abs_48))
+                (_ curr MODE_LOGIC.res.abs_47)))
+              (=>
+               (_ curr MODE_LOGIC.res.abs_46)
+               (_ curr MODE_LOGIC.res.abs_47)))
+             (=>
+              (_ curr MODE_LOGIC.contract.usr.head_req)
+              (_ curr MODE_LOGIC.usr.HeadEng_1_1)))
+            (=>
+             (and
+              (and
+               (_ curr MODE_LOGIC.res.abs_4)
+               (_ curr MODE_LOGIC.res.abs_20))
+              (_ curr MODE_LOGIC.res.abs_19))
+             (_ curr MODE_LOGIC.res.abs_18)))
+           (=> (_ curr MODE_LOGIC.res.abs_17) (_ curr MODE_LOGIC.res.abs_18)))
+          (_ curr MODE_LOGIC.res.abs_43))
+         (_ curr MODE_LOGIC.res.abs_52))
+        (_ curr MODE_LOGIC.res.abs_54)))))
+  ) (
+    (and
+     (=
+      (_ next MODE_LOGIC.res.abs_1)
+      (and
+       (_ curr MODE_LOGIC.contract.usr.disengage)
+       (not (not (= (_ next MODE_LOGIC.usr.HeadMode_1_1) 0.0)))))
+     (=
+      (_ next MODE_LOGIC.res.abs_0)
+      (not (= (_ next MODE_LOGIC.usr.HeadMode_1_1) 0.0)))
+     (=
+      (_ next MODE_LOGIC.contract.usr.head_req)
+      (_ next MODE_LOGIC.res.abs_2))
+     (=
+      (_ next MODE_LOGIC.contract.usr.disengage)
+      (or
+       (not (= (_ next MODE_LOGIC.usr.ailStick_1_1) 0.0))
+       (not (= (_ next MODE_LOGIC.usr.elevStick_1_1) 0.0))))
+     (=
+      (_ next MODE_LOGIC.res.abs_4)
+      (not (not (= (_ next MODE_LOGIC.usr.HeadMode_1_1) 0.0))))
+     (=
+      (_ next MODE_LOGIC.res.abs_6)
+      (=>
+       (= (_ next MODE_LOGIC.res.abs_3) 1)
+       (> (_ curr MODE_LOGIC.res.abs_5) 1)))
+     (=
+      (_ next MODE_LOGIC.res.abs_7)
+      (=>
+       (= (_ next MODE_LOGIC.res.abs_5) 1)
+       (> (_ curr MODE_LOGIC.res.abs_3) 1)))
+     (=
+      (_ next MODE_LOGIC.res.abs_11)
+      (=>
+       (= (_ next MODE_LOGIC.res.abs_8) 1)
+       (> (_ curr MODE_LOGIC.res.abs_10) 1)))
+     (=
+      (_ next MODE_LOGIC.res.abs_9)
+      (not (_ next MODE_LOGIC.contract.usr.disengage)))
+     (=
+      (_ next MODE_LOGIC.res.abs_12)
+      (=>
+       (= (_ next MODE_LOGIC.res.abs_10) 1)
+       (> (_ curr MODE_LOGIC.res.abs_8) 1)))
+     (=
+      (_ next MODE_LOGIC.res.abs_15)
+      (not
+       (and (_ next MODE_LOGIC.res.abs_13) (_ next MODE_LOGIC.res.abs_14))))
+     (= (_ next MODE_LOGIC.res.abs_17) (> (_ next MODE_LOGIC.res.abs_16) 0))
+     (=
+      (_ next MODE_LOGIC.res.abs_18)
+      (not (_ next MODE_LOGIC.usr.HeadEng_1_1)))
+     (= (_ next MODE_LOGIC.res.abs_19) (not (_ next MODE_LOGIC.res.abs_17)))
+     (=
+      (_ next MODE_LOGIC.res.abs_20)
+      (not (_ next MODE_LOGIC.contract.usr.head_req)))
+     (and
+      (=
+       (_ next MODE_LOGIC.res.abs_22)
+       (and
+        (_ curr MODE_LOGIC.contract.usr.disengage)
+        (not (not (= (_ next MODE_LOGIC.usr.AltMode_1_1) 0.0)))))
+      (=
+       (_ next MODE_LOGIC.res.abs_21)
+       (not (= (_ next MODE_LOGIC.usr.AltMode_1_1) 0.0)))
+      (=
+       (_ next MODE_LOGIC.contract.usr.alt_requested)
+       (_ next MODE_LOGIC.res.abs_23))
+      (=
+       (_ next MODE_LOGIC.res.abs_25)
+       (and
+        (_ curr MODE_LOGIC.contract.usr.disengage)
+        (not (not (= (_ next MODE_LOGIC.usr.FPAMode_1_1) 0.0)))))
+      (=
+       (_ next MODE_LOGIC.res.abs_24)
+       (not (= (_ next MODE_LOGIC.usr.FPAMode_1_1) 0.0)))
+      (=
+       (_ next MODE_LOGIC.contract.usr.fpa_requested)
+       (_ next MODE_LOGIC.res.abs_26))
+      (=
+       (_ next MODE_LOGIC.res.abs_27)
+       (-
+        (_ next MODE_LOGIC.usr.Altitude_1_1)
+        (_ next MODE_LOGIC.usr.AltCmd_1_1)))
+      (=
+       (_ next MODE_LOGIC.contract.usr.wide_altitude_gap)
+       (> (_ next MODE_LOGIC.res.abs_28) 200.0))
+      (=
+       (_ next MODE_LOGIC.contract.usr.tiny_altitude_gap)
+       (not (_ next MODE_LOGIC.contract.usr.wide_altitude_gap)))
+      (=
+       (_ next MODE_LOGIC.res.abs_32)
+       (=>
+        (= (_ next MODE_LOGIC.res.abs_29) 1)
+        (> (_ curr MODE_LOGIC.res.abs_31) 1)))
+      (=
+       (_ next MODE_LOGIC.res.abs_30)
+       (not (not (= (_ next MODE_LOGIC.usr.AltMode_1_1) 0.0))))
+      (=
+       (_ next MODE_LOGIC.res.abs_33)
+       (=>
+        (= (_ next MODE_LOGIC.res.abs_31) 1)
+        (> (_ curr MODE_LOGIC.res.abs_29) 1)))
+      (=
+       (_ next MODE_LOGIC.res.abs_37)
+       (=>
+        (= (_ next MODE_LOGIC.res.abs_34) 1)
+        (> (_ curr MODE_LOGIC.res.abs_36) 1)))
+      (=
+       (_ next MODE_LOGIC.res.abs_35)
+       (not (not (= (_ next MODE_LOGIC.usr.FPAMode_1_1) 0.0))))
+      (=
+       (_ next MODE_LOGIC.res.abs_38)
+       (=>
+        (= (_ next MODE_LOGIC.res.abs_36) 1)
+        (> (_ curr MODE_LOGIC.res.abs_34) 1)))
+      (=
+       (_ next MODE_LOGIC.res.abs_40)
+       (=>
+        (_ next MODE_LOGIC.res.abs_39)
+        (not (_ next MODE_LOGIC.res.abs_14))))
+      (=
+       (_ next MODE_LOGIC.res.abs_42)
+       (=>
+        (_ next MODE_LOGIC.res.abs_41)
+        (not (_ next MODE_LOGIC.res.abs_14))))
+      (=
+       (_ next MODE_LOGIC.res.abs_43)
+       (not
+        (and
+         (_ next MODE_LOGIC.usr.AltEng_2_1)
+         (_ next MODE_LOGIC.usr.FPAEng_3_1))))
+      (=
+       (_ next MODE_LOGIC.res.abs_44)
+       (not
+        (or
+         (not (= (_ next MODE_LOGIC.usr.AltMode_1_1) 0.0))
+         (not (= (_ next MODE_LOGIC.usr.FPAMode_1_1) 0.0)))))
+      (= (_ next MODE_LOGIC.res.abs_46) (> (_ next MODE_LOGIC.res.abs_45) 0))
+      (=
+       (_ next MODE_LOGIC.res.abs_47)
+       (not
+        (or
+         (_ next MODE_LOGIC.usr.AltEng_2_1)
+         (_ next MODE_LOGIC.usr.FPAEng_3_1))))
+      (= (_ next MODE_LOGIC.res.abs_48) (not (_ next MODE_LOGIC.res.abs_46)))
+      (=
+       (_ next MODE_LOGIC.res.abs_49)
+       (not (_ next MODE_LOGIC.contract.usr.alt_requested)))
+      (=
+       (_ next MODE_LOGIC.res.abs_50)
+       (not (_ next MODE_LOGIC.contract.usr.fpa_requested)))
+      (=
+       (_ next MODE_LOGIC.res.abs_52)
+       (or
+        (not
+         (and
+          (and
+           (and
+            (_ next MODE_LOGIC.res.abs_50)
+            (_ next MODE_LOGIC.contract.usr.alt_requested))
+           (_ next MODE_LOGIC.contract.usr.wide_altitude_gap))
+          (_ curr MODE_LOGIC.res.abs_51)))
+        (_ next MODE_LOGIC.contract.usr.disengage)))
+      (=
+       (_ next MODE_LOGIC.res.abs_51)
+       (and
+        (_ next MODE_LOGIC.contract.usr.fpa_requested)
+        (_ next MODE_LOGIC.contract.usr.wide_altitude_gap)))
+      (=
+       (_ next MODE_LOGIC.res.abs_54)
+       (or
+        (not
+         (and
+          (and
+           (and
+            (_ next MODE_LOGIC.res.abs_49)
+            (_ next MODE_LOGIC.contract.usr.fpa_requested))
+           (_ next MODE_LOGIC.contract.usr.tiny_altitude_gap))
+          (_ curr MODE_LOGIC.res.abs_53)))
+        (_ next MODE_LOGIC.contract.usr.disengage)))
+      (=
+       (_ next MODE_LOGIC.res.abs_53)
+       (and
+        (_ next MODE_LOGIC.contract.usr.alt_requested)
+        (_ next MODE_LOGIC.contract.usr.tiny_altitude_gap)))
+      (not (_ next MODE_LOGIC.res.init_flag))
+      (=>
+       (and
+        (and
+         (and
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (and
+                   (_ next MODE_LOGIC.res.abs_6)
+                   (_ next MODE_LOGIC.res.abs_7))
+                  (_ next MODE_LOGIC.res.abs_11))
+                 (_ next MODE_LOGIC.res.abs_12))
+                (_ next MODE_LOGIC.res.abs_15))
+               (_ next MODE_LOGIC.res.abs_32))
+              (_ next MODE_LOGIC.res.abs_33))
+             (_ next MODE_LOGIC.res.abs_37))
+            (_ next MODE_LOGIC.res.abs_38))
+           (_ next MODE_LOGIC.res.abs_11))
+          (_ next MODE_LOGIC.res.abs_12))
+         (_ next MODE_LOGIC.res.abs_40))
+        (_ next MODE_LOGIC.res.abs_42))
+       (and
+        (and
+         (and
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (=>
+                   (and
+                    (_ next MODE_LOGIC.contract.usr.alt_requested)
+                    (_ next MODE_LOGIC.contract.usr.tiny_altitude_gap))
+                   (_ next MODE_LOGIC.usr.AltEng_2_1))
+                  (=>
+                   (and
+                    (and
+                     (_ next MODE_LOGIC.res.abs_49)
+                     (_ next MODE_LOGIC.contract.usr.fpa_requested))
+                    (_ next MODE_LOGIC.contract.usr.tiny_altitude_gap))
+                   (_ next MODE_LOGIC.usr.FPAEng_3_1)))
+                 (=>
+                  (and
+                   (_ next MODE_LOGIC.contract.usr.fpa_requested)
+                   (_ next MODE_LOGIC.contract.usr.wide_altitude_gap))
+                  (_ next MODE_LOGIC.usr.FPAEng_3_1)))
+                (=>
+                 (and
+                  (and
+                   (_ next MODE_LOGIC.res.abs_50)
+                   (_ next MODE_LOGIC.contract.usr.alt_requested))
+                  (_ next MODE_LOGIC.contract.usr.wide_altitude_gap))
+                 (_ next MODE_LOGIC.usr.AltEng_2_1)))
+               (=>
+                (and
+                 (and
+                  (_ next MODE_LOGIC.res.abs_50)
+                  (_ next MODE_LOGIC.res.abs_49))
+                 (_ next MODE_LOGIC.res.abs_48))
+                (_ next MODE_LOGIC.res.abs_47)))
+              (=>
+               (_ next MODE_LOGIC.res.abs_46)
+               (_ next MODE_LOGIC.res.abs_47)))
+             (=>
+              (_ next MODE_LOGIC.contract.usr.head_req)
+              (_ next MODE_LOGIC.usr.HeadEng_1_1)))
+            (=>
+             (and
+              (and
+               (_ next MODE_LOGIC.res.abs_4)
+               (_ next MODE_LOGIC.res.abs_20))
+              (_ next MODE_LOGIC.res.abs_19))
+             (_ next MODE_LOGIC.res.abs_18)))
+           (=> (_ next MODE_LOGIC.res.abs_17) (_ next MODE_LOGIC.res.abs_18)))
+          (_ next MODE_LOGIC.res.abs_43))
+         (_ next MODE_LOGIC.res.abs_52))
+        (_ next MODE_LOGIC.res.abs_54)))))
+  ) (
+    (has_been_true_reset (_ curr MODE_LOGIC.res.abs_0) (_ curr MODE_LOGIC.res.abs_1) (_ curr MODE_LOGIC.res.abs_2) (_ curr MODE_LOGIC.res.inst_19))
+    (has_been_true_reset (_ curr MODE_LOGIC.res.abs_21) (_ curr MODE_LOGIC.res.abs_22) (_ curr MODE_LOGIC.res.abs_23) (_ curr MODE_LOGIC.res.inst_10))
+    (has_been_true_reset (_ curr MODE_LOGIC.res.abs_24) (_ curr MODE_LOGIC.res.abs_25) (_ curr MODE_LOGIC.res.abs_26) (_ curr MODE_LOGIC.res.inst_9))
+    (since (_ curr MODE_LOGIC.res.abs_0) (_ curr MODE_LOGIC.res.abs_3) (_ curr MODE_LOGIC.res.inst_18))
+    (since (_ curr MODE_LOGIC.res.abs_4) (_ curr MODE_LOGIC.res.abs_5) (_ curr MODE_LOGIC.res.inst_17))
+    (since (_ curr MODE_LOGIC.contract.usr.disengage) (_ curr MODE_LOGIC.res.abs_8) (_ curr MODE_LOGIC.res.inst_16))
+    (since (_ curr MODE_LOGIC.res.abs_9) (_ curr MODE_LOGIC.res.abs_10) (_ curr MODE_LOGIC.res.inst_15))
+    (since (_ curr MODE_LOGIC.res.abs_21) (_ curr MODE_LOGIC.res.abs_29) (_ curr MODE_LOGIC.res.inst_7))
+    (since (_ curr MODE_LOGIC.res.abs_30) (_ curr MODE_LOGIC.res.abs_31) (_ curr MODE_LOGIC.res.inst_6))
+    (since (_ curr MODE_LOGIC.res.abs_24) (_ curr MODE_LOGIC.res.abs_34) (_ curr MODE_LOGIC.res.inst_5))
+    (since (_ curr MODE_LOGIC.res.abs_35) (_ curr MODE_LOGIC.res.abs_36) (_ curr MODE_LOGIC.res.inst_4))
+    (duration (_ curr MODE_LOGIC.res.abs_4) (_ curr MODE_LOGIC.res.abs_16) (_ curr MODE_LOGIC.res.inst_12) (_ curr MODE_LOGIC.res.inst_11))
+    (duration (_ curr MODE_LOGIC.res.abs_44) (_ curr MODE_LOGIC.res.abs_45) (_ curr MODE_LOGIC.res.inst_1) (_ curr MODE_LOGIC.res.inst_0))
+    (fall (_ curr MODE_LOGIC.res.abs_0) (_ curr MODE_LOGIC.res.abs_13) (_ curr MODE_LOGIC.res.inst_14))
+    (fall (_ curr MODE_LOGIC.contract.usr.disengage) (_ curr MODE_LOGIC.res.abs_14) (_ curr MODE_LOGIC.res.inst_13))
+    (fall (_ curr MODE_LOGIC.res.abs_21) (_ curr MODE_LOGIC.res.abs_39) (_ curr MODE_LOGIC.res.inst_3))
+    (fall (_ curr MODE_LOGIC.res.abs_24) (_ curr MODE_LOGIC.res.abs_41) (_ curr MODE_LOGIC.res.inst_2))
+    (abs (_ curr MODE_LOGIC.res.abs_27) (_ curr MODE_LOGIC.res.abs_28) (_ curr MODE_LOGIC.res.inst_8))
+  )
+)
+
+
+(define-sys
+  Mode_plus_Longitudinal (
+    (Mode_plus_Longitudinal.usr.head_mode Real)
+    (Mode_plus_Longitudinal.usr.ail_stick_in Real)
+    (Mode_plus_Longitudinal.usr.elev_stick_in Real)
+    (Mode_plus_Longitudinal.usr.alt_mode Real)
+    (Mode_plus_Longitudinal.usr.fpa_mode Real)
+    (Mode_plus_Longitudinal.usr.at_mode Real)
+    (Mode_plus_Longitudinal.usr.alt_cmd_in Real)
+    (Mode_plus_Longitudinal.usr.alt_in Real)
+    (Mode_plus_Longitudinal.usr.cas_in Real)
+    (Mode_plus_Longitudinal.usr.cas_cmd Real)
+    (Mode_plus_Longitudinal.usr.pitch_in Real)
+    (Mode_plus_Longitudinal.usr.qbdegf_1_1 Real)
+    (Mode_plus_Longitudinal.usr.gskts_in Real)
+    (Mode_plus_Longitudinal.usr.hdot_in Real)
+    (Mode_plus_Longitudinal.usr.speed_in Real)
+    (Mode_plus_Longitudinal.usr.fpa_in Real)
+    (Mode_plus_Longitudinal.usr.fpa_cmd_in Real)
+    (Mode_plus_Longitudinal.usr.head_eng_out Bool)
+    (Mode_plus_Longitudinal.usr.alt_eng_out Bool)
+    (Mode_plus_Longitudinal.usr.fpa_eng_out Bool)
+    (Mode_plus_Longitudinal.usr.pitch_cmd_out Real)
+    (Mode_plus_Longitudinal.usr.elev_cmd_out Real)
+    (Mode_plus_Longitudinal.res.init_flag Bool)
+    (Mode_plus_Longitudinal.contract.usr.deactivate Bool)
+    (Mode_plus_Longitudinal.contract.usr.head_req Bool)
+    (Mode_plus_Longitudinal.res.abs_0 Bool)
+    (Mode_plus_Longitudinal.res.abs_1 Bool)
+    (Mode_plus_Longitudinal.res.abs_2 Bool)
+    (Mode_plus_Longitudinal.res.abs_3 Int)
+    (Mode_plus_Longitudinal.res.abs_4 Bool)
+    (Mode_plus_Longitudinal.res.abs_5 Int)
+    (Mode_plus_Longitudinal.res.abs_6 Bool)
+    (Mode_plus_Longitudinal.res.abs_7 Bool)
+    (Mode_plus_Longitudinal.res.abs_8 Int)
+    (Mode_plus_Longitudinal.res.abs_9 Bool)
+    (Mode_plus_Longitudinal.res.abs_10 Int)
+    (Mode_plus_Longitudinal.res.abs_11 Bool)
+    (Mode_plus_Longitudinal.res.abs_12 Bool)
+    (Mode_plus_Longitudinal.res.abs_13 Bool)
+    (Mode_plus_Longitudinal.res.abs_14 Bool)
+    (Mode_plus_Longitudinal.res.abs_15 Bool)
+    (Mode_plus_Longitudinal.res.abs_16 Int)
+    (Mode_plus_Longitudinal.res.abs_17 Bool)
+    (Mode_plus_Longitudinal.res.abs_18 Bool)
+    (Mode_plus_Longitudinal.res.abs_19 Bool)
+    (Mode_plus_Longitudinal.res.abs_20 Bool)
+    (Mode_plus_Longitudinal.contract.usr.alt_requested Bool)
+    (Mode_plus_Longitudinal.res.abs_21 Bool)
+    (Mode_plus_Longitudinal.res.abs_22 Bool)
+    (Mode_plus_Longitudinal.res.abs_23 Bool)
+    (Mode_plus_Longitudinal.contract.usr.fpa_requested Bool)
+    (Mode_plus_Longitudinal.res.abs_24 Bool)
+    (Mode_plus_Longitudinal.res.abs_25 Bool)
+    (Mode_plus_Longitudinal.res.abs_26 Bool)
+    (Mode_plus_Longitudinal.contract.usr.wide_altitude_gap Bool)
+    (Mode_plus_Longitudinal.res.abs_27 Real)
+    (Mode_plus_Longitudinal.res.abs_28 Real)
+    (Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap Bool)
+    (Mode_plus_Longitudinal.res.abs_29 Int)
+    (Mode_plus_Longitudinal.res.abs_30 Bool)
+    (Mode_plus_Longitudinal.res.abs_31 Int)
+    (Mode_plus_Longitudinal.res.abs_32 Bool)
+    (Mode_plus_Longitudinal.res.abs_33 Bool)
+    (Mode_plus_Longitudinal.res.abs_34 Int)
+    (Mode_plus_Longitudinal.res.abs_35 Bool)
+    (Mode_plus_Longitudinal.res.abs_36 Int)
+    (Mode_plus_Longitudinal.res.abs_37 Bool)
+    (Mode_plus_Longitudinal.res.abs_38 Bool)
+    (Mode_plus_Longitudinal.res.abs_39 Bool)
+    (Mode_plus_Longitudinal.res.abs_40 Bool)
+    (Mode_plus_Longitudinal.res.abs_41 Bool)
+    (Mode_plus_Longitudinal.res.abs_42 Bool)
+    (Mode_plus_Longitudinal.res.abs_43 Bool)
+    (Mode_plus_Longitudinal.res.abs_44 Bool)
+    (Mode_plus_Longitudinal.res.abs_45 Int)
+    (Mode_plus_Longitudinal.res.abs_46 Bool)
+    (Mode_plus_Longitudinal.res.abs_47 Bool)
+    (Mode_plus_Longitudinal.res.abs_48 Bool)
+    (Mode_plus_Longitudinal.res.abs_49 Bool)
+    (Mode_plus_Longitudinal.res.abs_50 Bool)
+    (Mode_plus_Longitudinal.contract.usr.rising Bool)
+    (Mode_plus_Longitudinal.contract.usr.lowering Bool)
+    (Mode_plus_Longitudinal.res.abs_51 Bool)
+    (Mode_plus_Longitudinal.res.abs_52 Bool)
+    (Mode_plus_Longitudinal.res.abs_53 Bool)
+    (Mode_plus_Longitudinal.res.abs_54 Real)
+    (Mode_plus_Longitudinal.res.abs_55 Bool)
+    (Mode_plus_Longitudinal.res.abs_56 Bool)
+    (Mode_plus_Longitudinal.res.abs_57 Bool)
+    (Mode_plus_Longitudinal.res.abs_58 Bool)
+    (Mode_plus_Longitudinal.res.abs_59 Bool)
+    (Mode_plus_Longitudinal.res.abs_60 Bool)
+    (Mode_plus_Longitudinal.res.abs_61 Bool)
+    (Mode_plus_Longitudinal.res.abs_62 Bool)
+    (Mode_plus_Longitudinal.res.abs_63 Bool)
+    (Mode_plus_Longitudinal.res.abs_64 Bool)
+    (Mode_plus_Longitudinal.res.abs_65 Bool)
+    (Mode_plus_Longitudinal.res.abs_66 Bool)
+    (Mode_plus_Longitudinal.res.abs_67 Bool)
+    (Mode_plus_Longitudinal.res.abs_68 Bool)
+    (Mode_plus_Longitudinal.res.abs_69 Bool)
+    (Mode_plus_Longitudinal.res.abs_70 Bool)
+    (Mode_plus_Longitudinal.res.abs_71 Bool)
+    (Mode_plus_Longitudinal.res.abs_72 Real)
+    (Mode_plus_Longitudinal.res.abs_73 Real)
+    (Mode_plus_Longitudinal.res.abs_74 Real)
+    (Mode_plus_Longitudinal.res.abs_75 Real)
+    (Mode_plus_Longitudinal.res.abs_76 Real)
+    (Mode_plus_Longitudinal.res.abs_77 Bool)
+    (Mode_plus_Longitudinal.res.abs_78 Bool)
+    (Mode_plus_Longitudinal.res.abs_79 Bool)
+    (Mode_plus_Longitudinal.res.abs_80 Bool)
+    (Mode_plus_Longitudinal.res.abs_81 Bool)
+    (Mode_plus_Longitudinal.res.abs_82 Bool)
+    (Mode_plus_Longitudinal.res.abs_83 Bool)
+    (Mode_plus_Longitudinal.res.abs_84 Bool)
+    (Mode_plus_Longitudinal.res.abs_85 Bool)
+    (Mode_plus_Longitudinal.res.abs_86 Bool)
+    (Mode_plus_Longitudinal.res.abs_87 Bool)
+    (Mode_plus_Longitudinal.res.abs_88 Bool)
+    (Mode_plus_Longitudinal.res.abs_89 Bool)
+    (Mode_plus_Longitudinal.res.abs_90 Bool)
+    (Mode_plus_Longitudinal.res.abs_91 Bool)
+    (Mode_plus_Longitudinal.res.abs_92 Bool)
+    (Mode_plus_Longitudinal.res.abs_93 Bool)
+    (Mode_plus_Longitudinal.res.abs_94 Bool)
+    (Mode_plus_Longitudinal.res.abs_95 Bool)
+    (Mode_plus_Longitudinal.res.abs_96 Bool)
+    (Mode_plus_Longitudinal.res.abs_97 Bool)
+    (Mode_plus_Longitudinal.res.abs_98 Bool)
+    (Mode_plus_Longitudinal.res.abs_99 Bool)
+    (Mode_plus_Longitudinal.res.abs_100 Bool)
+    (Mode_plus_Longitudinal.res.abs_101 Bool)
+    (Mode_plus_Longitudinal.res.abs_102 Bool)
+    (Mode_plus_Longitudinal.res.abs_103 Real)
+    (Mode_plus_Longitudinal.res.abs_104 Bool)
+    (Mode_plus_Longitudinal.res.abs_105 Real)
+    (Mode_plus_Longitudinal.res.abs_106 Real)
+    (Mode_plus_Longitudinal.res.abs_107 Real)
+    (Mode_plus_Longitudinal.res.inst_197 Bool)
+    (Mode_plus_Longitudinal.res.inst_196 Bool)
+    (Mode_plus_Longitudinal.res.inst_195 Bool)
+    (Mode_plus_Longitudinal.res.inst_194 Bool)
+    (Mode_plus_Longitudinal.res.inst_193 Bool)
+    (Mode_plus_Longitudinal.res.inst_192 Bool)
+    (Mode_plus_Longitudinal.res.inst_191 Int)
+    (Mode_plus_Longitudinal.res.inst_190 Bool)
+    (Mode_plus_Longitudinal.res.inst_189 Int)
+    (Mode_plus_Longitudinal.res.inst_188 Bool)
+    (Mode_plus_Longitudinal.res.inst_187 Bool)
+    (Mode_plus_Longitudinal.res.inst_186 Int)
+    (Mode_plus_Longitudinal.res.inst_185 Bool)
+    (Mode_plus_Longitudinal.res.inst_184 Int)
+    (Mode_plus_Longitudinal.res.inst_183 Bool)
+    (Mode_plus_Longitudinal.res.inst_182 Bool)
+    (Mode_plus_Longitudinal.res.inst_181 Bool)
+    (Mode_plus_Longitudinal.res.inst_180 Bool)
+    (Mode_plus_Longitudinal.res.inst_179 Bool)
+    (Mode_plus_Longitudinal.res.inst_178 Int)
+    (Mode_plus_Longitudinal.res.inst_177 Bool)
+    (Mode_plus_Longitudinal.res.inst_176 Bool)
+    (Mode_plus_Longitudinal.res.inst_175 Bool)
+    (Mode_plus_Longitudinal.res.inst_174 Bool)
+    (Mode_plus_Longitudinal.res.inst_173 Bool)
+    (Mode_plus_Longitudinal.res.inst_172 Bool)
+    (Mode_plus_Longitudinal.res.inst_171 Bool)
+    (Mode_plus_Longitudinal.res.inst_170 Bool)
+    (Mode_plus_Longitudinal.res.inst_169 Bool)
+    (Mode_plus_Longitudinal.res.inst_168 Bool)
+    (Mode_plus_Longitudinal.res.inst_167 Bool)
+    (Mode_plus_Longitudinal.res.inst_166 Bool)
+    (Mode_plus_Longitudinal.res.inst_165 Bool)
+    (Mode_plus_Longitudinal.res.inst_164 Real)
+    (Mode_plus_Longitudinal.res.inst_163 Real)
+    (Mode_plus_Longitudinal.res.inst_162 Bool)
+    (Mode_plus_Longitudinal.res.inst_161 Int)
+    (Mode_plus_Longitudinal.res.inst_160 Bool)
+    (Mode_plus_Longitudinal.res.inst_159 Int)
+    (Mode_plus_Longitudinal.res.inst_158 Bool)
+    (Mode_plus_Longitudinal.res.inst_157 Bool)
+    (Mode_plus_Longitudinal.res.inst_156 Int)
+    (Mode_plus_Longitudinal.res.inst_155 Bool)
+    (Mode_plus_Longitudinal.res.inst_154 Int)
+    (Mode_plus_Longitudinal.res.inst_153 Bool)
+    (Mode_plus_Longitudinal.res.inst_152 Bool)
+    (Mode_plus_Longitudinal.res.inst_151 Bool)
+    (Mode_plus_Longitudinal.res.inst_150 Bool)
+    (Mode_plus_Longitudinal.res.inst_149 Bool)
+    (Mode_plus_Longitudinal.res.inst_148 Bool)
+    (Mode_plus_Longitudinal.res.inst_147 Bool)
+    (Mode_plus_Longitudinal.res.inst_146 Bool)
+    (Mode_plus_Longitudinal.res.inst_145 Int)
+    (Mode_plus_Longitudinal.res.inst_144 Bool)
+    (Mode_plus_Longitudinal.res.inst_143 Bool)
+    (Mode_plus_Longitudinal.res.inst_142 Bool)
+    (Mode_plus_Longitudinal.res.inst_141 Bool)
+    (Mode_plus_Longitudinal.res.inst_140 Bool)
+    (Mode_plus_Longitudinal.res.inst_139 Bool)
+    (Mode_plus_Longitudinal.res.inst_138 Bool)
+    (Mode_plus_Longitudinal.res.inst_137 Bool)
+    (Mode_plus_Longitudinal.res.inst_136 Bool)
+    (Mode_plus_Longitudinal.res.inst_135 Bool)
+    (Mode_plus_Longitudinal.res.inst_134 Bool)
+    (Mode_plus_Longitudinal.res.inst_133 Bool)
+    (Mode_plus_Longitudinal.res.inst_132 Bool)
+    (Mode_plus_Longitudinal.res.inst_131 Bool)
+    (Mode_plus_Longitudinal.res.inst_130 Bool)
+    (Mode_plus_Longitudinal.res.inst_129 Bool)
+    (Mode_plus_Longitudinal.res.inst_128 Bool)
+    (Mode_plus_Longitudinal.res.inst_127 Bool)
+    (Mode_plus_Longitudinal.res.inst_126 Bool)
+    (Mode_plus_Longitudinal.res.inst_125 Bool)
+    (Mode_plus_Longitudinal.res.inst_124 Bool)
+    (Mode_plus_Longitudinal.res.inst_123 Bool)
+    (Mode_plus_Longitudinal.res.inst_122 Bool)
+    (Mode_plus_Longitudinal.res.inst_121 Bool)
+    (Mode_plus_Longitudinal.res.inst_120 Bool)
+    (Mode_plus_Longitudinal.res.inst_119 Bool)
+    (Mode_plus_Longitudinal.res.inst_118 Bool)
+    (Mode_plus_Longitudinal.res.inst_117 Bool)
+    (Mode_plus_Longitudinal.res.inst_116 Bool)
+    (Mode_plus_Longitudinal.res.inst_115 Bool)
+    (Mode_plus_Longitudinal.res.inst_114 Bool)
+    (Mode_plus_Longitudinal.res.inst_113 Bool)
+    (Mode_plus_Longitudinal.res.inst_112 Bool)
+    (Mode_plus_Longitudinal.res.inst_111 Bool)
+    (Mode_plus_Longitudinal.res.inst_110 Bool)
+    (Mode_plus_Longitudinal.res.inst_109 Bool)
+    (Mode_plus_Longitudinal.res.inst_108 Bool)
+    (Mode_plus_Longitudinal.res.inst_107 Bool)
+    (Mode_plus_Longitudinal.res.inst_106 Bool)
+    (Mode_plus_Longitudinal.res.inst_105 Bool)
+    (Mode_plus_Longitudinal.res.inst_104 Bool)
+    (Mode_plus_Longitudinal.res.inst_103 Bool)
+    (Mode_plus_Longitudinal.res.inst_102 Bool)
+    (Mode_plus_Longitudinal.res.inst_101 Bool)
+    (Mode_plus_Longitudinal.res.inst_100 Bool)
+    (Mode_plus_Longitudinal.res.inst_99 Bool)
+    (Mode_plus_Longitudinal.res.inst_98 Bool)
+    (Mode_plus_Longitudinal.res.inst_97 Bool)
+    (Mode_plus_Longitudinal.res.inst_96 Bool)
+    (Mode_plus_Longitudinal.res.inst_95 Bool)
+    (Mode_plus_Longitudinal.res.inst_94 Real)
+    (Mode_plus_Longitudinal.res.inst_93 Real)
+    (Mode_plus_Longitudinal.res.inst_92 Bool)
+    (Mode_plus_Longitudinal.res.inst_91 Bool)
+    (Mode_plus_Longitudinal.res.inst_90 Real)
+    (Mode_plus_Longitudinal.res.inst_89 Real)
+    (Mode_plus_Longitudinal.res.inst_88 Bool)
+    (Mode_plus_Longitudinal.res.inst_87 Bool)
+    (Mode_plus_Longitudinal.res.inst_86 Real)
+    (Mode_plus_Longitudinal.res.inst_85 Real)
+    (Mode_plus_Longitudinal.res.inst_84 Bool)
+    (Mode_plus_Longitudinal.res.inst_83 Bool)
+    (Mode_plus_Longitudinal.res.inst_82 Real)
+    (Mode_plus_Longitudinal.res.inst_81 Real)
+    (Mode_plus_Longitudinal.res.inst_80 Bool)
+    (Mode_plus_Longitudinal.res.inst_79 Bool)
+    (Mode_plus_Longitudinal.res.inst_78 Real)
+    (Mode_plus_Longitudinal.res.inst_77 Real)
+    (Mode_plus_Longitudinal.res.inst_76 Bool)
+    (Mode_plus_Longitudinal.res.inst_75 Bool)
+    (Mode_plus_Longitudinal.res.inst_74 Bool)
+    (Mode_plus_Longitudinal.res.inst_73 Bool)
+    (Mode_plus_Longitudinal.res.inst_72 Bool)
+    (Mode_plus_Longitudinal.res.inst_71 Bool)
+    (Mode_plus_Longitudinal.res.inst_70 Bool)
+    (Mode_plus_Longitudinal.res.inst_69 Bool)
+    (Mode_plus_Longitudinal.res.inst_68 Bool)
+    (Mode_plus_Longitudinal.res.inst_67 Real)
+    (Mode_plus_Longitudinal.res.inst_66 Bool)
+    (Mode_plus_Longitudinal.res.inst_65 Bool)
+    (Mode_plus_Longitudinal.res.inst_64 Bool)
+    (Mode_plus_Longitudinal.res.inst_63 Bool)
+    (Mode_plus_Longitudinal.res.inst_62 Bool)
+    (Mode_plus_Longitudinal.res.inst_61 Bool)
+    (Mode_plus_Longitudinal.res.inst_60 Bool)
+    (Mode_plus_Longitudinal.res.inst_59 Bool)
+    (Mode_plus_Longitudinal.res.inst_58 Bool)
+    (Mode_plus_Longitudinal.res.inst_57 Bool)
+    (Mode_plus_Longitudinal.res.inst_56 Bool)
+    (Mode_plus_Longitudinal.res.inst_55 Bool)
+    (Mode_plus_Longitudinal.res.inst_54 Bool)
+    (Mode_plus_Longitudinal.res.inst_53 Bool)
+    (Mode_plus_Longitudinal.res.inst_52 Bool)
+    (Mode_plus_Longitudinal.res.inst_51 Real)
+    (Mode_plus_Longitudinal.res.inst_50 Real)
+    (Mode_plus_Longitudinal.res.inst_49 Real)
+    (Mode_plus_Longitudinal.res.inst_48 Real)
+    (Mode_plus_Longitudinal.res.inst_47 Real)
+    (Mode_plus_Longitudinal.res.inst_46 Bool)
+    (Mode_plus_Longitudinal.res.inst_45 Bool)
+    (Mode_plus_Longitudinal.res.inst_44 Bool)
+    (Mode_plus_Longitudinal.res.inst_43 Bool)
+    (Mode_plus_Longitudinal.res.inst_42 Bool)
+    (Mode_plus_Longitudinal.res.inst_41 Bool)
+    (Mode_plus_Longitudinal.res.inst_40 Bool)
+    (Mode_plus_Longitudinal.res.inst_39 Bool)
+    (Mode_plus_Longitudinal.res.inst_38 Bool)
+    (Mode_plus_Longitudinal.res.inst_37 Bool)
+    (Mode_plus_Longitudinal.res.inst_36 Bool)
+    (Mode_plus_Longitudinal.res.inst_35 Bool)
+    (Mode_plus_Longitudinal.res.inst_34 Bool)
+    (Mode_plus_Longitudinal.res.inst_33 Bool)
+    (Mode_plus_Longitudinal.res.inst_32 Bool)
+    (Mode_plus_Longitudinal.res.inst_31 Bool)
+    (Mode_plus_Longitudinal.res.inst_30 Bool)
+    (Mode_plus_Longitudinal.res.inst_29 Bool)
+    (Mode_plus_Longitudinal.res.inst_28 Bool)
+    (Mode_plus_Longitudinal.res.inst_27 Bool)
+    (Mode_plus_Longitudinal.res.inst_26 Bool)
+    (Mode_plus_Longitudinal.res.inst_25 Real)
+    (Mode_plus_Longitudinal.res.inst_24 Real)
+    (Mode_plus_Longitudinal.res.inst_23 Bool)
+    (Mode_plus_Longitudinal.res.inst_22 Bool)
+    (Mode_plus_Longitudinal.res.inst_21 Real)
+    (Mode_plus_Longitudinal.res.inst_20 Real)
+    (Mode_plus_Longitudinal.res.inst_19 Bool)
+    (Mode_plus_Longitudinal.res.inst_18 Bool)
+    (Mode_plus_Longitudinal.res.inst_17 Real)
+    (Mode_plus_Longitudinal.res.inst_16 Real)
+    (Mode_plus_Longitudinal.res.inst_15 Bool)
+    (Mode_plus_Longitudinal.res.inst_14 Bool)
+    (Mode_plus_Longitudinal.res.inst_13 Real)
+    (Mode_plus_Longitudinal.res.inst_12 Real)
+    (Mode_plus_Longitudinal.res.inst_11 Bool)
+    (Mode_plus_Longitudinal.res.inst_10 Bool)
+    (Mode_plus_Longitudinal.res.inst_9 Real)
+    (Mode_plus_Longitudinal.res.inst_8 Real)
+    (Mode_plus_Longitudinal.res.inst_7 Bool)
+    (Mode_plus_Longitudinal.res.inst_6 Bool)
+    (Mode_plus_Longitudinal.res.inst_5 Bool)
+    (Mode_plus_Longitudinal.res.inst_4 Bool)
+    (Mode_plus_Longitudinal.res.inst_3 Bool)
+    (Mode_plus_Longitudinal.res.inst_2 Bool)
+    (Mode_plus_Longitudinal.res.inst_1 Bool)
+    (Mode_plus_Longitudinal.res.inst_0 Bool)
+  ) (
+    (and
+     (=
+      (_ curr Mode_plus_Longitudinal.usr.head_eng_out)
+      (_ curr Mode_plus_Longitudinal.res.abs_99))
+     (=
+      (_ curr Mode_plus_Longitudinal.usr.alt_eng_out)
+      (_ curr Mode_plus_Longitudinal.res.abs_100))
+     (=
+      (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out)
+      (_ curr Mode_plus_Longitudinal.res.abs_101))
+     (and
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_1)
+       (and
+        false
+        (not (not (= (_ curr Mode_plus_Longitudinal.usr.head_mode) 0.0)))))
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_0)
+       (not (= (_ curr Mode_plus_Longitudinal.usr.head_mode) 0.0)))
+      (=
+       (_ curr Mode_plus_Longitudinal.contract.usr.head_req)
+       (_ curr Mode_plus_Longitudinal.res.abs_2))
+      (=
+       (_ curr Mode_plus_Longitudinal.contract.usr.deactivate)
+       (or
+        (not (= (_ curr Mode_plus_Longitudinal.usr.elev_stick_in) 0.0))
+        (not (= (_ curr Mode_plus_Longitudinal.usr.ail_stick_in) 0.0))))
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_4)
+       (not (not (= (_ curr Mode_plus_Longitudinal.usr.head_mode) 0.0))))
+      (= (_ curr Mode_plus_Longitudinal.res.abs_6) true)
+      (= (_ curr Mode_plus_Longitudinal.res.abs_7) true)
+      (= (_ curr Mode_plus_Longitudinal.res.abs_11) true)
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_9)
+       (not (_ curr Mode_plus_Longitudinal.contract.usr.deactivate)))
+      (= (_ curr Mode_plus_Longitudinal.res.abs_12) true)
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_15)
+       (not
+        (and
+         (_ curr Mode_plus_Longitudinal.res.abs_13)
+         (_ curr Mode_plus_Longitudinal.res.abs_14))))
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_17)
+       (> (_ curr Mode_plus_Longitudinal.res.abs_16) 0))
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_18)
+       (not (_ curr Mode_plus_Longitudinal.usr.head_eng_out)))
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_19)
+       (not (_ curr Mode_plus_Longitudinal.res.abs_17)))
+      (=
+       (_ curr Mode_plus_Longitudinal.res.abs_20)
+       (not (_ curr Mode_plus_Longitudinal.contract.usr.head_req)))
+      (and
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_22)
+        (and
+         false
+         (not (not (= (_ curr Mode_plus_Longitudinal.usr.alt_mode) 0.0)))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_21)
+        (not (= (_ curr Mode_plus_Longitudinal.usr.alt_mode) 0.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+        (_ curr Mode_plus_Longitudinal.res.abs_23))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_25)
+        (and
+         false
+         (not (not (= (_ curr Mode_plus_Longitudinal.usr.fpa_mode) 0.0)))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_24)
+        (not (= (_ curr Mode_plus_Longitudinal.usr.fpa_mode) 0.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+        (_ curr Mode_plus_Longitudinal.res.abs_26))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_27)
+        (-
+         (_ curr Mode_plus_Longitudinal.usr.alt_in)
+         (_ curr Mode_plus_Longitudinal.usr.alt_cmd_in)))
+       (=
+        (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap)
+        (> (_ curr Mode_plus_Longitudinal.res.abs_28) 200.0))
+       (=
+        (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)
+        (not (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap)))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_32) true)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_30)
+        (not (not (= (_ curr Mode_plus_Longitudinal.usr.alt_mode) 0.0))))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_33) true)
+       (= (_ curr Mode_plus_Longitudinal.res.abs_37) true)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_35)
+        (not (not (= (_ curr Mode_plus_Longitudinal.usr.fpa_mode) 0.0))))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_38) true)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_40)
+        (=>
+         (_ curr Mode_plus_Longitudinal.res.abs_39)
+         (not (_ curr Mode_plus_Longitudinal.res.abs_14))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_42)
+        (=>
+         (_ curr Mode_plus_Longitudinal.res.abs_41)
+         (not (_ curr Mode_plus_Longitudinal.res.abs_14))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_43)
+        (not
+         (and
+          (_ curr Mode_plus_Longitudinal.usr.alt_eng_out)
+          (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_44)
+        (not
+         (or
+          (not (= (_ curr Mode_plus_Longitudinal.usr.alt_mode) 0.0))
+          (not (= (_ curr Mode_plus_Longitudinal.usr.fpa_mode) 0.0)))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_46)
+        (> (_ curr Mode_plus_Longitudinal.res.abs_45) 0))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_47)
+        (not
+         (or
+          (_ curr Mode_plus_Longitudinal.usr.alt_eng_out)
+          (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_48)
+        (not (_ curr Mode_plus_Longitudinal.res.abs_46)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_49)
+        (not (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_50)
+        (not (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_51)
+        (>= (_ curr Mode_plus_Longitudinal.usr.speed_in) 0.0))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_52)
+        (>= (_ curr Mode_plus_Longitudinal.usr.gskts_in) 0.0))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_53)
+        (>= (_ curr Mode_plus_Longitudinal.usr.cas_in) 0.0))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_54) 1.0)
+       (= (_ curr Mode_plus_Longitudinal.res.abs_60) true)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_61)
+        (=>
+         (or
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_50)
+             (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ curr Mode_plus_Longitudinal.usr.speed_in) 100.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_62)
+        (=>
+         (or
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_50)
+             (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ curr Mode_plus_Longitudinal.usr.gskts_in) 100.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_63)
+        (=>
+         (or
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_50)
+             (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ curr Mode_plus_Longitudinal.usr.cas_in) 100.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_64)
+        (=>
+         (or
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_50)
+             (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ curr Mode_plus_Longitudinal.usr.alt_cmd_in) 0.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_65)
+        (=>
+         (or
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_50)
+             (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (= (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_66)
+        (not
+         (and
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_50)
+             (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_67)
+        (or
+         (and
+          (and
+           (_ curr Mode_plus_Longitudinal.res.abs_50)
+           (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+          (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+         (and
+          (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+          (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_69)
+        (=>
+         (_ curr Mode_plus_Longitudinal.res.abs_68)
+         (not
+          (or
+           (and
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ curr Mode_plus_Longitudinal.res.abs_49)
+             (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_70) true)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_71)
+        (or
+         (and
+          (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+          (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+         (and
+          (and
+           (_ curr Mode_plus_Longitudinal.res.abs_49)
+           (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+          (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_77) true)
+       (= (_ curr Mode_plus_Longitudinal.res.abs_72) 0.0)
+       (=
+        (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)
+        (_ curr Mode_plus_Longitudinal.res.abs_106))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_75) 0.0)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_74)
+        (-
+         (_ curr Mode_plus_Longitudinal.usr.pitch_in)
+         (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_78) true)
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_79)
+        (not (= (_ curr Mode_plus_Longitudinal.usr.elev_stick_in) 0.0)))
+       (=
+        (_ curr Mode_plus_Longitudinal.usr.elev_cmd_out)
+        (_ curr Mode_plus_Longitudinal.res.abs_107))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_80)
+        (=
+         (_ curr Mode_plus_Longitudinal.usr.elev_cmd_out)
+         (_ curr Mode_plus_Longitudinal.usr.elev_stick_in)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_81)
+        (not (_ curr Mode_plus_Longitudinal.res.abs_79)))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_82)
+        (> (_ curr Mode_plus_Longitudinal.usr.cas_in) 500.0))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_83)
+        (= (_ curr Mode_plus_Longitudinal.usr.elev_cmd_out) 0.0))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_84)
+        (not
+         (and
+          (_ curr Mode_plus_Longitudinal.res.abs_82)
+          (_ curr Mode_plus_Longitudinal.res.abs_81))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_85)
+        (not
+         (or
+          (and
+           (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+           (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+          (and
+           (and
+            (_ curr Mode_plus_Longitudinal.res.abs_49)
+            (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+           (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_86)
+        (not
+         (or
+          (and
+           (and
+            (_ curr Mode_plus_Longitudinal.res.abs_50)
+            (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+           (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+          (and
+           (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+           (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))))
+       (=
+        (_ curr Mode_plus_Longitudinal.res.abs_88)
+        (or
+         (and
+          (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+          (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+         (and
+          (and
+           (_ curr Mode_plus_Longitudinal.res.abs_49)
+           (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+          (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+       (= (_ curr Mode_plus_Longitudinal.res.abs_89) false)
+       (and
+        (=
+         (_ curr Mode_plus_Longitudinal.res.abs_90)
+         (>
+          (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+          (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+        (and
+         (=
+          (_ curr Mode_plus_Longitudinal.contract.usr.rising)
+          (or
+           (or
+            (>
+             (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)
+             (_ curr Mode_plus_Longitudinal.usr.pitch_in))
+            (>=
+             (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)
+             (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+           (<=
+            (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+            (+ (_ curr Mode_plus_Longitudinal.usr.fpa_in) 0.0))))
+         (=
+          (_ curr Mode_plus_Longitudinal.res.abs_93)
+          (_ curr Mode_plus_Longitudinal.contract.usr.rising))
+         (=
+          (_ curr Mode_plus_Longitudinal.res.abs_91)
+          (<=
+           (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+           (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+         (=
+          (_ curr Mode_plus_Longitudinal.res.abs_92)
+          (=
+           (_ curr Mode_plus_Longitudinal.usr.pitch_in)
+           (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+         (and
+          (=
+           (_ curr Mode_plus_Longitudinal.res.abs_94)
+           (<
+            (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+            (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (_ curr Mode_plus_Longitudinal.contract.usr.lowering)
+           (or
+            (or
+             (<
+              (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)
+              (_ curr Mode_plus_Longitudinal.usr.pitch_in))
+             (<=
+              (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)
+              (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+            (>=
+             (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+             (+ (_ curr Mode_plus_Longitudinal.usr.fpa_in) 0.0))))
+          (=
+           (_ curr Mode_plus_Longitudinal.res.abs_96)
+           (_ curr Mode_plus_Longitudinal.contract.usr.lowering))
+          (=
+           (_ curr Mode_plus_Longitudinal.res.abs_95)
+           (>=
+            (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+            (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (_ curr Mode_plus_Longitudinal.res.abs_97)
+           (>=
+            (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+            (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (_ curr Mode_plus_Longitudinal.res.abs_98)
+           (<=
+            (+ (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)
+            (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+          (=>
+           (_ curr Mode_plus_Longitudinal.res.abs_104)
+           (not (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out)))
+          (_ curr Mode_plus_Longitudinal.res.init_flag)
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (and
+                   (and
+                    (and
+                     (and
+                      (and
+                       (and
+                        (and
+                         (and
+                          (and
+                           (and
+                            (and
+                             (and
+                              (and
+                               (and
+                                (and
+                                 (and
+                                  (and
+                                   (and
+                                    (and
+                                     (and
+                                      (and
+                                       (and
+                                        (_ curr Mode_plus_Longitudinal.res.abs_6)
+                                        (_ curr Mode_plus_Longitudinal.res.abs_7))
+                                       (_ curr Mode_plus_Longitudinal.res.abs_11))
+                                      (_ curr Mode_plus_Longitudinal.res.abs_12))
+                                     (_ curr Mode_plus_Longitudinal.res.abs_15))
+                                    (_ curr Mode_plus_Longitudinal.res.abs_32))
+                                   (_ curr Mode_plus_Longitudinal.res.abs_33))
+                                  (_ curr Mode_plus_Longitudinal.res.abs_37))
+                                 (_ curr Mode_plus_Longitudinal.res.abs_38))
+                                (_ curr Mode_plus_Longitudinal.res.abs_11))
+                               (_ curr Mode_plus_Longitudinal.res.abs_12))
+                              (_ curr Mode_plus_Longitudinal.res.abs_40))
+                             (_ curr Mode_plus_Longitudinal.res.abs_42))
+                            (_ curr Mode_plus_Longitudinal.res.abs_51))
+                           (_ curr Mode_plus_Longitudinal.res.abs_52))
+                          (_ curr Mode_plus_Longitudinal.res.abs_53))
+                         (_ curr Mode_plus_Longitudinal.res.abs_55))
+                        (_ curr Mode_plus_Longitudinal.res.abs_56))
+                       (_ curr Mode_plus_Longitudinal.res.abs_57))
+                      (_ curr Mode_plus_Longitudinal.res.abs_58))
+                     (_ curr Mode_plus_Longitudinal.res.abs_59))
+                    (_ curr Mode_plus_Longitudinal.res.abs_60))
+                   (_ curr Mode_plus_Longitudinal.res.abs_61))
+                  (_ curr Mode_plus_Longitudinal.res.abs_62))
+                 (_ curr Mode_plus_Longitudinal.res.abs_63))
+                (_ curr Mode_plus_Longitudinal.res.abs_64))
+               (_ curr Mode_plus_Longitudinal.res.abs_65))
+              (_ curr Mode_plus_Longitudinal.res.abs_66))
+             (_ curr Mode_plus_Longitudinal.res.abs_69))
+            (_ curr Mode_plus_Longitudinal.res.abs_70))
+           (_ curr Mode_plus_Longitudinal.res.abs_77))))))))
+  ) (
+    (and
+     (=
+      (_ next Mode_plus_Longitudinal.usr.head_eng_out)
+      (_ next Mode_plus_Longitudinal.res.abs_99))
+     (=
+      (_ next Mode_plus_Longitudinal.usr.alt_eng_out)
+      (_ next Mode_plus_Longitudinal.res.abs_100))
+     (=
+      (_ next Mode_plus_Longitudinal.usr.fpa_eng_out)
+      (_ next Mode_plus_Longitudinal.res.abs_101))
+     (and
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_1)
+       (and
+        (_ curr Mode_plus_Longitudinal.contract.usr.deactivate)
+        (not (not (= (_ next Mode_plus_Longitudinal.usr.head_mode) 0.0)))))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_0)
+       (not (= (_ next Mode_plus_Longitudinal.usr.head_mode) 0.0)))
+      (=
+       (_ next Mode_plus_Longitudinal.contract.usr.head_req)
+       (_ next Mode_plus_Longitudinal.res.abs_2))
+      (=
+       (_ next Mode_plus_Longitudinal.contract.usr.deactivate)
+       (or
+        (not (= (_ next Mode_plus_Longitudinal.usr.elev_stick_in) 0.0))
+        (not (= (_ next Mode_plus_Longitudinal.usr.ail_stick_in) 0.0))))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_4)
+       (not (not (= (_ next Mode_plus_Longitudinal.usr.head_mode) 0.0))))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_6)
+       (=>
+        (= (_ next Mode_plus_Longitudinal.res.abs_3) 1)
+        (> (_ curr Mode_plus_Longitudinal.res.abs_5) 1)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_7)
+       (=>
+        (= (_ next Mode_plus_Longitudinal.res.abs_5) 1)
+        (> (_ curr Mode_plus_Longitudinal.res.abs_3) 1)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_11)
+       (=>
+        (= (_ next Mode_plus_Longitudinal.res.abs_8) 1)
+        (> (_ curr Mode_plus_Longitudinal.res.abs_10) 1)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_9)
+       (not (_ next Mode_plus_Longitudinal.contract.usr.deactivate)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_12)
+       (=>
+        (= (_ next Mode_plus_Longitudinal.res.abs_10) 1)
+        (> (_ curr Mode_plus_Longitudinal.res.abs_8) 1)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_15)
+       (not
+        (and
+         (_ next Mode_plus_Longitudinal.res.abs_13)
+         (_ next Mode_plus_Longitudinal.res.abs_14))))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_17)
+       (> (_ next Mode_plus_Longitudinal.res.abs_16) 0))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_18)
+       (not (_ next Mode_plus_Longitudinal.usr.head_eng_out)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_19)
+       (not (_ next Mode_plus_Longitudinal.res.abs_17)))
+      (=
+       (_ next Mode_plus_Longitudinal.res.abs_20)
+       (not (_ next Mode_plus_Longitudinal.contract.usr.head_req)))
+      (and
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_22)
+        (and
+         (_ curr Mode_plus_Longitudinal.contract.usr.deactivate)
+         (not (not (= (_ next Mode_plus_Longitudinal.usr.alt_mode) 0.0)))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_21)
+        (not (= (_ next Mode_plus_Longitudinal.usr.alt_mode) 0.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+        (_ next Mode_plus_Longitudinal.res.abs_23))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_25)
+        (and
+         (_ curr Mode_plus_Longitudinal.contract.usr.deactivate)
+         (not (not (= (_ next Mode_plus_Longitudinal.usr.fpa_mode) 0.0)))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_24)
+        (not (= (_ next Mode_plus_Longitudinal.usr.fpa_mode) 0.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+        (_ next Mode_plus_Longitudinal.res.abs_26))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_27)
+        (-
+         (_ next Mode_plus_Longitudinal.usr.alt_in)
+         (_ next Mode_plus_Longitudinal.usr.alt_cmd_in)))
+       (=
+        (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap)
+        (> (_ next Mode_plus_Longitudinal.res.abs_28) 200.0))
+       (=
+        (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)
+        (not (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_32)
+        (=>
+         (= (_ next Mode_plus_Longitudinal.res.abs_29) 1)
+         (> (_ curr Mode_plus_Longitudinal.res.abs_31) 1)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_30)
+        (not (not (= (_ next Mode_plus_Longitudinal.usr.alt_mode) 0.0))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_33)
+        (=>
+         (= (_ next Mode_plus_Longitudinal.res.abs_31) 1)
+         (> (_ curr Mode_plus_Longitudinal.res.abs_29) 1)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_37)
+        (=>
+         (= (_ next Mode_plus_Longitudinal.res.abs_34) 1)
+         (> (_ curr Mode_plus_Longitudinal.res.abs_36) 1)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_35)
+        (not (not (= (_ next Mode_plus_Longitudinal.usr.fpa_mode) 0.0))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_38)
+        (=>
+         (= (_ next Mode_plus_Longitudinal.res.abs_36) 1)
+         (> (_ curr Mode_plus_Longitudinal.res.abs_34) 1)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_40)
+        (=>
+         (_ next Mode_plus_Longitudinal.res.abs_39)
+         (not (_ next Mode_plus_Longitudinal.res.abs_14))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_42)
+        (=>
+         (_ next Mode_plus_Longitudinal.res.abs_41)
+         (not (_ next Mode_plus_Longitudinal.res.abs_14))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_43)
+        (not
+         (and
+          (_ next Mode_plus_Longitudinal.usr.alt_eng_out)
+          (_ next Mode_plus_Longitudinal.usr.fpa_eng_out))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_44)
+        (not
+         (or
+          (not (= (_ next Mode_plus_Longitudinal.usr.alt_mode) 0.0))
+          (not (= (_ next Mode_plus_Longitudinal.usr.fpa_mode) 0.0)))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_46)
+        (> (_ next Mode_plus_Longitudinal.res.abs_45) 0))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_47)
+        (not
+         (or
+          (_ next Mode_plus_Longitudinal.usr.alt_eng_out)
+          (_ next Mode_plus_Longitudinal.usr.fpa_eng_out))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_48)
+        (not (_ next Mode_plus_Longitudinal.res.abs_46)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_49)
+        (not (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_50)
+        (not (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_51)
+        (>= (_ next Mode_plus_Longitudinal.usr.speed_in) 0.0))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_52)
+        (>= (_ next Mode_plus_Longitudinal.usr.gskts_in) 0.0))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_53)
+        (>= (_ next Mode_plus_Longitudinal.usr.cas_in) 0.0))
+       (= (_ next Mode_plus_Longitudinal.res.abs_54) 1.0)
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_60)
+        (=
+         (_ next Mode_plus_Longitudinal.usr.alt_in)
+         (+
+          (_ next Mode_plus_Longitudinal.usr.hdot_in)
+          (_ curr Mode_plus_Longitudinal.usr.alt_in))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_61)
+        (=>
+         (or
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_50)
+             (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ next Mode_plus_Longitudinal.usr.speed_in) 100.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_62)
+        (=>
+         (or
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_50)
+             (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ next Mode_plus_Longitudinal.usr.gskts_in) 100.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_63)
+        (=>
+         (or
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_50)
+             (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ next Mode_plus_Longitudinal.usr.cas_in) 100.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_64)
+        (=>
+         (or
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_50)
+             (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (>= (_ next Mode_plus_Longitudinal.usr.alt_cmd_in) 0.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_65)
+        (=>
+         (or
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_50)
+             (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+         (= (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in) 0.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_66)
+        (not
+         (and
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))
+          (or
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_50)
+             (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_67)
+        (or
+         (and
+          (and
+           (_ next Mode_plus_Longitudinal.res.abs_50)
+           (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+          (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+         (and
+          (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+          (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_69)
+        (=>
+         (_ next Mode_plus_Longitudinal.res.abs_68)
+         (not
+          (or
+           (and
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+            (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+           (and
+            (and
+             (_ next Mode_plus_Longitudinal.res.abs_49)
+             (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+            (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_70)
+        (and
+         (and
+          (=
+           (>
+            (_ next Mode_plus_Longitudinal.usr.pitch_in)
+            (_ curr Mode_plus_Longitudinal.usr.pitch_in))
+           (>
+            (_ next Mode_plus_Longitudinal.usr.fpa_in)
+            (_ curr Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (<
+            (_ next Mode_plus_Longitudinal.usr.pitch_in)
+            (_ curr Mode_plus_Longitudinal.usr.pitch_in))
+           (<
+            (_ next Mode_plus_Longitudinal.usr.fpa_in)
+            (_ curr Mode_plus_Longitudinal.usr.fpa_in))))
+         (=
+          (=
+           (_ next Mode_plus_Longitudinal.usr.pitch_in)
+           (_ curr Mode_plus_Longitudinal.usr.pitch_in))
+          (=
+           (_ next Mode_plus_Longitudinal.usr.fpa_in)
+           (_ curr Mode_plus_Longitudinal.usr.fpa_in)))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_71)
+        (or
+         (and
+          (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+          (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+         (and
+          (and
+           (_ next Mode_plus_Longitudinal.res.abs_49)
+           (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+          (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_75)
+        (_ curr Mode_plus_Longitudinal.res.abs_74))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_72)
+        (-
+         (_ next Mode_plus_Longitudinal.usr.pitch_in)
+         (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_77)
+        (=>
+         (_ curr Mode_plus_Longitudinal.res.abs_71)
+         (<=
+          (_ next Mode_plus_Longitudinal.res.abs_73)
+          (_ next Mode_plus_Longitudinal.res.abs_76))))
+       (=
+        (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)
+        (_ next Mode_plus_Longitudinal.res.abs_106))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_74)
+        (-
+         (_ next Mode_plus_Longitudinal.usr.pitch_in)
+         (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+       (= (_ next Mode_plus_Longitudinal.res.abs_78) true)
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_79)
+        (not (= (_ next Mode_plus_Longitudinal.usr.elev_stick_in) 0.0)))
+       (=
+        (_ next Mode_plus_Longitudinal.usr.elev_cmd_out)
+        (_ next Mode_plus_Longitudinal.res.abs_107))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_80)
+        (=
+         (_ next Mode_plus_Longitudinal.usr.elev_cmd_out)
+         (_ next Mode_plus_Longitudinal.usr.elev_stick_in)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_81)
+        (not (_ next Mode_plus_Longitudinal.res.abs_79)))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_82)
+        (> (_ next Mode_plus_Longitudinal.usr.cas_in) 500.0))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_83)
+        (= (_ next Mode_plus_Longitudinal.usr.elev_cmd_out) 0.0))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_84)
+        (not
+         (and
+          (_ next Mode_plus_Longitudinal.res.abs_82)
+          (_ next Mode_plus_Longitudinal.res.abs_81))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_85)
+        (not
+         (or
+          (and
+           (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested)
+           (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+          (and
+           (and
+            (_ next Mode_plus_Longitudinal.res.abs_49)
+            (_ next Mode_plus_Longitudinal.contract.usr.fpa_requested))
+           (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_86)
+        (not
+         (or
+          (and
+           (and
+            (_ next Mode_plus_Longitudinal.res.abs_50)
+            (_ next Mode_plus_Longitudinal.contract.usr.alt_requested))
+           (_ next Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+          (and
+           (_ next Mode_plus_Longitudinal.contract.usr.alt_requested)
+           (_ next Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap)))))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_88)
+        (_ next Mode_plus_Longitudinal.res.abs_87))
+       (=
+        (_ next Mode_plus_Longitudinal.res.abs_89)
+        (_ curr Mode_plus_Longitudinal.res.abs_71))
+       (and
+        (=
+         (_ next Mode_plus_Longitudinal.res.abs_90)
+         (>
+          (+
+           (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+           (*
+            (+ (- (/ 16 5)) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+            (/ 17 50)))
+          (_ next Mode_plus_Longitudinal.usr.fpa_in)))
+        (and
+         (=
+          (_ next Mode_plus_Longitudinal.contract.usr.rising)
+          (or
+           (or
+            (>
+             (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)
+             (_ next Mode_plus_Longitudinal.usr.pitch_in))
+            (>=
+             (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)
+             (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+           (<=
+            (+
+             (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+             (*
+              (+ (- (/ 16 5)) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+              (/ 17 50)))
+            (+
+             (_ next Mode_plus_Longitudinal.usr.fpa_in)
+             (-
+              (_ next Mode_plus_Longitudinal.usr.fpa_in)
+              (_ curr Mode_plus_Longitudinal.usr.fpa_in))))))
+         (=
+          (_ next Mode_plus_Longitudinal.res.abs_93)
+          (or
+           (or
+            (or
+             (_ curr Mode_plus_Longitudinal.res.abs_91)
+             (_ curr Mode_plus_Longitudinal.res.abs_92))
+            (_ next Mode_plus_Longitudinal.contract.usr.rising))
+           (_ curr Mode_plus_Longitudinal.contract.usr.rising)))
+         (=
+          (_ next Mode_plus_Longitudinal.res.abs_91)
+          (<=
+           (+
+            (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+            (*
+             (+ (- (/ 16 5)) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+             (/ 17 50)))
+           (_ next Mode_plus_Longitudinal.usr.fpa_in)))
+         (=
+          (_ next Mode_plus_Longitudinal.res.abs_92)
+          (=
+           (_ next Mode_plus_Longitudinal.usr.pitch_in)
+           (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+         (and
+          (=
+           (_ next Mode_plus_Longitudinal.res.abs_94)
+           (<
+            (+
+             (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+             (*
+              (+ (/ 16 5) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+              (/ 17 50)))
+            (_ next Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (_ next Mode_plus_Longitudinal.contract.usr.lowering)
+           (or
+            (or
+             (<
+              (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)
+              (_ next Mode_plus_Longitudinal.usr.pitch_in))
+             (<=
+              (_ next Mode_plus_Longitudinal.usr.pitch_cmd_out)
+              (_ curr Mode_plus_Longitudinal.usr.pitch_cmd_out)))
+            (>=
+             (+
+              (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+              (*
+               (+ (/ 16 5) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+               (/ 17 50)))
+             (+
+              (_ next Mode_plus_Longitudinal.usr.fpa_in)
+              (-
+               (_ next Mode_plus_Longitudinal.usr.fpa_in)
+               (_ curr Mode_plus_Longitudinal.usr.fpa_in))))))
+          (=
+           (_ next Mode_plus_Longitudinal.res.abs_96)
+           (or
+            (or
+             (or
+              (_ curr Mode_plus_Longitudinal.res.abs_95)
+              (_ curr Mode_plus_Longitudinal.res.abs_92))
+             (_ next Mode_plus_Longitudinal.contract.usr.lowering))
+            (_ curr Mode_plus_Longitudinal.contract.usr.lowering)))
+          (=
+           (_ next Mode_plus_Longitudinal.res.abs_95)
+           (>=
+            (+
+             (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+             (*
+              (+ (/ 16 5) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+              (/ 17 50)))
+            (_ next Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (_ next Mode_plus_Longitudinal.res.abs_97)
+           (>=
+            (+
+             (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+             (*
+              (+ (- (/ 16 5)) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+              (/ 17 50)))
+            (_ next Mode_plus_Longitudinal.usr.fpa_in)))
+          (=
+           (_ next Mode_plus_Longitudinal.res.abs_98)
+           (<=
+            (+
+             (_ next Mode_plus_Longitudinal.usr.fpa_cmd_in)
+             (*
+              (+ (/ 16 5) (_ curr Mode_plus_Longitudinal.usr.hdot_in))
+              (/ 17 50)))
+            (_ next Mode_plus_Longitudinal.usr.fpa_in)))
+          (=>
+           (_ next Mode_plus_Longitudinal.res.abs_104)
+           (not (_ next Mode_plus_Longitudinal.usr.fpa_eng_out)))
+          (not (_ next Mode_plus_Longitudinal.res.init_flag))
+          (and
+           (and
+            (and
+             (and
+              (and
+               (and
+                (and
+                 (and
+                  (and
+                   (and
+                    (and
+                     (and
+                      (and
+                       (and
+                        (and
+                         (and
+                          (and
+                           (and
+                            (and
+                             (and
+                              (and
+                               (and
+                                (and
+                                 (and
+                                  (and
+                                   (and
+                                    (and
+                                     (and
+                                      (and
+                                       (and
+                                        (_ next Mode_plus_Longitudinal.res.abs_6)
+                                        (_ next Mode_plus_Longitudinal.res.abs_7))
+                                       (_ next Mode_plus_Longitudinal.res.abs_11))
+                                      (_ next Mode_plus_Longitudinal.res.abs_12))
+                                     (_ next Mode_plus_Longitudinal.res.abs_15))
+                                    (_ next Mode_plus_Longitudinal.res.abs_32))
+                                   (_ next Mode_plus_Longitudinal.res.abs_33))
+                                  (_ next Mode_plus_Longitudinal.res.abs_37))
+                                 (_ next Mode_plus_Longitudinal.res.abs_38))
+                                (_ next Mode_plus_Longitudinal.res.abs_11))
+                               (_ next Mode_plus_Longitudinal.res.abs_12))
+                              (_ next Mode_plus_Longitudinal.res.abs_40))
+                             (_ next Mode_plus_Longitudinal.res.abs_42))
+                            (_ next Mode_plus_Longitudinal.res.abs_51))
+                           (_ next Mode_plus_Longitudinal.res.abs_52))
+                          (_ next Mode_plus_Longitudinal.res.abs_53))
+                         (_ next Mode_plus_Longitudinal.res.abs_55))
+                        (_ next Mode_plus_Longitudinal.res.abs_56))
+                       (_ next Mode_plus_Longitudinal.res.abs_57))
+                      (_ next Mode_plus_Longitudinal.res.abs_58))
+                     (_ next Mode_plus_Longitudinal.res.abs_59))
+                    (_ next Mode_plus_Longitudinal.res.abs_60))
+                   (_ next Mode_plus_Longitudinal.res.abs_61))
+                  (_ next Mode_plus_Longitudinal.res.abs_62))
+                 (_ next Mode_plus_Longitudinal.res.abs_63))
+                (_ next Mode_plus_Longitudinal.res.abs_64))
+               (_ next Mode_plus_Longitudinal.res.abs_65))
+              (_ next Mode_plus_Longitudinal.res.abs_66))
+             (_ next Mode_plus_Longitudinal.res.abs_69))
+            (_ next Mode_plus_Longitudinal.res.abs_70))
+           (_ next Mode_plus_Longitudinal.res.abs_77))))))))
+  ) (
+    (MODE_LOGIC (_ curr Mode_plus_Longitudinal.usr.head_mode) (_ curr Mode_plus_Longitudinal.usr.ail_stick_in) (_ curr Mode_plus_Longitudinal.usr.elev_stick_in) (_ curr Mode_plus_Longitudinal.usr.alt_mode) (_ curr Mode_plus_Longitudinal.usr.fpa_mode) (_ curr Mode_plus_Longitudinal.usr.at_mode) (_ curr Mode_plus_Longitudinal.usr.alt_cmd_in) (_ curr Mode_plus_Longitudinal.usr.alt_in) (_ curr Mode_plus_Longitudinal.usr.cas_in) (_ curr Mode_plus_Longitudinal.usr.cas_cmd) (_ curr Mode_plus_Longitudinal.res.abs_99) (_ curr Mode_plus_Longitudinal.res.abs_100) (_ curr Mode_plus_Longitudinal.res.abs_101) (_ curr Mode_plus_Longitudinal.res.abs_102) (_ curr Mode_plus_Longitudinal.res.abs_103) (_ curr Mode_plus_Longitudinal.res.inst_197) (_ curr Mode_plus_Longitudinal.res.inst_196) (_ curr Mode_plus_Longitudinal.res.inst_195) (_ curr Mode_plus_Longitudinal.res.inst_194) (_ curr Mode_plus_Longitudinal.res.inst_193) (_ curr Mode_plus_Longitudinal.res.inst_192) (_ curr Mode_plus_Longitudinal.res.inst_191) (_ curr Mode_plus_Longitudinal.res.inst_190) (_ curr Mode_plus_Longitudinal.res.inst_189) (_ curr Mode_plus_Longitudinal.res.inst_188) (_ curr Mode_plus_Longitudinal.res.inst_187) (_ curr Mode_plus_Longitudinal.res.inst_186) (_ curr Mode_plus_Longitudinal.res.inst_185) (_ curr Mode_plus_Longitudinal.res.inst_184) (_ curr Mode_plus_Longitudinal.res.inst_183) (_ curr Mode_plus_Longitudinal.res.inst_182) (_ curr Mode_plus_Longitudinal.res.inst_181) (_ curr Mode_plus_Longitudinal.res.inst_180) (_ curr Mode_plus_Longitudinal.res.inst_179) (_ curr Mode_plus_Longitudinal.res.inst_178) (_ curr Mode_plus_Longitudinal.res.inst_177) (_ curr Mode_plus_Longitudinal.res.inst_176) (_ curr Mode_plus_Longitudinal.res.inst_175) (_ curr Mode_plus_Longitudinal.res.inst_174) (_ curr Mode_plus_Longitudinal.res.inst_173) (_ curr Mode_plus_Longitudinal.res.inst_172) (_ curr Mode_plus_Longitudinal.res.inst_171) (_ curr Mode_plus_Longitudinal.res.inst_170) (_ curr Mode_plus_Longitudinal.res.inst_169) (_ curr Mode_plus_Longitudinal.res.inst_168) (_ curr Mode_plus_Longitudinal.res.inst_167) (_ curr Mode_plus_Longitudinal.res.inst_166) (_ curr Mode_plus_Longitudinal.res.inst_165) (_ curr Mode_plus_Longitudinal.res.inst_164) (_ curr Mode_plus_Longitudinal.res.inst_163) (_ curr Mode_plus_Longitudinal.res.inst_162) (_ curr Mode_plus_Longitudinal.res.inst_161) (_ curr Mode_plus_Longitudinal.res.inst_160) (_ curr Mode_plus_Longitudinal.res.inst_159) (_ curr Mode_plus_Longitudinal.res.inst_158) (_ curr Mode_plus_Longitudinal.res.inst_157) (_ curr Mode_plus_Longitudinal.res.inst_156) (_ curr Mode_plus_Longitudinal.res.inst_155) (_ curr Mode_plus_Longitudinal.res.inst_154) (_ curr Mode_plus_Longitudinal.res.inst_153) (_ curr Mode_plus_Longitudinal.res.inst_152) (_ curr Mode_plus_Longitudinal.res.inst_151) (_ curr Mode_plus_Longitudinal.res.inst_150) (_ curr Mode_plus_Longitudinal.res.inst_149) (_ curr Mode_plus_Longitudinal.res.inst_148) (_ curr Mode_plus_Longitudinal.res.inst_147) (_ curr Mode_plus_Longitudinal.res.inst_146) (_ curr Mode_plus_Longitudinal.res.inst_145) (_ curr Mode_plus_Longitudinal.res.inst_144) (_ curr Mode_plus_Longitudinal.res.inst_143) (_ curr Mode_plus_Longitudinal.res.inst_142) (_ curr Mode_plus_Longitudinal.res.inst_141) (_ curr Mode_plus_Longitudinal.res.inst_140) (_ curr Mode_plus_Longitudinal.res.inst_139) (_ curr Mode_plus_Longitudinal.res.inst_138) (_ curr Mode_plus_Longitudinal.res.inst_137) (_ curr Mode_plus_Longitudinal.res.inst_136) (_ curr Mode_plus_Longitudinal.res.inst_135) (_ curr Mode_plus_Longitudinal.res.inst_134) (_ curr Mode_plus_Longitudinal.res.inst_133) (_ curr Mode_plus_Longitudinal.res.inst_132) (_ curr Mode_plus_Longitudinal.res.inst_131) (_ curr Mode_plus_Longitudinal.res.inst_130) (_ curr Mode_plus_Longitudinal.res.inst_129) (_ curr Mode_plus_Longitudinal.res.inst_128) (_ curr Mode_plus_Longitudinal.res.inst_127) (_ curr Mode_plus_Longitudinal.res.inst_126) (_ curr Mode_plus_Longitudinal.res.inst_125) (_ curr Mode_plus_Longitudinal.res.inst_124) (_ curr Mode_plus_Longitudinal.res.inst_123) (_ curr Mode_plus_Longitudinal.res.inst_122) (_ curr Mode_plus_Longitudinal.res.inst_121) (_ curr Mode_plus_Longitudinal.res.inst_120) (_ curr Mode_plus_Longitudinal.res.inst_119) (_ curr Mode_plus_Longitudinal.res.inst_118) (_ curr Mode_plus_Longitudinal.res.inst_117) (_ curr Mode_plus_Longitudinal.res.inst_116))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_0) (_ curr Mode_plus_Longitudinal.res.abs_3) (_ curr Mode_plus_Longitudinal.res.inst_114))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_4) (_ curr Mode_plus_Longitudinal.res.abs_5) (_ curr Mode_plus_Longitudinal.res.inst_113))
+    (since (_ curr Mode_plus_Longitudinal.contract.usr.deactivate) (_ curr Mode_plus_Longitudinal.res.abs_8) (_ curr Mode_plus_Longitudinal.res.inst_112))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_9) (_ curr Mode_plus_Longitudinal.res.abs_10) (_ curr Mode_plus_Longitudinal.res.inst_111))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_21) (_ curr Mode_plus_Longitudinal.res.abs_29) (_ curr Mode_plus_Longitudinal.res.inst_103))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_30) (_ curr Mode_plus_Longitudinal.res.abs_31) (_ curr Mode_plus_Longitudinal.res.inst_102))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_24) (_ curr Mode_plus_Longitudinal.res.abs_34) (_ curr Mode_plus_Longitudinal.res.inst_101))
+    (since (_ curr Mode_plus_Longitudinal.res.abs_35) (_ curr Mode_plus_Longitudinal.res.abs_36) (_ curr Mode_plus_Longitudinal.res.inst_100))
+    (PseudoContinuous (_ curr Mode_plus_Longitudinal.usr.alt_in) (_ curr Mode_plus_Longitudinal.res.abs_54) (_ curr Mode_plus_Longitudinal.res.abs_55) (_ curr Mode_plus_Longitudinal.res.inst_95) (_ curr Mode_plus_Longitudinal.res.inst_94) (_ curr Mode_plus_Longitudinal.res.inst_93) (_ curr Mode_plus_Longitudinal.res.inst_92))
+    (PseudoContinuous (_ curr Mode_plus_Longitudinal.usr.hdot_in) (_ curr Mode_plus_Longitudinal.res.abs_54) (_ curr Mode_plus_Longitudinal.res.abs_56) (_ curr Mode_plus_Longitudinal.res.inst_91) (_ curr Mode_plus_Longitudinal.res.inst_90) (_ curr Mode_plus_Longitudinal.res.inst_89) (_ curr Mode_plus_Longitudinal.res.inst_88))
+    (PseudoContinuous (_ curr Mode_plus_Longitudinal.usr.speed_in) (_ curr Mode_plus_Longitudinal.res.abs_54) (_ curr Mode_plus_Longitudinal.res.abs_57) (_ curr Mode_plus_Longitudinal.res.inst_87) (_ curr Mode_plus_Longitudinal.res.inst_86) (_ curr Mode_plus_Longitudinal.res.inst_85) (_ curr Mode_plus_Longitudinal.res.inst_84))
+    (PseudoContinuous (_ curr Mode_plus_Longitudinal.usr.gskts_in) (_ curr Mode_plus_Longitudinal.res.abs_54) (_ curr Mode_plus_Longitudinal.res.abs_58) (_ curr Mode_plus_Longitudinal.res.inst_83) (_ curr Mode_plus_Longitudinal.res.inst_82) (_ curr Mode_plus_Longitudinal.res.inst_81) (_ curr Mode_plus_Longitudinal.res.inst_80))
+    (PseudoContinuous (_ curr Mode_plus_Longitudinal.usr.cas_in) (_ curr Mode_plus_Longitudinal.res.abs_54) (_ curr Mode_plus_Longitudinal.res.abs_59) (_ curr Mode_plus_Longitudinal.res.inst_79) (_ curr Mode_plus_Longitudinal.res.inst_78) (_ curr Mode_plus_Longitudinal.res.inst_77) (_ curr Mode_plus_Longitudinal.res.inst_76))
+    (abs (_ curr Mode_plus_Longitudinal.res.abs_27) (_ curr Mode_plus_Longitudinal.res.abs_28) (_ curr Mode_plus_Longitudinal.res.inst_104))
+    (abs (_ curr Mode_plus_Longitudinal.res.abs_72) (_ curr Mode_plus_Longitudinal.res.abs_73) (_ curr Mode_plus_Longitudinal.res.inst_74))
+    (abs (_ curr Mode_plus_Longitudinal.res.abs_75) (_ curr Mode_plus_Longitudinal.res.abs_76) (_ curr Mode_plus_Longitudinal.res.inst_3))
+    (fall (_ curr Mode_plus_Longitudinal.res.abs_0) (_ curr Mode_plus_Longitudinal.res.abs_13) (_ curr Mode_plus_Longitudinal.res.inst_110))
+    (fall (_ curr Mode_plus_Longitudinal.contract.usr.deactivate) (_ curr Mode_plus_Longitudinal.res.abs_14) (_ curr Mode_plus_Longitudinal.res.inst_109))
+    (fall (_ curr Mode_plus_Longitudinal.res.abs_21) (_ curr Mode_plus_Longitudinal.res.abs_39) (_ curr Mode_plus_Longitudinal.res.inst_99))
+    (fall (_ curr Mode_plus_Longitudinal.res.abs_24) (_ curr Mode_plus_Longitudinal.res.abs_41) (_ curr Mode_plus_Longitudinal.res.inst_98))
+    (fall (_ curr Mode_plus_Longitudinal.res.abs_67) (_ curr Mode_plus_Longitudinal.res.abs_68) (_ curr Mode_plus_Longitudinal.res.inst_75))
+    (fall (_ curr Mode_plus_Longitudinal.usr.alt_eng_out) (_ curr Mode_plus_Longitudinal.res.abs_104) (_ curr Mode_plus_Longitudinal.res.inst_0))
+    (rise (_ curr Mode_plus_Longitudinal.res.abs_71) (_ curr Mode_plus_Longitudinal.res.abs_87) (_ curr Mode_plus_Longitudinal.res.inst_2) (_ curr Mode_plus_Longitudinal.res.inst_1))
+    (LONGITUDINAL_CONTROLLER (_ curr Mode_plus_Longitudinal.usr.fpa_cmd_in) (_ curr Mode_plus_Longitudinal.usr.alt_eng_out) (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out) (_ curr Mode_plus_Longitudinal.usr.alt_cmd_in) (_ curr Mode_plus_Longitudinal.usr.alt_in) (_ curr Mode_plus_Longitudinal.usr.pitch_in) (_ curr Mode_plus_Longitudinal.usr.qbdegf_1_1) (_ curr Mode_plus_Longitudinal.usr.gskts_in) (_ curr Mode_plus_Longitudinal.usr.hdot_in) (_ curr Mode_plus_Longitudinal.usr.speed_in) (_ curr Mode_plus_Longitudinal.usr.fpa_in) (_ curr Mode_plus_Longitudinal.usr.cas_in) (_ curr Mode_plus_Longitudinal.usr.elev_stick_in) (_ curr Mode_plus_Longitudinal.res.abs_105) (_ curr Mode_plus_Longitudinal.res.abs_106) (_ curr Mode_plus_Longitudinal.res.abs_107) (_ curr Mode_plus_Longitudinal.res.inst_73) (_ curr Mode_plus_Longitudinal.res.inst_72) (_ curr Mode_plus_Longitudinal.res.inst_71) (_ curr Mode_plus_Longitudinal.res.inst_70) (_ curr Mode_plus_Longitudinal.res.inst_69) (_ curr Mode_plus_Longitudinal.res.inst_68) (_ curr Mode_plus_Longitudinal.res.inst_67) (_ curr Mode_plus_Longitudinal.res.inst_66) (_ curr Mode_plus_Longitudinal.res.inst_65) (_ curr Mode_plus_Longitudinal.res.inst_64) (_ curr Mode_plus_Longitudinal.res.inst_63) (_ curr Mode_plus_Longitudinal.res.inst_62) (_ curr Mode_plus_Longitudinal.res.inst_61) (_ curr Mode_plus_Longitudinal.res.inst_60) (_ curr Mode_plus_Longitudinal.res.inst_59) (_ curr Mode_plus_Longitudinal.res.inst_58) (_ curr Mode_plus_Longitudinal.res.inst_57) (_ curr Mode_plus_Longitudinal.res.inst_56) (_ curr Mode_plus_Longitudinal.res.inst_55) (_ curr Mode_plus_Longitudinal.res.inst_54) (_ curr Mode_plus_Longitudinal.res.inst_53) (_ curr Mode_plus_Longitudinal.res.inst_52) (_ curr Mode_plus_Longitudinal.res.inst_51) (_ curr Mode_plus_Longitudinal.res.inst_50) (_ curr Mode_plus_Longitudinal.res.inst_49) (_ curr Mode_plus_Longitudinal.res.inst_48) (_ curr Mode_plus_Longitudinal.res.inst_47) (_ curr Mode_plus_Longitudinal.res.inst_46) (_ curr Mode_plus_Longitudinal.res.inst_45) (_ curr Mode_plus_Longitudinal.res.inst_44) (_ curr Mode_plus_Longitudinal.res.inst_43) (_ curr Mode_plus_Longitudinal.res.inst_42) (_ curr Mode_plus_Longitudinal.res.inst_41) (_ curr Mode_plus_Longitudinal.res.inst_40) (_ curr Mode_plus_Longitudinal.res.inst_39) (_ curr Mode_plus_Longitudinal.res.inst_38) (_ curr Mode_plus_Longitudinal.res.inst_37) (_ curr Mode_plus_Longitudinal.res.inst_36) (_ curr Mode_plus_Longitudinal.res.inst_35) (_ curr Mode_plus_Longitudinal.res.inst_34) (_ curr Mode_plus_Longitudinal.res.inst_33) (_ curr Mode_plus_Longitudinal.res.inst_32) (_ curr Mode_plus_Longitudinal.res.inst_31) (_ curr Mode_plus_Longitudinal.res.inst_30) (_ curr Mode_plus_Longitudinal.res.inst_29) (_ curr Mode_plus_Longitudinal.res.inst_28) (_ curr Mode_plus_Longitudinal.res.inst_27) (_ curr Mode_plus_Longitudinal.res.inst_26) (_ curr Mode_plus_Longitudinal.res.inst_25) (_ curr Mode_plus_Longitudinal.res.inst_24) (_ curr Mode_plus_Longitudinal.res.inst_23) (_ curr Mode_plus_Longitudinal.res.inst_22) (_ curr Mode_plus_Longitudinal.res.inst_21) (_ curr Mode_plus_Longitudinal.res.inst_20) (_ curr Mode_plus_Longitudinal.res.inst_19) (_ curr Mode_plus_Longitudinal.res.inst_18) (_ curr Mode_plus_Longitudinal.res.inst_17) (_ curr Mode_plus_Longitudinal.res.inst_16) (_ curr Mode_plus_Longitudinal.res.inst_15) (_ curr Mode_plus_Longitudinal.res.inst_14) (_ curr Mode_plus_Longitudinal.res.inst_13) (_ curr Mode_plus_Longitudinal.res.inst_12) (_ curr Mode_plus_Longitudinal.res.inst_11) (_ curr Mode_plus_Longitudinal.res.inst_10) (_ curr Mode_plus_Longitudinal.res.inst_9) (_ curr Mode_plus_Longitudinal.res.inst_8) (_ curr Mode_plus_Longitudinal.res.inst_7) (_ curr Mode_plus_Longitudinal.res.inst_6) (_ curr Mode_plus_Longitudinal.res.inst_5) (_ curr Mode_plus_Longitudinal.res.inst_4))
+    (duration (_ curr Mode_plus_Longitudinal.res.abs_4) (_ curr Mode_plus_Longitudinal.res.abs_16) (_ curr Mode_plus_Longitudinal.res.inst_108) (_ curr Mode_plus_Longitudinal.res.inst_107))
+    (duration (_ curr Mode_plus_Longitudinal.res.abs_44) (_ curr Mode_plus_Longitudinal.res.abs_45) (_ curr Mode_plus_Longitudinal.res.inst_97) (_ curr Mode_plus_Longitudinal.res.inst_96))
+    (has_been_true_reset (_ curr Mode_plus_Longitudinal.res.abs_0) (_ curr Mode_plus_Longitudinal.res.abs_1) (_ curr Mode_plus_Longitudinal.res.abs_2) (_ curr Mode_plus_Longitudinal.res.inst_115))
+    (has_been_true_reset (_ curr Mode_plus_Longitudinal.res.abs_21) (_ curr Mode_plus_Longitudinal.res.abs_22) (_ curr Mode_plus_Longitudinal.res.abs_23) (_ curr Mode_plus_Longitudinal.res.inst_106))
+    (has_been_true_reset (_ curr Mode_plus_Longitudinal.res.abs_24) (_ curr Mode_plus_Longitudinal.res.abs_25) (_ curr Mode_plus_Longitudinal.res.abs_26) (_ curr Mode_plus_Longitudinal.res.inst_105))
+  )
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_1
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_46)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_2
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_52)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_3
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_53)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_4
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_55)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_5
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_56)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_6
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_57)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_7
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_58)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_8
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_59)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_9
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_60)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_10
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_61)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_11
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_62)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_12
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_63)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_13
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_64)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_14
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_65)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_15
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_66)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_16
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_68)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_17
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_69)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_18
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_70)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_19
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_148)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_20
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_150)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_23
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_152)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_24
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_153)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_25
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_157)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_26
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_158)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_27
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_179)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_28
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_182)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_29
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_183)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_30
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_187)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_31
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.inst_188)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_32
+  Mode_plus_Longitudinal
+  (_ curr Mode_plus_Longitudinal.res.abs_43)
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_33
+  Mode_plus_Longitudinal
+  (=>
+   (_ curr Mode_plus_Longitudinal.res.abs_17)
+   (_ curr Mode_plus_Longitudinal.res.abs_18))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_34
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (_ curr Mode_plus_Longitudinal.res.abs_4)
+     (_ curr Mode_plus_Longitudinal.res.abs_20))
+    (_ curr Mode_plus_Longitudinal.res.abs_19))
+   (_ curr Mode_plus_Longitudinal.res.abs_18))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_35
+  Mode_plus_Longitudinal
+  (=>
+   (_ curr Mode_plus_Longitudinal.contract.usr.head_req)
+   (_ curr Mode_plus_Longitudinal.usr.head_eng_out))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_36
+  Mode_plus_Longitudinal
+  (=>
+   (_ curr Mode_plus_Longitudinal.res.abs_46)
+   (_ curr Mode_plus_Longitudinal.res.abs_47))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_37
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (_ curr Mode_plus_Longitudinal.res.abs_50)
+     (_ curr Mode_plus_Longitudinal.res.abs_49))
+    (_ curr Mode_plus_Longitudinal.res.abs_48))
+   (_ curr Mode_plus_Longitudinal.res.abs_47))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_38
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (_ curr Mode_plus_Longitudinal.res.abs_50)
+     (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested))
+    (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+   (_ curr Mode_plus_Longitudinal.usr.alt_eng_out))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_39
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested)
+    (_ curr Mode_plus_Longitudinal.contract.usr.wide_altitude_gap))
+   (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_40
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (_ curr Mode_plus_Longitudinal.res.abs_49)
+     (_ curr Mode_plus_Longitudinal.contract.usr.fpa_requested))
+    (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))
+   (_ curr Mode_plus_Longitudinal.usr.fpa_eng_out))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_41
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (_ curr Mode_plus_Longitudinal.contract.usr.alt_requested)
+    (_ curr Mode_plus_Longitudinal.contract.usr.tiny_altitude_gap))
+   (_ curr Mode_plus_Longitudinal.usr.alt_eng_out))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_42
+  Mode_plus_Longitudinal
+  (=>
+   (_ curr Mode_plus_Longitudinal.res.abs_79)
+   (_ curr Mode_plus_Longitudinal.res.abs_80))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_43
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (_ curr Mode_plus_Longitudinal.res.abs_82)
+    (_ curr Mode_plus_Longitudinal.res.abs_81))
+   (_ curr Mode_plus_Longitudinal.res.abs_83))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_44
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (and
+      (_ curr Mode_plus_Longitudinal.res.abs_86)
+      (_ curr Mode_plus_Longitudinal.res.abs_85))
+     (_ curr Mode_plus_Longitudinal.res.abs_84))
+    (_ curr Mode_plus_Longitudinal.res.abs_81))
+   (_ curr Mode_plus_Longitudinal.res.abs_83))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_45
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (and
+      (and
+       (_ curr Mode_plus_Longitudinal.res.abs_90)
+       (_ curr Mode_plus_Longitudinal.res.abs_89))
+      (_ curr Mode_plus_Longitudinal.res.abs_71))
+     (_ curr Mode_plus_Longitudinal.res.abs_84))
+    (_ curr Mode_plus_Longitudinal.res.abs_81))
+   (_ curr Mode_plus_Longitudinal.res.abs_93))
+)
+(define-prop
+  Mode_plus_Longitudinal_prop_46
+  Mode_plus_Longitudinal
+  (=>
+   (and
+    (and
+     (and
+      (and
+       (_ curr Mode_plus_Longitudinal.res.abs_94)
+       (_ curr Mode_plus_Longitudinal.res.abs_89))
+      (_ curr Mode_plus_Longitudinal.res.abs_71))
+     (_ curr Mode_plus_Longitudinal.res.abs_84))
+    (_ curr Mode_plus_Longitudinal.res.abs_81))
+   (_ curr Mode_plus_Longitudinal.res.abs_96))
+)
+
+
+
+
+(verify
+  Mode_plus_Longitudinal (
+    Mode_plus_Longitudinal_prop_1
+    Mode_plus_Longitudinal_prop_2
+    Mode_plus_Longitudinal_prop_3
+    Mode_plus_Longitudinal_prop_4
+    Mode_plus_Longitudinal_prop_5
+    Mode_plus_Longitudinal_prop_6
+    Mode_plus_Longitudinal_prop_7
+    Mode_plus_Longitudinal_prop_8
+    Mode_plus_Longitudinal_prop_9
+    Mode_plus_Longitudinal_prop_10
+    Mode_plus_Longitudinal_prop_11
+    Mode_plus_Longitudinal_prop_12
+    Mode_plus_Longitudinal_prop_13
+    Mode_plus_Longitudinal_prop_14
+    Mode_plus_Longitudinal_prop_15
+    Mode_plus_Longitudinal_prop_16
+    Mode_plus_Longitudinal_prop_17
+    Mode_plus_Longitudinal_prop_18
+    Mode_plus_Longitudinal_prop_19
+    Mode_plus_Longitudinal_prop_20
+    Mode_plus_Longitudinal_prop_23
+    Mode_plus_Longitudinal_prop_24
+    Mode_plus_Longitudinal_prop_25
+    Mode_plus_Longitudinal_prop_26
+    Mode_plus_Longitudinal_prop_27
+    Mode_plus_Longitudinal_prop_28
+    Mode_plus_Longitudinal_prop_29
+    Mode_plus_Longitudinal_prop_30
+    Mode_plus_Longitudinal_prop_31
+    Mode_plus_Longitudinal_prop_32
+    Mode_plus_Longitudinal_prop_33
+    Mode_plus_Longitudinal_prop_34
+    Mode_plus_Longitudinal_prop_35
+    Mode_plus_Longitudinal_prop_36
+    Mode_plus_Longitudinal_prop_37
+    Mode_plus_Longitudinal_prop_38
+    Mode_plus_Longitudinal_prop_39
+    Mode_plus_Longitudinal_prop_40
+    Mode_plus_Longitudinal_prop_41
+    Mode_plus_Longitudinal_prop_42
+    Mode_plus_Longitudinal_prop_43
+    Mode_plus_Longitudinal_prop_44
+    Mode_plus_Longitudinal_prop_45
+    Mode_plus_Longitudinal_prop_46
+  )
+)
+
