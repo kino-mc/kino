@@ -69,14 +69,19 @@ impl CanRun<conf::Bmc> for Bmc {
 fn bmc<
   'a, S: SolverTrait<'a>
 >(
-  mut solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
+  solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
   let init_off = Offset2::init() ;
   let mut k = Offset2::init() ;
 
+  let mut unroller = try_error!(
+    Unroller::mk(& sys, solver), event,
+    "while creating unroller"
+  ) ;
+
   // event.log("creating manager, declaring actlits") ;
   let mut props = try_error!(
-    PropManager::mk(props, & mut solver, & sys),
+    PropManager::mk(props, unroller.solver()),
     event,
     "while creating property manager"
   ) ;
@@ -86,14 +91,6 @@ fn bmc<
     event.done_at(k.curr()) ;
     return ()
   }
-
-  let mut unroller = Unroller::mk(& sys, solver) ;
-
-  // event.log("declaring functions, init and trans") ;
-  try_error!(
-    unroller.defclare_funs(), event,
-    "while declaring UFs, init and trans"
-  ) ;
 
   // event.log("declare svar@0 and assert init@0") ;
   try_error!(

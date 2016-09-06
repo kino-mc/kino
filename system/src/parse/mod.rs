@@ -466,7 +466,7 @@ impl Context {
               },
               Incomplete(_) => {
                 // Can be incomplete if line is empty.
-                assert!( line.len() == 0 ) ;
+                assert!( line.trim().len() == 0 ) ;
                 ()
               },
               _ => {

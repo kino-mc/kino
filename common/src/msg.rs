@@ -27,11 +27,11 @@ use ::{ Tek, CanRun } ;
 
 /// Wrapper around master and kids receive and send channels.
 pub struct KidManager {
-  /** Receives messages from kids. */
+  /// Receives messages from kids.
   r: mpsc::Receiver<MsgUp>,
-  /** Sends messages to master. */
+  /// Sends messages to master.
   s: mpsc::Sender<MsgUp>,
-  /** Senders to running techniques. */
+  /// Senders to running techniques.
   senders: HashMap<Tek, mpsc::Sender<MsgDown>>,
 }
 impl KidManager {
@@ -179,6 +179,12 @@ impl fmt::Display for MsgUp {
   }
 }
 
+/// Exits with code `0`.
+fn exit<T>(_: T) {
+  use std::process::exit ;
+  exit(0)
+}
+
 /** Used by the techniques to communicate with kino. */
 pub struct Event {
   /** Sender to kino. */
@@ -212,14 +218,14 @@ impl Event {
   pub fn invariants(& self, sys: & Sym, invs: STermSet) {
     self.s.send(
       MsgUp::Invariants(self.t, sys.clone(), invs)
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
 
   /// Sends a done message upwards.
   pub fn done(& self, info: Info) {
     self.s.send(
       MsgUp::Done(self.t, info)
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// Sends a done message upwards.
   pub fn done_at(& self, o: & Offset) {
@@ -229,7 +235,7 @@ impl Event {
   pub fn proved(& self, props: Vec<Sym>, info: Info) {
     self.s.send(
       MsgUp::Proved(props, self.t, info)
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// Sends a proved message upwards.
   pub fn proved_at(& self, props: Vec<Sym>, o: & Offset) {
@@ -239,7 +245,7 @@ impl Event {
   pub fn disproved(& self, model: Model, props: Vec<Sym>, info: Info) {
     self.s.send(
       MsgUp::Disproved(model, props, self.t, info)
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// Sends a falsification message upwards.
   pub fn disproved_at(& self, model: Model, props: Vec<Sym>, o: & Offset) {
@@ -249,25 +255,25 @@ impl Event {
   pub fn k_true(& self, props: Vec<Sym>, o: & Offset) {
     self.s.send(
       MsgUp::KTrue(props, self.t, o.clone())
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// Sends a log message upwards.
   pub fn log(& self, s: & str) {
     self.s.send(
       MsgUp::Bla(self.t, s.to_string())
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// Sends an error upwards.
   pub fn error(& self, s: & str) {
     self.s.send(
       MsgUp::Error(self.t, s.to_string())
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// Sends a warning upwards.
   pub fn warning(& self, s: & str) {
     self.s.send(
       MsgUp::Warning(self.t, s.to_string())
-    ).unwrap()
+    ).unwrap_or_else( exit )
   }
   /// The factory in an `Event`.
   pub fn factory(& self) -> & Factory {

@@ -11,12 +11,12 @@ use std::fmt ;
 use std::hash::{ Hash, Hasher } ;
 use std::cmp::{ PartialEq, Eq } ;
 use std::iter::Iterator ;
-// use std::collections::HashSet ;
+use std::collections::HashSet ;
 
 use term::{ Sym, Var, Type, Term, STerm } ;
 use term::real_term::Cst ;
 
-/** Set of callables. */
+/// Set of callables.
 #[derive(Debug,Clone,PartialEq,Eq)]
 pub struct CallSet {
   calls: Vec<::Callable>
@@ -109,19 +109,19 @@ impl CallSet {
 }
 
 
-/** A signature, a list of types. Used only in `Uf`. */
+/// A signature, a list of types. Used only in `Uf`.
 #[derive(Debug,Clone)]
 pub struct Sig {
-  /** Types of the signature. */
+  /// Types of the signature.
   types: Vec<Type>,
 }
 impl Sig {
-  /** Creates a new signature. */
+  /// Creates a new signature.
   #[inline(always)]
   pub fn mk(types: Vec<Type>) -> Self {
     Sig { types: types }
   }
-  /** The types of a signature. */
+  /// The types of a signature.
   #[inline(always)]
   pub fn types(& self) -> & [Type] { & self.types }
 }
@@ -138,25 +138,25 @@ impl fmt::Display for Sig {
   }
 }
 
-/** A list of typed formal parameters. */
+/// A list of typed formal parameters.
 #[derive(Debug,Clone)]
 pub struct Args {
-  /** The symbol/type pair list. */
+  /// The symbol/type pair list.
   args: Vec<(Sym, Type)>,
 }
 impl Args {
-  /** Creates a new argument list. */
+  /// Creates a new argument list.
   #[inline(always)]
   pub fn mk(args: Vec<(Sym, Type)>) -> Self {
     Args { args: args }
   }
-  /** The formal parameters. */
+  /// The formal parameters.
   #[inline(always)]
   pub fn args(& self) -> & [(Sym, Type)] { & self.args }
-  /** Number of paramaters. */
+  /// Number of paramaters.
   #[inline(always)]
   pub fn len(& self) -> usize { self.args.len() }
-  /** Returns true iff a symbol is a list of arguments. */
+  /// Returns true iff a symbol is a list of arguments.
   pub fn contains(& self, sym: & Sym) -> bool {
     for & (ref arg, _) in self.args() {
       if sym == arg { return true }
@@ -199,29 +199,29 @@ impl fmt::Display for Args {
 //   }
 // }
 
-/** An uninterpreted function. */
+/// An uninterpreted function.
 #[derive(Debug,Clone)]
 pub struct Uf {
-  /** Identifier of the function. */
+  /// Identifier of the function.
   sym: Sym,
-  /** Signature of the function. */
+  /// Signature of the function.
   sig: Sig,
-  /** Return type of the function. */
+  /// Return type of the function.
   typ: Type,
 }
 impl Uf {
-  /** Creates a new uninterpreted function. */
+  /// Creates a new uninterpreted function.
   #[inline(always)]
   pub fn mk(sym: Sym, sig: Sig, typ: Type) -> Self {
     Uf { sym: sym, sig: sig, typ: typ }
   }
-  /** Identifier of a function. */
+  /// Identifier of a function.
   #[inline(always)]
   pub fn sym(& self) -> & Sym { & self.sym }
-  /** Signature of a function. */
+  /// Signature of a function.
   #[inline(always)]
   pub fn sig(& self) -> & [Type] { & self.sig.types() }
-  /** Return type of a function. */
+  /// Return type of a function.
   #[inline(always)]
   pub fn typ(& self) -> & Type { & self.typ }
 }
@@ -242,41 +242,41 @@ impl Hash for Uf {
   }
 }
 
-/** A function (actually a macro in SMT-LIB). */
+/// A function (actually a macro in SMT-LIB).
 #[derive(Debug,Clone)]
 pub struct Fun {
-  /** Identifier of the function. */
+  /// Identifier of the function.
   sym: Sym,
-  /** Formal arguments of the function. */
+  /// Formal arguments of the function.
   args: Args,
-  /** Return type of the function. */
+  /// Return type of the function.
   typ: Type,
-  /** Body of the function. */
+  /// Body of the function.
   body: Term,
-  /** Callables used by this function **recursively**. */
+  /// Callables used by this function **recursively**.
   calls: CallSet,
 }
 impl Fun {
-  /** Creates a new function. */
+  /// Creates a new function.
   #[inline(always)]
   pub fn mk(
     sym: Sym, args: Args, typ: Type, body: Term, calls: CallSet
   ) -> Self {
     Fun { sym: sym, args: args, typ: typ, body: body, calls: calls }
   }
-  /** Identifier of a function. */
+  /// Identifier of a function.
   #[inline(always)]
   pub fn sym(& self) -> & Sym { & self.sym }
-  /** Formal arguments of a function. */
+  /// Formal arguments of a function.
   #[inline(always)]
   pub fn args(& self) -> & [(Sym, Type)] { & self.args.args() }
-  /** Return type of a function. */
+  /// Return type of a function.
   #[inline(always)]
   pub fn typ(& self) -> & Type { & self.typ }
-  /** Body of a function. */
+  /// Body of a function.
   #[inline(always)]
   pub fn body(& self) -> & Term { & self.body }
-  /** Calls of a function. */
+  /// Calls of a function.
   #[inline(always)]
   pub fn calls(& self) -> & CallSet { & self.calls }
 }
@@ -299,16 +299,16 @@ impl Hash for Fun {
   }
 }
 
-/** Wraps an (uninterpreted) function. */
+/// Wraps an (uninterpreted) function.
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum Callable {
-  /** Wraps an uninterpreted function. */
+  /// Wraps an uninterpreted function.
   Dec(Uf),
-  /** Wraps a function. */
+  /// Wraps a function.
   Def(Fun),
 }
 impl Callable {
-  /** The calls made by the function if any. */
+  /// The calls made by the function if any.
   #[inline(always)]
   pub fn calls(& self) -> & [::Callable] {
     match * self {
@@ -316,14 +316,14 @@ impl Callable {
       Callable::Def(ref fun) => fun.calls.get(),
     }
   }
-  /** The symbol of a function. */
+  /// The symbol of a function.
   pub fn sym(& self) -> & Sym {
     match * self {
       Callable::Def(ref f) => f.sym(),
       Callable::Dec(ref f) => f.sym(),
     }
   }
-  /** Returns the output type if the input signature type checks. */
+  /// Returns the output type if the input signature type checks.
   pub fn type_check(& self, sig: & [ Type ]) -> Result<Type, (usize, String)> {
     // use std::iter::Zip ;
     let mut cpt = 0 ;
@@ -376,34 +376,34 @@ impl fmt::Display for Callable {
   }
 }
 
-/** A property. */
+/// A property.
 #[derive(Debug,Clone)]
 pub struct Prop {
-  /** Identifier of the property. */
+  /// Identifier of the property.
   sym: Sym,
-  /** System the property is over. */
+  /// System the property is over.
   sys: ::Sys,
-  /** Body of the property. */
+  /// Body of the property.
   body: STerm,
-  /** Calls in the property. */
+  /// Calls in the property.
   calls: CallSet,
 }
 impl Prop {
-  /** Creates a new property. */
+  /// Creates a new property.
   #[inline(always)]
   pub fn mk(sym: Sym, sys: ::Sys, body: STerm, calls: CallSet) -> Self {
     Prop { sym: sym, sys: sys, body: body, calls: calls }
   }
-  /** Identifier of a property. */
+  /// Identifier of a property.
   #[inline(always)]
   pub fn sym(& self) -> & Sym { & self.sym }
-  /** System a property ranges over. */
+  /// System a property ranges over.
   #[inline(always)]
   pub fn sys(& self) -> & ::Sys { & self.sys }
-  /** Body of a property. */
+  /// Body of a property.
   #[inline(always)]
   pub fn body(& self) -> & STerm { & self.body }
-  /** Calls of a property. */
+  /// Calls of a property.
   #[inline(always)]
   pub fn calls(& self) -> & CallSet { & self.calls }
 }
@@ -426,26 +426,26 @@ impl Hash for Prop {
   }
 }
 
-/** A transition system. */
+/// A transition system.
 #[derive(Debug,Clone)]
 pub struct Sys {
-  /** Identifier of the system. */
+  /// Identifier of the system.
   sym: Sym,
-  /** State of the system. */
+  /// State of the system.
   state: Args,
-  /** Local variables of the system. */
+  /// Local variables of the system.
   locals: Vec<(Sym, Type, Term)>,
-  /** Identifier of the init predicate of the system. */
+  /// Identifier of the init predicate of the system.
   init: (Sym, Vec<(Var, Type)>, Term, Term),
-  /** Identifier of the transition relation of the system. */
+  /// Identifier of the transition relation of the system.
   trans: (Sym, Vec<(Var, Type)>, Term, Term),
-  /** Calls of the system. */
+  /// Calls of the system.
   subsys: Vec<(::Sys, Vec<Term>)>,
-  /** Callables used by this system **recursively**. */
+  /// Callables used by this system **recursively**.
   calls: CallSet,
 }
 impl Sys {
-  /** Creates a new system. */
+  /// Creates a new system.
   #[inline(always)]
   pub fn mk(
     sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
@@ -460,35 +460,45 @@ impl Sys {
       subsys: subsys, calls: calls,
     }
   }
-  /** Identifier of a system. */
+  /// Identifier of a system.
   #[inline(always)]
   pub fn sym(& self) -> & Sym { & self.sym }
-  /** State of a system. */
+  /// State of a system.
   #[inline(always)]
   pub fn state(& self) -> & Args { & self.state }
-  /** Locals variables of a system. */
+  /// Locals variables of a system.
   #[inline(always)]
   pub fn locals(& self) -> & [ (Sym, Type, Term) ] { & self.locals }
-  /** Init predicate of a system. */
+  /// Init predicate of a system.
   #[inline(always)]
   pub fn init(& self) -> & (Sym, Vec<(Var, Type)>, Term, Term) {
     & self.init
   }
-  /** Init term. */
+  /// Init term.
   #[inline(always)]
   pub fn init_term(& self) -> & Term { & self.init.3 }
-  /** Transition relation of a system. */
+  /// Transition relation of a system.
   #[inline(always)]
   pub fn trans(& self) -> & (Sym, Vec<(Var, Type)>, Term, Term) {
     & self.trans
   }
-  /** Trans term. */
+  /// Trans term.
   #[inline(always)]
   pub fn trans_term(& self) -> & Term { & self.trans.3 }
-  /** Sub-systems of a system. */
+  /// Sub-systems of a system.
   #[inline(always)]
   pub fn subsys(& self) -> & [ (::Sys, Vec<Term>) ] { & self.subsys }
-  /** Calls of a system. */
+  /// Symbols of the sub-systems of a system, has a hash set.
+  #[inline]
+  pub fn subsys_syms(& self) -> HashSet<Sym> {
+    let mut set = HashSet::with_capacity( self.subsys.len() ) ;
+    for & (ref sub, _) in self.subsys.iter() {
+      set.insert(sub.sym().clone()) ; ()
+    }
+    set.shrink_to_fit() ;
+    set
+  }
+  /// Calls of a system.
   #[inline(always)]
   pub fn calls(& self) -> & CallSet { & self.calls }
 
@@ -502,7 +512,7 @@ impl Sys {
     Err( format!("[sys] unknown symbol {}", sym) )
   }
 
-  /** String representation of a system as lines. */
+  /// String representation of a system as lines.
   pub fn lines(& self) -> String {
     let mut s = format!(
       "{} ({})\n  init:  {}\n  trans: {}",

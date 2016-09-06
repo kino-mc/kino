@@ -130,7 +130,9 @@ pub mod top_only {
     /// Creates a base checker, unrolls the transition relation `unroll` times.
     pub fn mk(sys: & Sys, solver: Solver, unroll: usize) -> Res<Self> {
       let factory = solver.parser().clone() ;
-      let unroller = Unroller::mk(sys, solver) ;
+      let unroller = try_str!(
+        Unroller::mk(sys, solver), "while creating unroller"
+      ) ;
       Base::of(
         unroller, unroll, Eval::mk(
           sys.clone(), vec![], Step::<Val, Solver>::check_offset(), factory

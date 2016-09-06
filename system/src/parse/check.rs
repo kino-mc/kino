@@ -147,32 +147,40 @@ macro_rules! check_sym {
 /** Type checks a term. */
 macro_rules! type_check {
   (
-    $ctxt:expr, $term:expr, $ty:expr, state: $state:expr, $( $fmt:tt )+
+    $ctxt:expr, $term:expr, $ty:expr,
+    state: $state:expr, $desc:expr, $( $fmt:tt )+
   ) => (
     type_check!(internal
-      $ctxt, $term, $ty, Some($state), None, $( $fmt )+
+      $ctxt, $term, $ty, Some($state), None, $desc, $( $fmt )+
     )
   ) ;
   (
-    $ctxt:expr, $term:expr, $ty:expr, sig: $sig:expr, $( $fmt:tt )+
+    $ctxt:expr, $term:expr, $ty:expr,
+    sig: $sig:expr, $desc:expr, $( $fmt:tt )+
   ) => (
     type_check!(internal
-      $ctxt, $term, $ty, None, Some($sig), $( $fmt )+
+      $ctxt, $term, $ty, None, Some($sig), $desc, $( $fmt )+
     )
   ) ;
   (
     internal $ctxt:expr, $term:expr, $ty:expr,
-    $state:expr, $sig:expr, $t:ident => $( $fmt:tt )+
+    $state:expr, $sig:expr, $desc: expr, $t:ident => $( $fmt:tt )+
   ) => (
     match ::type_check::type_check(
       $ctxt, & $term, $state, $sig
     ) {
       Ok($t) => if $t != $ty {
         return Err(
-          TypeCheck( format!( $( $fmt )+ ) )
+          TypeCheck(
+            format!(
+              "{}\n{}", $desc, format!( $( $fmt )+ )
+            )
+          )
         )
       },
-      Err(s) => return Err( TypeCheck(s) ),
+      Err(s) => return Err(
+        TypeCheck( format!("{}\n{}", $desc, s) )
+      ),
     }
   ) ;
 }
@@ -236,7 +244,11 @@ pub fn check_fun_dec(
   check_sym!(ctxt, sym, desc) ;
   match ctxt.factory().set_fun_type(sym.clone(), typ) {
     Ok(()) => (),
-    Err(e) => return Err( Error::TypeCheck(e) ),
+    Err(e) => return Err(
+      TypeCheck(
+        format!("in `(declare-fun {} ...)\n{}`", sym, e)
+      )
+    ),
   } ;
   Ok( Callable::Dec( Uf::mk(sym, sig, typ) ) )
 }
@@ -283,6 +295,7 @@ pub fn check_fun_def(
 
   type_check!(
     ctxt, body.term, typ, sig: args.args(),
+    format!("in body of `(define-fun {} ...)`", sym),
     t => "body of function is inconsistent with return type\n  \
       expected {}, got {}",
     typ, t
@@ -290,7 +303,11 @@ pub fn check_fun_def(
 
   match ctxt.factory().set_fun_type(sym.clone(), typ) {
     Ok(()) => (),
-    Err(e) => return Err( Error::TypeCheck(e) ),
+    Err(e) => return Err(
+      TypeCheck(
+        format!("in `(define-fun {} ...)\n{}`", sym, e)
+      )
+    ),
   } ;
 
   Ok(
@@ -410,6 +427,7 @@ pub fn check_prop(
 
   type_check!(
     ctxt, body.term, Type::Bool, state: sys.state().args(),
+    format!("in body of `(define-prop {} ...)`", sym),
     t => "body of property should have type Bool, got {}", t
   ) ;
 
@@ -464,6 +482,7 @@ pub fn check_rel(
 
   type_check!(
     ctxt, body.term, Type::Bool, state: sys.state().args(),
+    format!("in body of `(check-rel {} ...)`", sym),
     t => "body of property should have type Bool, got {}", t
   ) ;
 
@@ -518,6 +537,7 @@ pub fn check_sys(
 
     type_check!(
       ctxt, term, typ, state: state.args(),
+      format!("in `(define-sys {} ...)`", sym),
       t =>
         "local variable {} was declared with type {}, got {}",
         local_sym, typ, t
@@ -532,6 +552,7 @@ pub fn check_sys(
   // * non-stateful var exist.
   type_check!(
     ctxt, init.term, Type::Bool, state: state.args(),
+    format!("in init term of `(define-sys {} ...)`", sym),
     t => "init predicate should have type Bool, got {}", t
   ) ;
   let init = sys_try!(
@@ -545,6 +566,7 @@ pub fn check_sys(
   // * non-stateful var exist.
   type_check!(
     ctxt, trans.term, Type::Bool, state: state.args(),
+    format!("in trans term of `(define-sys {} ...)`", sym),
     t => "trans predicate should have type Bool, got {}", t
   ) ;
   let trans = sys_try!(
@@ -653,7 +675,11 @@ pub fn check_sys(
     let svar = ctxt.factory().svar(v_sym.clone(), Curr) ;
     match ctxt.factory().set_var_type(Some(sym.clone()), svar, * typ) {
       Ok(()) => (),
-      Err(e) => return Err( Error::TypeCheck(e) ),
+      Err(e) => return Err(
+        TypeCheck(
+          format!("in `(define-sys {} ...)\n{}`", sym, e)
+        )
+      ),
     }
   }
 

@@ -14,7 +14,7 @@ It runs on a system and tries to prove some properties. */
 use std::sync::Arc ;
 use std::collections::{ HashSet, HashMap } ;
 
-use term::{ Sym, Term } ;
+use term::{ Sym, Term, STermSet } ;
 
 use system::{ Prop, Sys } ;
 use system::ctxt::Context ;
@@ -39,7 +39,12 @@ impl Master {
     sys: Sys, props: Vec<Prop>,
     _assumptions: Option<Vec<Term>>,
     conf: conf::Master
-  ) -> Result<(Sys, HashMap<Sym, Term>), ()> {
+  ) -> Result<(Sys, HashMap<Sym, STermSet>), ()> {
+
+    let mut invar_map = HashMap::new() ;
+    for sub in sys.subsys_syms().into_iter() {
+      invar_map.insert(sub, STermSet::new()) ; ()
+    }
 
     let mut proved_set = HashSet::with_capacity(props.len()) ;
     let mut disproved_set = HashSet::with_capacity(props.len()) ;
@@ -90,7 +95,7 @@ impl Master {
     } ;
 
     // Entering message loop.
-    loop {
+    'msg_loop: loop {
       // Stopping if no more kids running.
       if manager.kids_done() { break } ;
       // Stopping if no property left to prove.
@@ -151,6 +156,17 @@ impl Master {
         ),
 
         Ok( Invariants(from, sym, set) ) => {
+          use std::iter::Extend ;
+          match invar_map.get_mut(& sym) {
+            Some(invs) => invs.extend( set.clone() ),
+            None => {
+              log.bad(
+                & from,
+                & format!("received invariants for unknown system {}", sym)
+              ) ;
+              continue 'msg_loop
+            },
+          } ;
           let mut blah = format!(
             "{} invariant{} discovered:",
             set.len(),
@@ -206,7 +222,7 @@ impl Master {
 
     log.trail() ;
 
-    Err(())
+    Ok( (sys, invar_map) )
 
   }
 }

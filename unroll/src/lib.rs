@@ -119,15 +119,19 @@ impl<
   ///
   /// Declares everything needed at `0`.
   #[inline]
-  pub fn mk(sys: & Sys, solver: S) -> Self {
-    Unroller {
+  pub fn mk(sys: & Sys, solver: S) -> Res<Self> {
+    let mut unroller = Unroller {
       sys: sys.clone(),
       solver: solver,
       invs: STermSet::with_capacity(107),
       // beg_k: Offset2::init(),
       // end_k: Offset2::init().pre(),
       act_factory: ActlitFactory::mk(),
-    }
+    } ;
+    try_str!(
+      unroller.defclare_funs(), "during function defclaration"
+    ) ;
+    Ok(unroller)
   }
 
   // /// Creates an unroller that unrolls backwards.
@@ -214,26 +218,39 @@ impl<
     // Will not really be used.
     let offset = Offset2::init() ;
 
+    let mut known = HashSet::with_capacity(7) ;
     // Declaring UFs and defining functions.
     // println!("declaring UFs, defining funs") ;
     for fun in self.sys.calls().get() {
       // println!("defining {}", fun.sym()) ;
       match * * fun {
-        Dec(ref fun) => try!(
-          self.solver.declare_fun( fun.sym(), fun.sig(), fun.typ(), & offset )
-        ),
-        Def(ref fun) => try!(
-          self.solver.define_fun(
-            fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
-          )
-        ),
+        Dec(ref fun) => if ! known.contains(fun.sym()) {
+          try!({
+            known.insert( fun.sym().clone() ) ;
+            self.solver.declare_fun(
+              fun.sym(), fun.sig(), fun.typ(), & offset
+            )
+          })
+        },
+        Def(ref fun) => if ! known.contains(fun.sym()) {
+          try!({
+            known.insert( fun.sym().clone() ) ;
+            self.solver.define_fun(
+              fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
+            )
+          })
+        },
       }
     } ;
 
     // Defining sub systems.
     // println!("defining sub systems") ;
+    let mut known = HashSet::with_capacity(7) ;
     for & (ref sub, _) in self.sys.subsys() {
-      try!( define(sub, & mut self.solver, & offset) )
+      if ! known.contains( sub.sym() ) {
+        known.insert( sub.sym().clone() ) ;
+        try!( define(sub, & mut self.solver, & offset) )
+      }
     } ;
 
     // Define current system.
@@ -625,35 +642,37 @@ pub struct PropManager {
 
 impl PropManager {
   /** Constructs a property manager. Creates and declares one positive
-  activation literal per property. */
+  activation literal per property
+
+  Assumes the properties have already been defined.  */
   pub fn mk<
     'a, S: SolverTrait<'a>
   >(
-    props: Vec<Prop>, solver: & mut S, sys: & Sys
+    props: Vec<Prop>, solver: & mut S
   ) -> SmtRes<Self> {
-    use sys::real_sys::Callable::* ;
+    // use sys::real_sys::Callable::* ;
 
-    let calls = sys.calls() ;
+    // let calls = sys.calls() ;
 
     let mut map_1 = HashMap::new() ;
     let mut map_2 = HashMap::new() ;
     let offset = Offset2::init() ;
 
     for prop in props {
-      for call in prop.calls().get() {
-        if ! calls.contains(call) {
-          match * * call {
-            Dec(ref fun) => try!(
-              solver.declare_fun(fun.sym(), fun.sig(), fun.typ(), & offset)
-            ),
-            Def(ref fun) => try!(
-              solver.define_fun(
-                fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
-              )
-            ),
-          }
-        }
-      } ;
+      // for call in prop.calls().get() {
+      //   if ! calls.contains(call) {
+      //     match * * call {
+      //       Dec(ref fun) => try!(
+      //         solver.declare_fun(fun.sym(), fun.sig(), fun.typ(), & offset)
+      //       ),
+      //       Def(ref fun) => try!(
+      //         solver.define_fun(
+      //           fun.sym(), fun.args(), fun.typ(), fun.body(), & offset
+      //         )
+      //       ),
+      //     }
+      //   }
+      // } ;
       let actlit = actlit_name_of(& prop) ;
       match solver.declare_fun(
         & actlit, & [], & Type::Bool, & ()
@@ -804,8 +823,8 @@ impl PropManager {
     vec
   }
 
-  /** Returns the list of non-inhibited one-state properties that evaluate to
-  false in their state version for some offset in a solver. */
+  /** Returns the list of non-inhibited properties that evaluate to false in
+  their **next** version for some offset in a solver.*/
   pub fn get_false_state<
     'a, S: SolverTrait<'a>
   >(
@@ -815,9 +834,9 @@ impl PropManager {
     let mut back_map = HashMap::with_capacity(self.props_1.len()) ;
     for (ref sym, & (ref prop, _)) in self.props_1.iter() {
       if ! self.inhibited.contains(sym) {
-        terms.push(prop.body().state().unwrap().clone()) ;
+        terms.push(prop.body().next().clone()) ;
         match back_map.insert(
-          prop.body().state().unwrap().clone(), prop.sym().clone()
+          prop.body().next().clone(), prop.sym().clone()
         ) {
           None => (),
           Some(_) => unreachable!(),

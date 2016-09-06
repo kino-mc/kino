@@ -75,16 +75,31 @@ fn invgen<
   use graph::* ;
   use lsd::top_only::* ;
 
+  let graph_dir = "graph" ;
+  // if ! try_error!(
+  //   ::std::fs::metadata(graph_dir), event,
+  //   "unable to retrieve information about graph log directory `{}`", graph_dir
+  // ).is_dir()
+  {
+    use std::fs::DirBuilder ;
+    let mut db = DirBuilder::new() ;
+    db.recursive(true) ;
+    try_error!(
+      db.create(graph_dir), event,
+      "while creating directory `{}` for graph logging", graph_dir
+    )
+  } ;
+
   let factory = solver.parser().clone() ;
 
   // event.log("mining system") ;
   let (rep, class) = mine::bool(& factory, & sys) ;
 
-  let mut blah = format!("{} ->", rep) ;
-  for t in class.iter() {
-    blah = format!("{}\n    {}", blah, t)
-  } ;
-  event.log(& blah) ;
+  // let mut blah = format!("{} ->", rep) ;
+  // for t in class.iter() {
+  //   blah = format!("{}\n    {}", blah, t)
+  // } ;
+  // event.log(& blah) ;
 
   // event.log("creating graph") ;
   let mut graph = Graph::<Bool>::mk(rep, class) ;
@@ -130,7 +145,7 @@ fn invgen<
         ),
         None => break 'base,
       } ;
-      let file_path = format!("graph/tig_{}_{}.dot", cnt, base_cnt) ;
+      let file_path = format!("{}/tig_{}_{}.dot", graph_dir, cnt, base_cnt) ;
       try_error!(
         graph.dot_dump( & file_path ), event,
         "could not dump graph to file `{}`", file_path

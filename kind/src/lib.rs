@@ -67,16 +67,21 @@ fn kind<
   'a,
   S: SolverTrait<'a>
 >(
-  mut solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
+  solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
 
   // Reversed to unroll backwards.
   let check_offset = Offset2::init().rev() ;
   let mut k = check_offset.clone() ;
 
+  let mut unroller = try_error!(
+    Unroller::mk(& sys, solver), event,
+    "while creating unroller"
+  ) ;
+
   // event.log("creating manager, declaring actlits") ;
   let mut props = try_error!(
-    PropManager::mk(props, & mut solver, & sys),
+    PropManager::mk(props, unroller.solver()),
     event,
     "while creating property manager"
   ) ;
@@ -87,13 +92,11 @@ fn kind<
     return ()
   }
 
-  let mut unroller = Unroller::mk(& sys, solver) ;
-
   // event.log("declaring functions, init and trans") ;
-  try_error!(
-    unroller.defclare_funs(), event,
-    "while declaring UFs, init and trans"
-  ) ;
+  // try_error!(
+  //   unroller.defclare_funs(), event,
+  //   "while declaring UFs, init and trans"
+  // ) ;
 
   // event.log("declare svar@0") ;
   try_error!(
@@ -109,6 +112,10 @@ fn kind<
   ) ;
 
   'out: loop {
+
+    // event.log(
+    //   & format!("checking for {}-induction", k.curr())
+    // ) ;
 
     props.reset_inhibited() ;
 
@@ -144,6 +151,8 @@ fn kind<
       break
     }
 
+    // event.log("splitting") ;
+
     'split: while let Some(one_prop_false) = props.one_false_next() {
         
       // Setting up the negative actlit.
@@ -171,7 +180,7 @@ fn kind<
       if is_sat {
         // event.log("sat, getting falsified props") ;
         let falsified = try_error!(
-          props.get_false_next(unroller.solver(), & k), event,
+          props.get_false_next(unroller.solver(), & check_offset), event,
           "could not retrieve falsified properties"
         ) ;
         try_error!(
@@ -188,6 +197,7 @@ fn kind<
         let mut unfalsifiable = props.not_inhibited_set() ;
 
         // Wait until we get something from BMC.
+        // event.log("waiting for bmc") ;
         loop {
           let mut invariant = true ;
           let at_least = k.curr().pre() ;
@@ -292,7 +302,7 @@ fn kind<
 
     }
 
-    event.log("checking if there's some properties left") ;
+    // event.log("checking if there's some properties left") ;
     if props.none_left() {
       event.done_at( k.curr() ) ;
       break
