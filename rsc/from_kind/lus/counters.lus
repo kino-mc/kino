@@ -1,0 +1,29 @@
+node top(a,b,c:bool) returns(o1, o2, ok:bool);
+var
+pre_x,x,pre_y,y:int;
+n1,n2:int;
+let
+assert a or b or c ;
+-- assert (0 <= x) and (x <= n1) and (0 <= y) and (y <= n2);
+n1=10;
+n2=6;
+pre_x = 0->pre(x);
+pre_y = 0->pre(y);
+x = if (b or c) 
+    then (0) 
+    else (if (a and pre_x<n1) then pre_x+1 else pre_x);
+y = if (c) 
+    then 
+    0 
+    else (if (a and pre_y<n2) then pre_y + 1 else pre_y);
+o1 = x = n1;
+o2 = y = n2;
+ok = (o1 => o2);
+--%PROPERTY ok ;
+-- %PROPERTY x + y <= 160 ;
+-- %PROPERTY x>=5 => y=5 ;
+-- %PROPERTY x<5 => x<=y ;
+--%PROPERTY 0<=x and x<=n1 ;
+--%PROPERTY 0<=y and y<=n2 ;
+--%MAIN;
+tel
