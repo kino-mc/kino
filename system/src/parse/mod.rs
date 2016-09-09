@@ -7,15 +7,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! System parsing.
-
-## To do
-
-Context:
-
-* hash of `Item` should be hash of its `Sym`, and replace hash maps with hash
-  sets
-*/
+//! System parsing.
+//! 
+//! ## To do
+//! 
+//! Context:
+//! 
+//! * hash of `Item` should be hash of its `Sym`, and replace hash maps with
+//!   hash sets
 
 static uf_desc:        & 'static str = "function declaration"         ;
 static fun_desc:       & 'static str = "function definition"          ;
@@ -32,7 +31,7 @@ use std::thread::sleep ;
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
-  TermAndDep, Type, Offset, Cst, Sym, Term, Factory, Model
+  TermAndDep, Type, Offset, Cst, Sym, Term, Factory, Model, STermSet
 } ;
 
 use base::* ;
@@ -58,6 +57,22 @@ fn map_to_lines<
   }
 }
 
+fn map_pairs_to_lines<
+  K: ::std::cmp::Eq + ::std::hash::Hash, V: fmt::Display, W: fmt::Display
+>(
+  map: & HashMap<K, (V, W)>, title: & 'static str, mut acc: String
+) -> String {
+  acc = format!("{}\n{} {{", acc, title) ;
+  if ! map.is_empty() {
+    for (_, &(ref v, ref w)) in map.iter() {
+      acc = format!("{}\n  {}: {}", acc, v, w)
+    } ;
+    format!("{}\n}}", acc)
+  } else {
+    format!("{}}}", acc)
+  }
+}
+
 macro_rules! try_get {
   ($map:expr, $sym:expr, $id:ident => $b:block) => (
     match $map.get($sym) {
@@ -73,11 +88,11 @@ macro_rules! try_get {
   ) ;
 }
 
-/** A positive or negative literal. */
+/// A positive or negative literal.
 pub enum Atom {
-  /** A positive literal. */
+  /// A positive literal.
   Pos(Sym),
-  /** A negative literal. */
+  /// A negative literal.
   Neg(Sym),
 }
 impl Atom {
@@ -98,18 +113,18 @@ impl Atom {
   }
 }
 
-/** Normal result of a parsing attempt. */
+/// Normal result of a parsing attempt.
 #[derive(Debug)]
 pub enum Res {
-  /** Found an exit command. */
+  /// Found an exit command.
   Exit,
-  /** Found a check command. */
+  /// Found a check command.
   Check(::Sys, Vec<::Prop>),
-  /** Found a check with assumptions command. */
+  /// Found a check with assumptions command.
   CheckAss(::Sys, Vec<::Prop>, Vec<Term>)
 }
 impl Res {
-  /** A multi-line representation of the result of a parsing attempty */
+  /// A multi-line representation of the result of a parsing attempty
   pub fn lines(& self) -> String {
     match * self {
       Res::Exit => "exit".to_string(),
@@ -145,19 +160,20 @@ impl Res {
   }
 }
 
-/** A counterexample for a system. */
+/// A counterexample for a system.
+#[derive(Clone)]
 pub struct Cex {
   sys: ::Sys,
   no_state: HashMap<Sym, Cst>,
   trace: HashMap<Offset, HashMap<Sym, Cst>>
 }
 impl Cex {
-  /** Length of a cex. Number of states minus one. */
+  /// Length of a cex. Number of states minus one.
   pub fn len(& self) -> usize {
     assert!(self.trace.len() > 0) ;
     self.trace.len() - 1
   }
-  /** Formats a counterexample vmt-style. */
+  /// Formats a counterexample vmt-style.
   pub fn write_vmt<W: io::Write>(
     & self, props: & [ Sym ], fmt: & mut W
   ) -> io::Result<()> {
@@ -195,7 +211,7 @@ impl Cex {
 
     write!(fmt, ")\n")
   }
-  /** Formats a counterexample human-style. */
+  /// Formats a counterexample human-style.
   pub fn format(& self) -> String {
     use std::cmp::max ;
     // First, we format all constants as strings and compute the maximal width
@@ -303,48 +319,42 @@ impl Cex {
   }
 }
 
-/** Maintains the context and can read commands from an `io::Read`.
-
-Input is read line per line.
-
-## Checks
-
-During parsing, checks the errors corresponding to [`Error`][error].
-
-[error]: enum.Error.html (The Error enum)
-*/
+/// Maintains the context and can read commands from an `io::Read`.
+/// 
+/// Input is read line per line.
+/// 
+/// ## Checks
+/// 
+/// During parsing, checks the errors corresponding to [`Error`][error].
+/// 
+/// [error]: enum.Error.html (The Error enum)
 pub struct Context {
-  /** Number of lines **read** so far. Does not correspond to where the parser
-  is currently at. Not really used at the moment. */
+  /// Number of lines **read** so far. Does not correspond to where the parser
+  /// is currently at. Not really used at the moment.
   line: usize,
-  /** String buffer for swapping when reading, and remember stuff when reading
-  from stdin. */
+  /// String buffer for swapping when reading, and remember stuff when reading
+  /// from stdin.
   buffer: String,
-  /** Term factory. */
+  /// Term factory.
   factory: Factory,
-  /** All symbols defined. Used for faster redefinition checking. */
+  /// All symbols defined. Used for faster redefinition checking.
   all: HashSet<Sym>,
-  // /** State definitions. */
+  // /// State definitions.
   // states: HashMap<Sym, Arc<State>>,
-  /** Function symbol declarations and definitions. */
+  /// Function symbol declarations and definitions.
   callables: HashMap<Sym, ::Callable>,
-  /** Propiacte definitions. */
-  props: HashMap<Sym, ::Prop>,
-  // /** Init property definitions. */
-  // inits: HashMap<Sym, Arc<Init>>,
-  // /** Transition property definitions. */
-  // transs: HashMap<Sym, Arc<Trans>>,
-  /** Systems. */
+  /// Map from systems to properties.
+  props: HashMap<Sym, (::Prop, PropStatus)>,
+  /// Systems.
   syss: HashMap<Sym, ::Sys>,
-  // /** Maps system identifiers to their invariants. */
-  // invs: HashMap<Sym, HashSet<Prop>>,
+  /// Maps system identifiers to their invariants.
+  invs: HashMap<Sym, STermSet>,
 }
 impl Context {
-  /** Creates an empty context.
-
-  All tables in the context are created with capacity that's a prime number.
-  It's useless but looks pretty cool.
-  */
+  /// Creates an empty context.
+  /// 
+  /// All tables in the context are created with a capacity that's a prime
+  /// number. It's useless but looks pretty cool.
   pub fn mk(factory: Factory, buffer_size: usize) -> Self {
     Context {
       line: 0,
@@ -357,36 +367,201 @@ impl Context {
       // inits: HashMap::with_capacity(23),
       // transs: HashMap::with_capacity(23),
       syss: HashMap::with_capacity(23),
-      // invs: HashMap::with_capacity(127),
+      invs: HashMap::with_capacity(127),
     }
   }
 
-  // /** Option of the state corresponding to an identifier. */
-  // #[inline(always)]
+  // /// Option of the state corresponding to an identifier.
+  // #[inline]
   // pub fn get_state(& self, sym: & Sym) -> Option<& ::State> {
   //   self.states.get(sym)
   // }
-  /** Option of the function declaration/definition corresponding to an
-  identifier. */
-  #[inline(always)]
+  /// Option of the function declaration/definition corresponding to an
+  /// identifier.
+  #[inline]
   pub fn get_callable(& self, sym: & Sym) -> Option<& ::Callable> {
     self.callables.get(sym)
   }
-  /** Option of the property corresponding to an identifier. */
-  #[inline(always)]
-  pub fn get_prop(& self, sym: & Sym) -> Option<& ::Prop> {
+  /// Option of the property corresponding to an identifier.
+  #[inline]
+  pub fn get_prop(& self, sym: & Sym) -> Option<& (::Prop, PropStatus) > {
     self.props.get(sym)
   }
-  /** Option of the system corresponding to an identifier. */
-  #[inline(always)]
+  /// Updates the status of a property to invariant.
+  pub fn set_prop_k_true(
+    & mut self, sym: & Sym, k: usize
+  ) -> Result<(), String> {
+    if let Some( & mut (_, ref mut status) ) = self.props.get_mut(sym) {
+      match * status {
+        PropStatus::Falsified(ref cex) => if k < cex.len() {
+          return Ok(())
+        } else {
+          return Err(
+            format!(
+              "[Context::set_prop_inv] cannot set property {}-true\n\
+              property's status is falsified at {}",
+              k, cex.len()
+            )
+          )
+        },
+        PropStatus::KTrue(old_k) => if k <= old_k {
+          return Ok(())
+        },
+        PropStatus::Invariant(_) => return Ok(()),
+        _ => (),
+      }
+      * status = PropStatus::KTrue(k) ;
+      Ok(())
+    } else {
+      Err(
+        format!("[Context::set_prop_inv] unknown property {}", sym)
+      )
+    }
+  }
+  /// Updates the status of a property to invariant.
+  pub fn set_prop_inv(& mut self, sym: & Sym, k: usize) -> Result<(), String> {
+    if let Some( & mut (_, ref mut status) ) = self.props.get_mut(sym) {
+      match * status {
+        PropStatus::Falsified(ref cex) => return Err(
+          format!(
+            "[Context::set_prop_inv] cannot set property invariant at {}\n\
+            property's status is falsified at {}",
+            k, cex.len()
+          )
+        ),
+        PropStatus::Invariant(old_k) => if old_k <= k {
+          return Ok(())
+        },
+        _ => (),
+      }
+      * status = PropStatus::Invariant(k) ;
+      Ok(())
+    } else {
+      Err(
+        format!("[Context::set_prop_inv] unknown property {}", sym)
+      )
+    }
+  }
+  /// Updates the status of a property to falsified.
+  pub fn set_prop_false(
+    & mut self, sym: & Sym, cex: Cex
+  ) -> Result<(), String> {
+    if let Some( & mut (_, ref mut status) ) = self.props.get_mut(sym) {
+      match * status {
+        PropStatus::Invariant(k) => return Err(
+          format!(
+            "[Context::set_prop_false] cannot set property false at {}\n\
+            property's status is proved at {}",
+            cex.len(), k
+          )
+        ),
+        PropStatus::KTrue(k) => if k >= cex.len() {
+          return Err(
+            format!(
+              "[Context::set_prop_false] cannotset property false at {}\n\
+              property's status is {}-true", cex.len(), k
+            )
+          )
+        },
+        _ => (),
+      }
+      * status = PropStatus::Falsified(cex) ;
+      Ok(())
+    } else {
+      Err(
+        format!("[Context::set_prop_false] unknown property {}", sym)
+      )
+    }
+  }
+
+  /// Returns true iff some properties are neither proved or disproved.
+  #[inline]
+  pub fn some_prop_unknown(& self, props: & [::Prop]) -> Result<bool, String> {
+    for prop in props {
+      match self.props.get( prop.sym() ) {
+        Some( & (_, PropStatus::Unknown) ) => return Ok(true),
+        Some( & (_, PropStatus::KTrue(_)) ) => return Ok(true),
+        Some( _ ) => (),
+        None => return Err(
+          format!("[Context::any_prop_unknown] unknown property {}", prop)
+        ),
+      }
+    }
+    Ok(false)
+  }
+
+  /// Returns the unknown properties.
+  #[inline]
+  pub fn unknown_props<'a>(
+    & self, props: & 'a [::Prop]
+  ) -> Result<Vec<& 'a Sym>, String> {
+    let mut res = vec![] ;
+    for prop in props {
+      match self.props.get( prop.sym() ) {
+        Some( & (_, PropStatus::Unknown) ) => res.push(prop.sym()),
+        Some( & (_, PropStatus::KTrue(_)) ) => res.push(prop.sym()),
+        Some( _ ) => (),
+        None => return Err(
+          format!("[Context::unknown_props] unknown property {}", prop)
+        ),
+      }
+    }
+    Ok(res)
+  }
+
+  /// Returns true iff some properties are disproved.
+  #[inline]
+  pub fn some_prop_disproved(
+    & self, props: & [::Prop]
+  ) -> Result<bool, String> {
+    for prop in props {
+      match self.props.get( prop.sym() ) {
+        Some( & (_, PropStatus::Falsified(_)) ) => return Ok(true),
+        Some( _ ) => (),
+        None => return Err(
+          format!("[Context::any_prop_unknown] unknown property {}", prop)
+        ),
+      }
+    }
+    Ok(false)
+  }
+
+  /// Option of the system corresponding to an identifier.
+  #[inline]
   pub fn get_sys(& self, sym: & Sym) -> Option<& ::Sys> {
     self.syss.get(sym)
   }
 
-  /** Prints the state of the context to stdin. Used for debugging. See also
-  [the `lines` function][lines fun].
+  /// Add invariants for a system.
+  #[inline]
+  pub fn add_invs(
+    & mut self, sym: & Sym, invs: STermSet
+  ) -> Result<(), String> {
+    if let Some(set) = self.invs.get_mut(sym) {
+      if set.is_empty() {
+        * set = invs
+      } else {
+        use std::iter::Extend ;
+        set.extend(invs)
+      }
+      return Ok(())
+    }
 
-  [lines fun]: struct.Context.html#method.lines (The lines function) */
+    // Reacheable iff `self.invs` is not defined for `sym`.
+    if self.syss.contains_key(sym) {
+      self.invs.insert(sym.clone(), invs) ;
+      Ok(())
+    } else {
+      Err(
+        format!("[Context::add_invs] unknown system {}", sym)
+      )
+    }
+  }
+
+  /// Prints the state of the context to stdin. Used for debugging. See also
+  /// [the `lines` function][lines fun].
+  ///
+  /// [lines fun]: struct.Context.html#method.lines (The lines function)
   pub fn stdin_print(& self) {
     println!("Context:") ;
     for line in self.lines().lines() {
@@ -394,7 +569,7 @@ impl Context {
     }
   }
 
-  /** Option of the item corresponding to an identifier. */
+  /// Option of the item corresponding to an identifier.
   pub fn sym_unused(& self, sym: & Sym) -> Option<& 'static str> {
     use base::Callable::* ;
     if ! self.all.contains(sym) { None } else {
@@ -418,7 +593,7 @@ impl Context {
     }
   }
 
-  /** A multiline string representation of the state of a context. */
+  /// A multiline string representation of the state of a context.
   pub fn lines(& self) -> String {
     let mut s = format!("line: {}\nbuffer: {}", self.line, self.buffer) ;
     s = map_to_lines(& self.callables, "function symbols:", s) ;
@@ -429,18 +604,18 @@ impl Context {
       }
     } ;
     if ! self.syss.is_empty() { s = format!("{}\n}}", s) } ;
-    map_to_lines(& self.props, "properties:", s)
+    map_pairs_to_lines(& self.props, "properties:", s)
   }
 
-  /** Underlying symbol, constant and term factory. */
-  #[inline(always)]
+  /// Underlying symbol, constant and term factory.
+  #[inline]
   pub fn factory(& self) -> & Factory { & self.factory }
 
-  /** Reads lines and parses them until it finds
-
-  * a check command,
-  * an exit command, or
-  * an error. */
+  /// Reads lines and parses them until it finds
+  ///
+  /// * a check command,
+  /// * an exit command, or
+  /// * an error.
   pub fn read(
     & mut self, reader: & mut io::Read
   ) -> Result<Res, Error> {
@@ -538,10 +713,10 @@ impl Context {
     }
   }
 
-  /** Returns a counterexample for a system from a model.
-
-  Assumes the offset **does not have reverse semantics**. That is, the model
-  does not come from a backward unrolling.*/
+  /// Returns a counterexample for a system from a model.
+  ///
+  /// Assumes the offset **does not have reverse semantics**. That is, the
+  /// model does not come from a backward unrolling.
   pub fn cex_of(& self, model: & Model, sys: & ::Sys) -> Cex {
     let mut no_state = HashMap::new() ;
     let mut trace = HashMap::<Offset, HashMap<Sym, Cst>>::new() ;
@@ -603,7 +778,7 @@ impl Context {
       },
     }
   }
-  fn internal_add_prop(& mut self, prop: Prop) {
+  fn internal_add_prop(& mut self, prop: Prop, status: PropStatus) {
     let sym = prop.sym().clone() ;
     match self.all.insert(sym.clone()) {
       true => (),
@@ -611,11 +786,11 @@ impl Context {
         println!("added prop {} but symbol is already used", sym)
       ),
     }
-    match self.props.insert(sym, Arc::new(prop)) {
+    match self.props.insert(sym, (Arc::new(prop), status)) {
       None => (),
       Some(e) => {
         self.stdin_print() ;
-        println!("added {} which already exists in props", e) ;
+        println!("added {} which already exists in props ({})", e.0, e.1) ;
         unreachable!()
       },
     }
@@ -639,7 +814,7 @@ impl Context {
   }
 
 
-  /** Adds a function declaration to the context. */
+  /// Adds a function declaration to the context.
   pub fn add_fun_dec(
     & mut self, sym: Sym, sig: Sig, typ: Type
   ) -> Result<(), Error> {
@@ -649,7 +824,7 @@ impl Context {
     }
   }
 
-  /** Adds a function definition to the context. */
+  /// Adds a function definition to the context.
   pub fn add_fun_def(
     & mut self, sym: Sym, args: Args, typ: Type, body: TermAndDep
   ) -> Result<(), Error> {
@@ -659,27 +834,27 @@ impl Context {
     }
   }
 
-  /** Adds a state property definition to the context. */
+  /// Adds a state property definition to the context.
   pub fn add_prop(
     & mut self, sym: Sym, sys: Sym, body: TermAndDep
   ) -> Result<(), Error> {
     match check::check_prop(self, sym, sys, body) {
-      Ok(prop) => Ok( self.internal_add_prop(prop) ),
+      Ok(prop) => Ok( self.internal_add_prop(prop, PropStatus::Unknown) ),
       Err(e) => Err(e),
     }
   }
 
-  /** Adds a state relation definition to the context. */
+  /// Adds a state relation definition to the context.
   pub fn add_rel(
     & mut self, sym: Sym, sys: Sym, body: TermAndDep
   ) -> Result<(), Error> {
     match check::check_rel(self, sym, sys, body) {
-      Ok(rel) => Ok( self.internal_add_prop(rel) ),
+      Ok(rel) => Ok( self.internal_add_prop(rel, PropStatus::Unknown) ),
       Err(e) => Err(e),
     }
   }
 
-  /** Adds a system definition to the context. */
+  /// Adds a system definition to the context.
   pub fn add_sys(
     & mut self, sym: Sym, state: Args,
     locals: Vec<(Sym, Type, TermAndDep)>,

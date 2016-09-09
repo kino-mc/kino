@@ -15,10 +15,13 @@
 extern crate term ;
 extern crate system ;
 extern crate unroll ;
+#[macro_use]
 extern crate common ;
 extern crate bmc ;
 extern crate kind ;
+extern crate twind ;
 extern crate tig ;
+extern crate pruner ;
 
 mod master ;
 

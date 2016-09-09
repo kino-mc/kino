@@ -12,6 +12,8 @@ term = { path = "term" }
 system = { path = "system" }
 unroll = { path = "unroll" }
 common = { path = "common" }
-kind = { path = "kind" }
 bmc = { path = "bmc" }
+kind = { path = "kind" }
+twind = { path = "twind" }
 tig = { path = "tig" }
+pruner = { path = "pruner" }

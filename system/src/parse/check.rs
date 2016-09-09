@@ -712,7 +712,7 @@ pub fn check_check(
   for prop in props.iter() {
     let prop = match ctxt.get_prop(prop) {
       None => return Err( UkProp(prop.clone(), sym.clone(), desc) ),
-      Some(prop) => (* prop).clone(),
+      Some(prop) => (* prop).0.clone(),
     } ;
     if sys.sym() != prop.sys().sym() {
       return Err( IncProp(prop.clone(), sys.clone(), desc) )

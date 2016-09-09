@@ -166,7 +166,7 @@ trait HasSet {
 /// Creates a configuration structure.
 macro_rules! conf {
   ($name:ident ($head:expr) {
-    $( $item:ident(
+    $( $item:ident (
       $typ:ty,
       $key:expr,
       $shrt:expr,
@@ -218,13 +218,15 @@ macro_rules! conf {
     impl HasSet for $name {
       fn set(& mut self, key: & str, val: & str) -> Result<(), String> {
         match (key, val) {
-          $( ($key, $val) => match $parser {
-            Ok(val) => {
-              self.$item.val = val ;
-              Ok(())
+          $(
+            ($key, $val) => match $parser {
+              Ok(val) => {
+                self.$item.val = val ;
+                Ok(())
+              },
+              Err(e) => Err(e),
             },
-            Err(e) => Err(e),
-          }, )+
+          )+
           _ => Err(
             format!("unknown key \"{}\"", key)
           ),
@@ -324,6 +326,40 @@ conf!{
 
 
 conf!{
+  Twind("2-induction (Twind) options".to_string()) {
+    is_on (
+      bool,
+      "turn", "[on/off]".to_string(),
+      "(De)activates Twind.".to_string(),
+      true,
+      val => bool::of(val)
+    ),
+    smt (
+      SolverStyle,
+      "smt", solver_keys(),
+      "Kind of solver to use.".to_string(),
+      SolverStyle::Z3,
+      val => SolverStyle::of(val)
+    ),
+    smt_cmd (
+      Option<String>,
+      "smt_cmd", "<cmd>".to_string(),
+      "Command to run the solver with.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    ),
+    smt_log (
+      Option<String>,
+      "smt_log", "<file>".to_string(),
+      "File to log the smt trace to.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    )
+  }
+}
+
+
+conf!{
   Tig("Template-based Invariant Generation (TIG) options".to_string()) {
     is_on (
       bool,
@@ -332,12 +368,60 @@ conf!{
       true,
       val => bool::of(val)
     ),
+    all_out (
+      bool,
+      "all_out", "[on/off]".to_string(),
+      "Generates a lot of candidate terms.".to_string(),
+      false,
+      val => bool::of(val)
+    ),
     max (
       Option<usize>,
       "max", "<int>".to_string(),
       "Maximum number of unrollings.".to_string(),
       None,
       val => Option::<usize>::of(val)
+    ),
+    smt (
+      SolverStyle,
+      "smt", solver_keys(),
+      "Kind of solver to use.".to_string(),
+      SolverStyle::Z3,
+      val => SolverStyle::of(val)
+    ),
+    smt_cmd (
+      Option<String>,
+      "smt_cmd", "<cmd>".to_string(),
+      "Command to run the solver with.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    ),
+    smt_log (
+      Option<String>,
+      "smt_log", "<file>".to_string(),
+      "File to log the smt trace to.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    ),
+    graph_log (
+      Option<String>,
+      "graph_log", "<dir>".to_string(),
+      "Directory to log the graphs to.".to_string(),
+      None,
+      val => Option::<String>::of(val)
+    )
+  }
+}
+
+
+conf!{
+  Pruner("Options of the pruner for discovered invariants".to_string()) {
+    is_on (
+      bool,
+      "turn", "[on/off]".to_string(),
+      "(De)activates pruning.".to_string(),
+      true,
+      val => bool::of(val)
     ),
     smt (
       SolverStyle,
@@ -445,8 +529,12 @@ pub struct Master {
   pub bmc: Option<Bmc>,
   /// Optional Kind configuration.
   pub kind: Option<Kind>,
+  /// Optional Twind configuration.
+  pub twind: Option<Twind>,
   /// Optional TIG configuration.
   pub tig: Option<Tig>,
+  /// Optional Pruner configuration.
+  pub pruner: Option<Pruner>,
 }
 impl Master {
   /// The scope to technique mapping.
@@ -482,6 +570,20 @@ impl Master {
         self.kind = Some(kind) ;
         Ok(self)
       },
+      "twind" => {
+        let mut twind = self.twind.unwrap_or_else(|| Twind::default()) ;
+        for & (ref key, ref val) in opts.iter() {
+          match twind.set(key, val) {
+            Ok(()) => (),
+            Err(e) => {
+              self.twind = Some(twind) ;
+              return Err( (e, self) )
+            },
+          }
+        } ;
+        self.twind = Some(twind) ;
+        Ok(self)
+      },
       "tig" => {
         let mut tig = self.tig.unwrap_or_else(|| Tig::default()) ;
         for & (ref key, ref val) in opts.iter() {
@@ -494,6 +596,20 @@ impl Master {
           }
         } ;
         self.tig = Some(tig) ;
+        Ok(self)
+      },
+      "pruner" => {
+        let mut pruner = self.pruner.unwrap_or_else(|| Pruner::default()) ;
+        for & (ref key, ref val) in opts.iter() {
+          match pruner.set(key, val) {
+            Ok(()) => (),
+            Err(e) => {
+              self.pruner = Some(pruner) ;
+              return Err( (e, self) )
+            },
+          }
+        } ;
+        self.pruner = Some(pruner) ;
         Ok(self)
       },
       "all" => {
@@ -531,10 +647,12 @@ impl Master {
   /// Default top level configuration.
   fn default() -> Self {
     Master {
-      scopes: vec![ "bmc", "kind", "tig" ],
+      scopes: vec![ "bmc", "kind", "twind", "tig", "pruner" ],
       bmc: Some( Bmc::default() ),
       kind: Some( Kind::default() ),
+      twind: Some( Twind::default() ),
       tig: Some( Tig::default() ),
+      pruner: Some( Pruner::default() ),
     }
   }
 
@@ -637,7 +755,13 @@ impl Master {
       "kind" => for line in Kind::lines(log.fmt(), log.stl()) {
         println!("{}", line)
       },
+      "twind" => for line in Twind::lines(log.fmt(), log.stl()) {
+        println!("{}", line)
+      },
       "tig" => for line in Tig::lines(log.fmt(), log.stl()) {
+        println!("{}", line)
+      },
+      "pruner" => for line in Pruner::lines(log.fmt(), log.stl()) {
         println!("{}", line)
       },
       "all" => {

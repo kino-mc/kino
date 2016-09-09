@@ -18,30 +18,32 @@ use std::collections::HashMap ;
 use std::sync::Arc ;
 
 use term::{
-  Offset, Sym, Factory, Model, STerm, STermSet
+  Offset, Sym, Factory, Model, STermSet
 } ;
 
 use sys::{ Prop, Sys } ;
 
-use ::{ Tek, CanRun } ;
+use ::{ Tek, CanRun, Res } ;
 
 /// Wrapper around master and kids receive and send channels.
 pub struct KidManager {
   /// Receives messages from kids.
-  r: mpsc::Receiver<MsgUp>,
+  r: Receiver<MsgUp>,
   /// Sends messages to master.
-  s: mpsc::Sender<MsgUp>,
+  s: Sender<MsgUp>,
   /// Senders to running techniques.
   senders: HashMap<Tek, mpsc::Sender<MsgDown>>,
 }
 impl KidManager {
-  /** Constructs a kid manager. */
+  /// Constructs a kid manager.
   pub fn mk() -> Self {
     let (sender, receiver) = mpsc::channel() ;
     KidManager { r: receiver, s: sender, senders: HashMap::new() }
   }
-  /** Launches a technique. */
-  pub fn launch<Conf: 'static + Sync + Send, T: CanRun<Conf> + Send + 'static>(
+  /// Launches a technique.
+  pub fn launch<
+    Conf: 'static + Sync + Send, T: CanRun<Conf> + Send + 'static
+  >(
     & mut self, t: T, sys: Sys, props: Vec<Prop>, f: & Factory, conf: Arc<Conf>
   ) -> Result<(), String> {
     let (s,r) = mpsc::channel() ;
@@ -65,7 +67,7 @@ impl KidManager {
     }
   }
 
-  /** Broadcasts a message to the kids. */
+  /// Broadcasts a message to the kids.
   #[inline(always)]
   pub fn broadcast(& self, msg: MsgDown) {
     for (_, sender) in self.senders.iter() {
@@ -78,32 +80,69 @@ impl KidManager {
     }
   }
 
-  /** Receive a message from the kids. */
+  /// Receive a message from the kids.
   #[inline(always)]
   pub fn recv(& self) -> Result<MsgUp, mpsc::RecvError> {
     self.r.recv()
   }
-  /** Forget a kid. */
+  /// Forget a kid.
   #[inline(always)]
-  pub fn forget(& mut self, t: & Tek) {
-    match self.senders.remove(t) {
-      Some(_) => (),
-      None => panic!("[kid_manager.forget] did not know {}", t.to_str()),
-    }
+  pub fn forget(& mut self, t: & Tek) -> Res<()> {
+    try_str_opt!(
+      self.senders.remove(t),
+      "[KidManager::forget] No instance of {} running", t.to_str()
+    ) ;
+    Ok(())
   }
-  /** True iff there's no more kids known by the manager. */
+  /// True iff there's no more kids known by the manager.
   #[inline(always)]
   pub fn kids_done(& self) -> bool { self.senders.is_empty() }
+
+  /// Sends a pruning message if a pruner is registered. Returns `true` iff the
+  /// pruning message was successfully sent.
+  ///
+  /// If the pruner is registered but the message can't be sent, writes a `bad`
+  /// message explaining what happened, forgets the pruner, and returns
+  /// `false`.
+  #[inline(always)]
+  pub fn prune_if_possible<BadLog: Fn(& str)>(
+    & mut self, tek: Tek, sys: Sym, invs: STermSet, info: Option<usize>,
+    bad_log: BadLog
+  ) -> bool {
+    let send_res = if let Some(pruner) = self.senders.get(& Tek::Pruner) {
+      pruner.send(
+        MsgDown::InvariantPruning( tek, sys.clone(), invs.clone(), info )
+      )
+    } else {
+      return false
+    } ;
+    // Not reachable if pruner's not registered, see early return above.
+    match send_res {
+      Ok(()) => true,
+      Err(e) => {
+        bad_log(
+          & format!(
+            "could not send pruning job:\n\
+            {}\n\
+            pruner seems to be dead, forgetting it", e
+          )
+        ) ;
+        match self.senders.remove(& Tek::Pruner) {
+          _ => false,
+        }
+      },
+    }
+  }
 }
 
 
 
-/** Info a technique can communicate. */
+/// Info a technique can communicate.
 pub enum Info {
-  /** Typical techniques unroll the system, this communicates the number of
-  unrollings. */
+  /// Typical techniques unroll the system, this communicates the number of
+  /// unrollings.
   At(Offset),
-  /** An error occurred. */
+  /// An error occurred.
   Error,
 }
 impl fmt::Display for Info {
@@ -115,7 +154,7 @@ impl fmt::Display for Info {
   }
 }
 
-/** Status of a property. */
+/// Status of a property.
 #[derive(Debug, Clone)]
 pub enum Status {
   /// Property was proved.
@@ -124,44 +163,93 @@ pub enum Status {
   Disproved,
 }
 
-/** Message from kino to the techniques. */
+/// Message from kino to the techniques.
 #[derive(Debug, Clone)]
 pub enum MsgDown {
-  /** Contains invariants for a system. */
-  Invariants(Sym, Vec<STerm>),
-  /** Some properties have been proved or disproved. */
+  /// Contains invariants for a system.
+  Invariants(Sym, STermSet),
+  /// Invariant pruning job.
+  InvariantPruning(Tek, Sym, STermSet, Option<usize>),
+  /// Some properties have been proved or disproved.
   Forget(Vec<Sym>, Status),
-  /** Some properties were found k-true. */
+  /// Some properties were found k-true.
   KTrue(Vec<Sym>, Offset),
 }
 
-/** Message from the techniques to kino. */
+/// Message from the techniques to kino.
 pub enum MsgUp {
-  /** Invariants discovered. */
-  Invariants(Tek, Sym, STermSet),
-  /** Not implemented. */
+  /// Invariants discovered.
+  ///
+  /// Stores
+  /// - the technique who discovered the invariants
+  /// - system's name
+  /// - invariant set
+  /// - optional invariant discovery info (unrolling, typically)
+  Invariants(Tek, Sym, STermSet, Option<usize>),
+  /// Invariants discovered after pruning.
+  ///
+  /// Stores
+  /// - the technique responsible for pruning
+  /// - the technique who discovered the invariants
+  /// - system's name
+  /// - pruned invariant set
+  /// - number of invariants in the original set
+  /// - optional invariant discovery info (unrolling, typically)
+  PrunedInvariants(Tek, Tek, Sym, STermSet, usize, Option<usize>),
+  /// Not implemented.
   Unimplemented,
-  /** Log message. */
+  /// Log message.
   Bla(Tek, String),
-  /** Warning message. */
+  /// Warning message.
   Warning(Tek, String),
-  /** Error message. */
+  /// Error message.
   Error(Tek, String),
-  /** Tek is done. */
+  /// Tek is done.
   Done(Tek, Info),
-  /** KTrue. */
-  KTrue(Vec<Sym>, Tek, Offset),
-  /** Some properties were proved. */
-  Proved(Vec<Sym>, Tek, Info),
-  /** Some properties were falsified. */
+  /// KTrue.
+  KTrue(Tek, Vec<Sym>, Tek, Offset),
+  /// Some properties were proved.
+  Proved(Vec<Sym>, Tek, Offset),
+  /// Some properties were falsified.
   Disproved(Model, Vec<Sym>, Tek, Info),
 }
 impl fmt::Display for MsgUp {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     use msg::MsgUp::* ;
     match * self {
-      Invariants(ref t, ref sym, ref invs) => {
-        try!( write!(fmt, "Invariants[{}]({},", sym, t) ) ;
+      Invariants(ref t, ref sym, ref invs, ref at) => {
+        try!(
+          write!(
+            fmt, "Invariants[{}{}]({},",
+            sym,
+            if let Some(at) = * at {
+              format!(" at {}", at)
+            } else {
+              format!("")
+            },
+            t
+          )
+        ) ;
+        for inv in invs {
+          try!( write!(fmt, " {}", inv) )
+        }
+        write!(fmt, " )")
+      },
+      PrunedInvariants(
+        ref t_p, ref t, ref sym, ref invs, ref card, ref at
+      ) => {
+        try!(
+          write!(
+            fmt, "Invariants[{}{}]({} by {} thru {},",
+            sym,
+            if let Some(at) = * at {
+              format!(" at {}", at)
+            } else {
+              format!("")
+            },
+            card, t, t_p
+          )
+        ) ;
         for inv in invs {
           try!( write!(fmt, " {}", inv) )
         }
@@ -172,7 +260,7 @@ impl fmt::Display for MsgUp {
       Bla(ref t, _) => write!(fmt, "Bla({})", t),
       Error(ref t, _) => write!(fmt, "Error({})", t),
       Warning(ref t, _) => write!(fmt, "Warning({})", t),
-      KTrue(_, ref t, _) => write!(fmt, "KTrue({})", t),
+      KTrue(_, _, ref t, _) => write!(fmt, "KTrue({})", t),
       Proved(_, ref t, _) => write!(fmt, "Proved({})", t),
       Disproved(_, _, ref t, _) => write!(fmt, "Disproved({})", t),
     }
@@ -185,21 +273,21 @@ fn exit<T>(_: T) {
   exit(0)
 }
 
-/** Used by the techniques to communicate with kino. */
+/// Used by the techniques to communicate with kino.
 pub struct Event {
-  /** Sender to kino. */
+  /// Sender to kino.
   s: Sender<MsgUp>,
-  /** Receiver from kino. */
+  /// Receiver from kino.
   r: Receiver<MsgDown>,
-  /** Identifier of the technique. */
+  /// Identifier of the technique.
   t: Tek,
-  /** Term factory. */
+  /// Term factory.
   f: Factory,
-  /** K-true properties. */
+  /// K-true properties.
   k_true: HashMap<Sym, Option<Offset>>,
 }
 impl Event {
-  /** Creates a new `Event`. */
+  /// Creates a new `Event`.
   pub fn mk(
     s: Sender<MsgUp>, r: Receiver<MsgDown>,
     t: Tek, f: Factory, props: & [Prop]
@@ -214,10 +302,26 @@ impl Event {
     Event { s: s, r: r, t: t, f: f, k_true: k_true }
   }
 
+  /// Sends a pruned invariant message upwards.
+  pub fn pruned_invariants(
+    & self, tek: Tek, sys: & Sym, invs: STermSet, old_card: usize,
+    info: Option<usize>
+  ) {
+    self.s.send(
+      MsgUp::PrunedInvariants(self.t, tek, sys.clone(), invs, old_card, info)
+    ).unwrap_or_else( exit )
+  }
+
   /// Sends an invariant message upwards.
   pub fn invariants(& self, sys: & Sym, invs: STermSet) {
     self.s.send(
-      MsgUp::Invariants(self.t, sys.clone(), invs)
+      MsgUp::Invariants(self.t, sys.clone(), invs, None)
+    ).unwrap_or_else( exit )
+  }
+  /// Sends an invariant message upwards, with a notion of offset.
+  pub fn invariants_at(& self, sys: & Sym, invs: STermSet, at: usize) {
+    self.s.send(
+      MsgUp::Invariants(self.t, sys.clone(), invs, Some(at))
     ).unwrap_or_else( exit )
   }
 
@@ -232,14 +336,14 @@ impl Event {
     self.done(Info::At(o.clone()))
   }
   /// Sends a proved message upwards.
-  pub fn proved(& self, props: Vec<Sym>, info: Info) {
+  pub fn proved(& self, props: Vec<Sym>, info: Offset) {
     self.s.send(
       MsgUp::Proved(props, self.t, info)
     ).unwrap_or_else( exit )
   }
   /// Sends a proved message upwards.
   pub fn proved_at(& self, props: Vec<Sym>, o: & Offset) {
-    self.proved(props, Info::At(o.clone()))
+    self.proved(props, o.clone())
   }
   /// Sends a falsification message upwards.
   pub fn disproved(& self, model: Model, props: Vec<Sym>, info: Info) {
@@ -254,7 +358,7 @@ impl Event {
   /// Sends some k-true properties.
   pub fn k_true(& self, props: Vec<Sym>, o: & Offset) {
     self.s.send(
-      MsgUp::KTrue(props, self.t, o.clone())
+      MsgUp::KTrue(self.t, props, self.t, o.clone())
     ).unwrap_or_else( exit )
   }
   /// Sends a log message upwards.

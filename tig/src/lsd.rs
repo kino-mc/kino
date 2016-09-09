@@ -12,6 +12,7 @@ invariant-generation-oriented operations. */
 
 use common::Res ;
 
+use term::STermSet ;
 use term::tmp::{ TmpTerm, TmpTermMap } ;
 
 use Domain ;
@@ -53,6 +54,8 @@ pub trait Lsd<
   fn unroll_len(& self) -> usize ;
   /// Unrolls one transition further. Returns the new depth.
   fn unroll(& mut self) -> Res<usize> ;
+  /// Adds invariants to an lsd instance.
+  fn add_invs(& mut self, STermSet) -> Res<()> ;
 }
 
 
@@ -63,7 +66,7 @@ pub trait Lsd<
 pub mod top_only {
 
   use common::{ SolverTrait, Res } ;
-  use term::{ Offset2, Bool } ;
+  use term::{ Offset2, Bool, STermSet } ;
   use term::tmp::TmpTerm as Term ;
   use term::tmp::{ TmpTermMker, TmpTermMap } ;
   use system::Sys ;
@@ -97,7 +100,7 @@ pub mod top_only {
         "while `reset`ing the solver {}", k
       ) ;
       try_str!(
-        unroller.defclare_funs(),
+        unroller.defclare_funs(& []),
         "while declaring UFs, init and trans"
       ) ;
       try_str!(
@@ -131,7 +134,7 @@ pub mod top_only {
     pub fn mk(sys: & Sys, solver: Solver, unroll: usize) -> Res<Self> {
       let factory = solver.parser().clone() ;
       let unroller = try_str!(
-        Unroller::mk(sys, solver), "while creating unroller"
+        Unroller::mk(sys, & [], solver), "while creating unroller"
       ) ;
       Base::of(
         unroller, unroll, Eval::mk(
@@ -226,6 +229,9 @@ pub mod top_only {
       ) ;
       Ok( self.unroll_len() )
     }
+    fn add_invs(& mut self, invs: STermSet) -> Res<()> {
+      self.unroller.add_invs(invs, & Offset2::init(), & self.k)
+    }
   }
 
 
@@ -271,7 +277,7 @@ pub mod top_only {
         "while `reset`ing the solver"
       ) ;
       try_str!(
-        unroller.defclare_funs(),
+        unroller.defclare_funs(& []),
         "while declaring UFs, init and trans"
       ) ;
       try_str!(
@@ -448,9 +454,8 @@ pub mod top_only {
     'a, Val: Domain, Solver: SolverTrait<'a>
   > Lsd< Val, Base<Val, Solver>, Step<Val, Solver> > for Step<Val, Solver> {
     fn restart(& mut self) -> Res<()> {
-      match Step::<Val, Solver>::setup(
-        & mut self.unroller, self.k.next().to_usize()
-      ) {
+      let k = self.unroll_len() ;
+      match Step::<Val, Solver>::setup(& mut self.unroller, k) {
         Ok( (check, k) ) => {
           debug_assert!(k == self.k) ;
           debug_assert!(check == self.check) ;
@@ -466,7 +471,7 @@ pub mod top_only {
       Ok(self)
     }
     fn unroll_len(& self) -> usize {
-      self.k.next().to_usize()
+      self.k.curr().to_usize()
     }
     fn unroll(& mut self) -> Res<usize> {
       self.k = self.k.nxt() ;
@@ -475,6 +480,9 @@ pub mod top_only {
         "while unrolling system at {}", self.k.next()
       ) ;
       Ok( self.unroll_len() )
+    }
+    fn add_invs(& mut self, invs: STermSet) -> Res<()> {
+      self.unroller.add_invs(invs, & self.check, & self.k)
     }
   }
 }

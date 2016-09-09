@@ -8,7 +8,7 @@
 // except according to those terms.
 #![deny(missing_docs)]
 
-//! K-induction.
+//! 2-induction.
 //!
 //! Unrolls backwards.
 
@@ -32,14 +32,15 @@ use system::{ Sys, Prop } ;
 
 use unroll::* ;
 
-/** K-induction. */
-pub struct KInd ;
-unsafe impl Send for KInd {}
-impl common::CanRun<conf::Kind> for KInd {
-  fn id(& self) -> common::Tek { common::Tek::KInd }
+/// K-induction.
+pub struct Twind ;
+unsafe impl Send for Twind {}
+impl common::CanRun<conf::Twind> for Twind {
+  fn id(& self) -> common::Tek { common::Tek::Twind }
 
   fn run(
-    & self, conf: Arc<conf::Kind>, sys: Sys, props: Vec<Prop>, mut event: Event
+    & self, conf: Arc<conf::Twind>, sys: Sys, props: Vec<Prop>,
+    mut event: Event
   ) {
     // event.log(
     //   & format!("checking {} propertie(s) on system {}", props.len(), sys.sym())
@@ -54,24 +55,25 @@ impl common::CanRun<conf::Kind> for KInd {
     } ;
 
     mk_solver_run!(
-      solver_conf, conf.smt_log(), "kind", event.factory(),
-      solver => kind(solver, conf.clone(), sys, props, & mut event),
+      solver_conf, conf.smt_log(), "twind", event.factory(),
+      solver => twind(solver, sys, props, & mut event),
       msg => event.error(msg)
     )
   }
 }
 
-fn kind<
+fn twind<
   'a,
   S: SolverTrait<'a>
 >(
-  solver: S, conf: Arc<conf::Kind>,
-  sys: Sys, props: Vec<Prop>, event: & mut Event
+  solver: S, sys: Sys, props: Vec<Prop>, event: & mut Event
 ) {
+
+  let duration = Duration::from_millis(73) ;
 
   // Reversed to unroll backwards.
   let check_offset = Offset2::init().rev() ;
-  let mut k = check_offset.clone() ;
+  let k = check_offset.clone() ;
 
   let mut unroller = try_error!(
     Unroller::mk(& sys, & props, solver), event,
@@ -107,30 +109,38 @@ fn kind<
   // event.log( & format!("unroll {}", k) ) ;
   try_error!(
     unroller.unroll_init(& k), event,
-    "while unrolling system"
+    "while unrolling system at {}", k
+  ) ;
+  try_error!(
+    props.activate_state(unroller.solver(), & k), event,
+    "while activating one state properties"
+  ) ;
+
+  let k = k.nxt() ;
+
+  try_error!(
+    unroller.unroll_bak(& k), event,
+    "while unrolling system at {}", k
   ) ;
 
   try_error!(
+    props.activate_next(unroller.solver(), & k), event,
+    "while activating two state properties"
+  ) ;
+  try_error!(
     props.activate_state(unroller.solver(), & k), event,
-    "while activating one-state property"
+    "while activating one state properties"
   ) ;
 
   'out: loop {
 
-    if let Some(ref max) = * conf.max() {
-      if max < & k.curr().to_usize() {
-        event.done_at( & k.next() ) ;
-        break 'out
-      }
-    }
-
-    // event.log(
-    //   & format!("checking for {}-induction", k.curr())
-    // ) ;
-
     props.reset_inhibited() ;
 
     // event.log( & format!("activating state at {}", k) ) ;
+    try_error!(
+      props.activate_state(unroller.solver(), & k), event,
+      "while activating one-state property"
+    ) ;
 
     match event.recv() {
       None => return (),
@@ -142,10 +152,6 @@ fn kind<
             because of a `Forget` message (1)"
           ),
           MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
-            // event.log(
-            //   & format!("received {} invariants", invs.len())
-            // ) ;
-            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
             try_error!(
               unroller.add_invs(invs, & check_offset, & k), event,
               "while adding invariants from supervisor"
@@ -154,7 +160,7 @@ fn kind<
           _ => event.error("unknown message")
         }
       },
-    } ;
+    }
 
     if props.none_left() {
       event.done_at(& k.curr()) ;
@@ -234,7 +240,7 @@ fn kind<
               "while forgetting some properties\n\
               because I just proved them invariant"
             ) ;
-            event.proved_at(unfalsifiable.into_iter().collect(), k.curr()) ;
+            event.proved_at(unfalsifiable.into_iter().collect(), k.curr()) ; 
             break 'split
           } else {
             // event.log("recv") ;
@@ -292,7 +298,7 @@ fn kind<
               event.done_at( k.curr() ) ;
               break 'out
             }
-            sleep(Duration::from_millis(10)) ;
+            sleep(duration) ;
           }
         }
       }
@@ -329,25 +335,43 @@ fn kind<
       break
     }
 
-    k = k.nxt() ;
+    let mut new_stuff = false ;
 
-    // event.log( & format!("unroll {}", k) ) ;
-    try_error!(
-      unroller.unroll_bak(& k), event,
-      "while unrolling system"
-    ) ;
+    'new_stuff: while ! new_stuff {
 
-    // event.log( & format!("activate next at {}", k) ) ;
-    try_error!(
-      props.activate_next(unroller.solver(), & k), event,
-      "while activating two state properties"
-    ) ;
-    try_error!(
-      props.activate_state(unroller.solver(), & k), event,
-      "while activating one state properties"
-    ) ;
+      match event.recv() {
+        None => return (),
+        Some(msgs) => for msg in msgs {
+          match msg {
+            MsgDown::Forget(ps, _) => {
+              new_stuff = true ;
+              try_error!(
+                props.forget(unroller.solver(), ps.iter()), event,
+                "while forgetting some properties\n\
+                because of a `Forget` message (1)"
+              )
+            },
+            MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+              new_stuff = true ;
+              // event.log(
+              //   & format!("received {} invariants", invs.len())
+              // ) ;
+              // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
+              try_error!(
+                unroller.add_invs(invs, & check_offset, & k), event,
+                "while adding invariants from supervisor"
+              )
+            },
+            _ => event.error("unknown message")
+          }
+        },
+      }
 
-    ()
+      sleep(duration)
+    }
 
   }
 }
+
+
+

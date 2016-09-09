@@ -104,15 +104,16 @@ pub struct Miner {
 impl Miner {
   /// Creates a miner from a system.
   #[inline]
-  pub fn mk(sys: & Sys, factory: & Factory) -> Self {
-    use term::{ CstMaker, Int, Rat, Zero, One } ;
+  pub fn mk(sys: & Sys, factory: & Factory, all_out: bool) -> Self {
+    use term::{
+      VarMaker, CstMaker, Int, Rat, Zero, One, UnTermOps, State, STerm
+    } ;
     let mut boo = Info::empty(17) ;
     let mut int = Info::empty(17) ;
     let mut rat = Info::empty(17) ;
 
     // Splitting state variables of the system.
     for & (ref sym, ref typ) in sys.state().args().iter() {
-      use term::{ State, VarMaker, STerm, UnTermOps } ;
       use term::Type::* ;
       match * typ {
         Bool => {
@@ -174,26 +175,84 @@ impl Miner {
     rat.add_cst( factory.cst(one.clone()) ) ;
     rat.add_cst( factory.cst(one.clone() + one) ) ;
 
-    let result = Miner {
-      sys: sys.clone(),
-      fac: factory.clone(),
-      boo: boo,
-      int: int,
-      rat: rat,
-    } ;
-
     // Extracting constants.
-    factory.cst_fold(
-      result, | mut miner, cst | {
+    let mut miner = factory.cst_fold(
+      Miner {
+        sys: sys.clone(),
+        fac: factory.clone(),
+        boo: boo,
+        int: int,
+        rat: rat,
+      }, | mut miner, cst | {
         use term::Type::* ;
         match cst.typ() {
-          Bool => miner.boo.add_cst( cst.clone() ),
+          Bool => (),
           Int  => miner.int.add_cst( cst.clone() ),
           Rat  => miner.rat.add_cst( cst.clone() ),
         }
         miner
       }
-    )
+    ) ;
+
+    if all_out {
+
+      // Add svar le/lt/ge/gt cst for int and rat to boo.
+      for svar in miner.int.vars.iter() {
+        for cst in miner.int.csts.iter() {
+          let svar_term: Term = factory.svar(svar.clone(), State::Curr) ;
+          let cst = factory.cst(cst.clone()) ;
+          let term = factory.le(svar_term.clone(), cst.clone()) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+          let term = factory.lt(svar_term.clone(), cst.clone()) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+          let term = factory.gt(svar_term.clone(), cst.clone()) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+          let term = factory.ge(svar_term, cst) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+        }
+      }
+      for svar in miner.rat.vars.iter() {
+        for cst in miner.rat.csts.iter() {
+          let svar_term: Term = factory.svar(svar.clone(), State::Curr) ;
+          let cst = factory.cst(cst.clone()) ;
+          let term = factory.le(svar_term.clone(), cst.clone()) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+          let term = factory.lt(svar_term.clone(), cst.clone()) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+          let term = factory.gt(svar_term.clone(), cst.clone()) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+          let term = factory.ge(svar_term, cst) ;
+          let term = STerm::One(
+            term.clone(), factory.bump(& term).unwrap()
+          ) ;
+          miner.boo.add_term( term ) ;
+        }
+      }
+
+    }
+
+    miner
   }
   /// Shrinks the sets to the current size.
   #[inline]
@@ -259,11 +318,8 @@ impl Miner {
         let add = factory.add(
           vec![ var.clone(), var_p.clone() ]
         ) ;
-        let sub_1 = factory.sub(
+        let sub = factory.sub(
           vec![ var.clone(), var_p.clone() ]
-        ) ;
-        let sub_2 = factory.sub(
-          vec![ var_p, var.clone() ]
         ) ;
         info.trms.insert(
           STerm::One(
@@ -272,12 +328,7 @@ impl Miner {
         ) ;
         info.trms.insert(
           STerm::One(
-            sub_1.clone(), try!( factory.bump(sub_1) )
-          )
-        ) ;
-        info.trms.insert(
-          STerm::One(
-            sub_2.clone(), try!( factory.bump(sub_2) )
+            sub.clone(), try!( factory.bump(sub) )
           )
         ) ;
         ()
@@ -290,11 +341,8 @@ impl Miner {
           let add = factory.add(
             vec![ var.clone(), cst.clone() ]
           ) ;
-          let sub_1 = factory.sub(
+          let sub = factory.sub(
             vec![ var.clone(), cst.clone() ]
-          ) ;
-          let sub_2 = factory.sub(
-            vec![ cst, var.clone() ]
           ) ;
           info.trms.insert(
             STerm::One(
@@ -303,12 +351,7 @@ impl Miner {
           ) ;
           info.trms.insert(
             STerm::One(
-              sub_1.clone(), try!( factory.bump(sub_1) )
-            )
-          ) ;
-          info.trms.insert(
-            STerm::One(
-              sub_2.clone(), try!( factory.bump(sub_2) )
+              sub.clone(), try!( factory.bump(sub) )
             )
           ) ;
           ()
@@ -395,21 +438,23 @@ impl Miner {
 }
 
 /// Mines a system for boolean candidate terms.
-pub fn bool(factory: & Factory, sys: & Sys) -> (Term, TermSet) {
+pub fn bool(factory: & Factory, sys: & Sys, all_out: bool) -> (Term, TermSet) {
   use term::CstMaker ;
-  let mut miner = Miner::mk(sys, factory) ;
-  match miner.int_synth_os_oct2() {
-    Ok(()) => (),
-    Err(e) => panic!(
-      "[mine::bool] in call to `Miner::int_synth_os_oct2`: {}", e
-    )
-  } ;
-  match miner.rat_synth_os_oct2() {
-    Ok(()) => (),
-    Err(e) => panic!(
-      "[mine::bool] in call to `Miner::rat_synth_os_oct2`: {}", e
-    )
-  } ;
+  let mut miner = Miner::mk(sys, factory, all_out) ;
+  if all_out {
+    match miner.int_synth_os_oct2() {
+      Ok(()) => (),
+      Err(e) => panic!(
+        "[mine::bool] in call to `Miner::int_synth_os_oct2`: {}", e
+      )
+    } ;
+    match miner.rat_synth_os_oct2() {
+      Ok(()) => (),
+      Err(e) => panic!(
+        "[mine::bool] in call to `Miner::rat_synth_os_oct2`: {}", e
+      )
+    }
+  }
   miner.bool_synth_of_int() ;
   let (set, _, _) = miner.to_sets() ;
 

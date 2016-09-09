@@ -5,9 +5,11 @@ dependencies = [
  "bmc 0.1.0",
  "common 0.1.0",
  "kind 0.1.0",
+ "pruner 0.1.0",
  "system 0.1.0",
  "term 0.1.0",
  "tig 0.1.0",
+ "twind 0.1.0",
  "unroll 0.1.0",
 ]
 
@@ -153,6 +155,16 @@ version = "0.1.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "pruner"
+version = "0.1.0"
+dependencies = [
+ "common 0.1.0",
+ "system 0.1.0",
+ "term 0.1.0",
+ "unroll 0.1.0",
+]
+
+[[package]]
 name = "rand"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -162,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "0.1.74"
+version = "0.1.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "aho-corasick 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -180,10 +192,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "rsmt2"
 version = "0.2.0"
-source = "git+https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git#87d68d486990efa934cd7bb5897ff4a0c726ae41"
+source = "git+https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git#71e3f58d155786c60bbc9e8519c6c07223dda08e"
 dependencies = [
  "nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex 0.1.74 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.75 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -229,6 +241,16 @@ dependencies = [
 
 [[package]]
 name = "tig"
+version = "0.1.0"
+dependencies = [
+ "common 0.1.0",
+ "system 0.1.0",
+ "term 0.1.0",
+ "unroll 0.1.0",
+]
+
+[[package]]
+name = "twind"
 version = "0.1.0"
 dependencies = [
  "common 0.1.0",

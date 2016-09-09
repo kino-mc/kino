@@ -19,10 +19,13 @@ write stuff here
 
 extern crate term ;
 extern crate system ;
+#[macro_use]
 extern crate common ;
 extern crate bmc ;
 extern crate kind ;
+extern crate twind ;
 extern crate tig ;
+extern crate pruner ;
 
 use std::process::exit ;
 
@@ -82,9 +85,12 @@ fn main() {
             Res::Exit => (),
             Res::Check(sys, props) => {
               log.trail() ;
-              let _ = Master::launch(
-                & log, & context, sys, props, None, conf
-              ) ;
+              match Master::launch(
+                & log, & mut context, sys, props, None, conf
+              ) {
+                Ok(()) => exit(0),
+                Err(()) => exit(2),
+              }
             },
             Res::CheckAss(_, _, _) => {
               log.bad(

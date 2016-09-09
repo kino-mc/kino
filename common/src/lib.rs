@@ -8,13 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Stuff common to all techniques.
-
-# To do
-
-* check that first argument of custom technique is legal
-
-*/
+//! Stuff common to all techniques.
+//!
+//!# To do
+//!
+//! * check that first argument of custom technique is legal
 
 extern crate ansi_term as ansi ;
 #[macro_use]
@@ -33,7 +31,7 @@ use term::smt::{
 
 use sys::{ Prop, Sys } ;
 
-/** Try for `Result<T, String>`, appends something to error messages. */
+/// Try for `Result<T, String>`, appends something to error messages.
 #[macro_export]
 macro_rules! try_str {
   ($e:expr, $($blah:expr),+) => (
@@ -48,7 +46,7 @@ macro_rules! try_str {
   ) ;
 }
 
-/** Try for `Option<T>`. */
+/// Try for `Option<T>`.
 #[macro_export]
 macro_rules! try_str_opt {
   ($e:expr, $($blah:expr),+) => (
@@ -78,11 +76,21 @@ macro_rules! try_error {
         return ()
       },
     }
+  ) ;
+  ($e:expr, $event:expr) => (
+    match $e {
+      Ok(v) => v,
+      Err(e) => {
+        $event.error( & e ) ;
+        $event.done($crate::msg::Info::Error) ;
+        return ()
+      },
+    }
   )
 }
 
 
-/** Solver trait that bmc and kind will use. */
+/// Solver trait that bmc and kind will use.
 pub trait SolverTrait<'a>:
   Solver<'a, Factory> +
   Query<'a, Factory> +
@@ -92,30 +100,30 @@ pub trait SolverTrait<'a>:
 impl<'a> SolverTrait<'a> for PlainSolver<'a, Factory> {}
 impl<'a> SolverTrait<'a> for TeeSolver<'a, Factory> {}
 
-/** Creates a plain solver.
-
-```[no_use]
-// With the `term` crate in scope...
-mk_solver! {
-  solver_conf,
-  conf.smt_log(),
-  "smt_log_file_name_without_smt2_extension",
-  factory, // Cloned in the macro, should be a ref.
-  solver => blah(conf, event, solver),
-  error_msg => event.error(error_msg)
-}
-```
-
-Why use a macro? The solver stores mutable references to the stdin and stout
-of the kid. The kid must thus be in scope when the solver is used.
-
-Writing this in a function is a mess, mostly because of the genericity of the
-function applied in terms of `Plain`/`Tee` solvers.
-
-# TODO
-
-The configuration stuff to pass is messy for now, waiting for conf module to
-reach maturity. */
+/// Creates a plain solver.
+/// 
+/// ```[no_use]
+/// // With the `term` crate in scope...
+/// mk_solver! {
+///   solver_conf,
+///   conf.smt_log(),
+///   "smt_log_file_name_without_smt2_extension",
+///   factory, // Cloned in the macro, should be a ref.
+///   solver => blah(conf, event, solver),
+///   error_msg => event.error(error_msg)
+/// }
+/// ```
+/// 
+/// Why use a macro? The solver stores mutable references to the stdin and
+/// stout of the kid. The kid must thus be in scope when the solver is used.
+/// 
+/// Writing this in a function is a mess, mostly because of the genericity of
+/// the function applied in terms of `Plain`/`Tee` solvers.
+/// 
+/// # TODO
+/// 
+/// The configuration stuff to pass is messy for now, waiting for conf module
+/// to reach maturity.
 #[macro_export]
 macro_rules! mk_solver_run {
   (
@@ -164,6 +172,83 @@ macro_rules! mk_solver_run {
     }
   ) ;
 }
+/// Same as [`mk_solver_run`](macro.mk_solver_run!.html) with two solvers.
+#[macro_export]
+macro_rules! mk_two_solver_run {
+  (
+    $conf:expr,
+    $smt_log:expr,
+    $log_file: expr,
+    $factory:expr,
+    (
+      $solver1:ident $log_suff1:expr, $solver2:ident $log_suff2:expr
+    ) => $run:expr,
+    $err:ident => $errun:expr
+  ) => (
+    match ( term::smt::Kid::mk($conf.clone()), term::smt::Kid::mk($conf) ) {
+      ( Ok(mut kid_1), Ok(mut kid_2) ) => match (
+        term::smt::solver( & mut kid_1, $factory.clone() ),
+        term::smt::solver( & mut kid_2, $factory.clone() ),
+      ) {
+        ( Ok($solver1), Ok($solver2) ) => match * $smt_log {
+          None => $run,
+          Some(ref path) => {
+            let (path_1, path_2) = (
+              format!("{}/{}_{}.smt2", path, $log_file, $log_suff1),
+              format!("{}/{}_{}.smt2", path, $log_file, $log_suff2)
+            ) ;
+            match (
+              std::fs::File::create(& path_1),
+              std::fs::File::create(& path_2)
+            ) {
+              (Ok(file_1), Ok(file_2)) => {
+                let $solver1 = $solver1.tee(file_1) ;
+                let $solver2 = $solver2.tee(file_2) ;
+                $run
+              },
+              (Err(e), _) => {
+                let $err = & format!(
+                  "could not open smt log file \"{}\":\n{:?}", path_1, e
+                ) ;
+                $errun
+              },
+              (_, Err(e)) => {
+                let $err = & format!(
+                  "could not open smt log file \"{}\":\n{:?}", path_2, e
+                ) ;
+                $errun
+              },
+            }
+          },
+        },
+        (Err(e), _) => {
+          let $err = & format!(
+            "could not create solver from kid:\n{}", e
+          ) ;
+          $errun
+        },
+        (_, Err(e)) => {
+          let $err = & format!(
+            "could not create solver from kid:\n{}", e
+          ) ;
+          $errun
+        },
+      },
+      (Err(e), _) => {
+        let $err = & format!(
+          "could not spawn solver kid:\n{}", e
+        ) ;
+        $errun
+      },
+      (_, Err(e)) => {
+        let $err = & format!(
+          "could not spawn solver kid:\n{}", e
+        ) ;
+        $errun
+      },
+    }
+  ) ;
+}
 
 
 // /** Creates a plain solver. */
@@ -186,32 +271,36 @@ macro_rules! mk_solver_run {
 //   Ok( run(solver) )
 // }
 
-/** Result yielding a list of strings. */
+/// Result yielding a list of strings.
 pub type Res<T> = Result<T, String> ;
 
-/** Trait the techniques should implement so that kino can call them in a
-generic way. */
+/// Trait the techniques should implement so that kino can call them in a
+/// generic way.
 pub trait CanRun<Conf> {
-  /** The identifier of the technique. */
+  /// The identifier of the technique.
   fn id(& self) -> Tek ;
-  /** Runs the technique. */
+  /// Runs the technique.
   fn run(& self, Arc<Conf>, Sys, Vec<Prop>, msg::Event) ;
 }
 
-/** Enumeration of the techniques. */
+/// Enumeration of the techniques.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tek {
-  /** Master. */
+  /// Master.
   Kino,
-  /** Bounded model checking. */
+  /// Bounded model checking.
   Bmc,
-  /** Induction. */
+  /// K-induction.
   KInd,
-  /** Invgen. */
+  /// 2-induction.
+  Twind,
+  /// Invgen.
   Tig,
-  /** Custom technique.
-  First string is a short description that should be a legal filename.
-  Second is an arbitrarily long description. */
+  /// Invariant pruner.
+  Pruner,
+  /// Custom technique.
+  /// First string is a short description that should be a legal filename.
+  /// Second is an arbitrarily long description.
   Tec(& 'static str, & 'static str),
 }
 impl fmt::Display for Tek {
@@ -220,7 +309,7 @@ impl fmt::Display for Tek {
   }
 }
 impl Tek {
-  /** A short string representation of a technique. */
+  /// A short string representation of a technique.
   #[inline(always)]
   pub fn to_str(& self) -> & str {
     use Tek::* ;
@@ -228,11 +317,13 @@ impl Tek {
       Kino => "master",
       Bmc => "bmc",
       KInd => "k-ind",
+      Twind => "2-ind",
       Tig => "tig",
+      Pruner => "pruner",
       Tec(ref s, _) => & s,
     }
   }
-  /** A description of a technique. */
+  /// A description of a technique.
   #[inline(always)]
   pub fn desc(& self) -> & str {
     use Tek::* ;
@@ -240,11 +331,13 @@ impl Tek {
       Kino => "supervisor",
       Bmc => "bounded model checking",
       KInd => "k-induction",
+      Twind => "2-induction",
       Tig => "invariant generation",
+      Pruner => "invariant pruner",
       Tec(_, ref desc) => & desc,
     }
   }
-  /** Thread name for techniques. */
+  /// Thread name for techniques.
   #[inline(always)]
   pub fn thread_name(& self) -> String {
     use Tek::* ;
@@ -252,7 +345,9 @@ impl Tek {
       Kino => panic!("thread name of supervisor requested"),
       Bmc => "kino_bmc".to_string(),
       KInd => "kino_k-induction".to_string(),
-      Tig => "kino_k-invgen".to_string(),
+      Twind => "kino_2-induction".to_string(),
+      Tig => "kino_invgen".to_string(),
+      Pruner => "kino_pruner".to_string(),
       Tec(ref s, _) => format!("kino_{}", s),
     }
   }

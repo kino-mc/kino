@@ -13,8 +13,12 @@ use std::cmp::{ PartialEq, Eq } ;
 use std::iter::Iterator ;
 use std::collections::HashSet ;
 
-use term::{ Sym, Var, Type, Term, STerm } ;
+use term::{
+  Sym, Var, Type, Term, STerm, STermSet
+} ;
 use term::real_term::Cst ;
+
+use Cex ;
 
 /// Set of callables.
 #[derive(Debug,Clone,PartialEq,Eq)]
@@ -376,6 +380,34 @@ impl fmt::Display for Callable {
   }
 }
 
+/// Status of a property.
+pub enum PropStatus {
+  /// Unknown.
+  Unknown,
+  /// True up to k transitions from the initial states.
+  KTrue(usize),
+  /// Falsified, with a cex.
+  Falsified(Cex),
+  /// K-inductive invariant without minimization.
+  Invariant(usize),
+  /// Minimized k-inductive invariant with lemmas.
+  MinInvariant(usize, STermSet),
+}
+impl fmt::Display for PropStatus {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    use self::PropStatus::* ;
+    match * self {
+      Unknown => write!(fmt, "unknown"),
+      KTrue(ref k) => write!(fmt, "true up to {} transitions", k),
+      Falsified(ref model) => write!(fmt, "falsified at {}", model.len()),
+      Invariant(ref k) => write!(fmt, "{}-inductive", k),
+      MinInvariant(ref k, ref invs) => write!(
+        fmt, "{}-inductive with {} lemmas (minimized)", k, invs.len()
+      ),
+    }
+  }
+}
+
 /// A property.
 #[derive(Debug,Clone)]
 pub struct Prop {
@@ -535,6 +567,11 @@ impl Sys {
       } ;
     } ;
     s
+  }
+}
+impl PartialEq<Sym> for Sys {
+  fn eq(& self, rhs: & Sym) -> bool {
+    self.sym == * rhs
   }
 }
 impl fmt::Display for Sys {

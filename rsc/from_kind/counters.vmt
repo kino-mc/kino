@@ -1,0 +1,106 @@
+(define-sys
+  top (
+    (top.usr.a Bool)
+    (top.usr.b Bool)
+    (top.usr.c Bool)
+    (top.usr.o1 Bool)
+    (top.usr.o2 Bool)
+    (top.usr.ok Bool)
+    (top.res.init_flag Bool)
+    (top.impl.usr.x Int)
+    (top.impl.usr.y Int)
+    (top.res.abs_0 Bool)
+    (top.res.abs_1 Bool)
+  ) (
+    (and
+     (=
+      (_ curr top.impl.usr.y)
+      (ite
+       (_ curr top.usr.c)
+       0
+       (ite (and (_ curr top.usr.a) (< 0 6)) (+ 0 1) 0)))
+     (and
+      (=
+       (_ curr top.impl.usr.x)
+       (ite
+        (or (_ curr top.usr.b) (_ curr top.usr.c))
+        0
+        (ite (and (_ curr top.usr.a) (< 0 10)) (+ 0 1) 0)))
+      (= (_ curr top.usr.o2) (= (_ curr top.impl.usr.y) 6))
+      (= (_ curr top.usr.o1) (= (_ curr top.impl.usr.x) 10))
+      (= (_ curr top.usr.ok) (=> (_ curr top.usr.o1) (_ curr top.usr.o2)))
+      (=
+       (_ curr top.res.abs_0)
+       (and (<= 0 (_ curr top.impl.usr.x)) (<= (_ curr top.impl.usr.x) 10)))
+      (=
+       (_ curr top.res.abs_1)
+       (and (<= 0 (_ curr top.impl.usr.y)) (<= (_ curr top.impl.usr.y) 6)))
+      (or (or (_ curr top.usr.a) (_ curr top.usr.b)) (_ curr top.usr.c))
+      (<= 10 10 10)
+      (<= 6 6 6)
+      (_ curr top.res.init_flag)))
+  ) (
+    (and
+     (=
+      (_ next top.impl.usr.y)
+      (ite
+       (_ next top.usr.c)
+       0
+       (ite
+        (and (_ next top.usr.a) (< (_ curr top.impl.usr.y) 6))
+        (+ (_ curr top.impl.usr.y) 1)
+        (_ curr top.impl.usr.y))))
+     (and
+      (=
+       (_ next top.impl.usr.x)
+       (ite
+        (or (_ next top.usr.b) (_ next top.usr.c))
+        0
+        (ite
+         (and (_ next top.usr.a) (< (_ curr top.impl.usr.x) 10))
+         (+ (_ curr top.impl.usr.x) 1)
+         (_ curr top.impl.usr.x))))
+      (= (_ next top.usr.o2) (= (_ next top.impl.usr.y) 6))
+      (= (_ next top.usr.o1) (= (_ next top.impl.usr.x) 10))
+      (= (_ next top.usr.ok) (=> (_ next top.usr.o1) (_ next top.usr.o2)))
+      (=
+       (_ next top.res.abs_0)
+       (and (<= 0 (_ next top.impl.usr.x)) (<= (_ next top.impl.usr.x) 10)))
+      (=
+       (_ next top.res.abs_1)
+       (and (<= 0 (_ next top.impl.usr.y)) (<= (_ next top.impl.usr.y) 6)))
+      (or (or (_ next top.usr.a) (_ next top.usr.b)) (_ next top.usr.c))
+      (<= 10 10 10)
+      (<= 6 6 6)
+      (not (_ next top.res.init_flag))))
+  ) (
+    
+  )
+)
+(define-prop
+  top_prop_1
+  top
+  (_ curr top.usr.ok)
+)
+(define-prop
+  top_prop_2
+  top
+  (_ curr top.res.abs_0)
+)
+(define-prop
+  top_prop_3
+  top
+  (_ curr top.res.abs_1)
+)
+
+
+
+
+(verify
+  top (
+    top_prop_1
+    top_prop_2
+    top_prop_3
+  )
+)
+

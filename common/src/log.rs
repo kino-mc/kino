@@ -7,31 +7,31 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Logging. */
+//! Logging. */
 
 use ansi::Style as AStyle ;
 
-use term::Sym ;
+use term::{ Sym, Offset } ;
 
 use sys::Cex ;
 
-/** Formatting elements of a log. */
+/// Formatting elements of a log.
 pub trait Formatter: Clone {
-  /** The pre prefix. */
+  /// The pre prefix.
   #[inline(always)]
   fn ppre(& self) -> & str ;
-  /** The prefix. */
+  /// The prefix.
   #[inline(always)]
   fn pref(& self) -> & str ;
-  /** The header. */
+  /// The header.
   #[inline(always)]
   fn head(& self) -> & str ;
-  /** The trailer. */
+  /// The trailer.
   #[inline(always)]
   fn trail(& self) -> & str ;
 }
 
-/** No formatting. */
+/// No formatting.
 #[derive(Clone)]
 pub struct NoFormat ;
 impl Formatter for NoFormat {
@@ -41,20 +41,20 @@ impl Formatter for NoFormat {
   fn trail(& self) -> & str { & "" }
 }
 
-/** Custom formatting. */
+/// Custom formatting.
 #[derive(Clone)]
 pub struct Format {
-  /** The pre prefix. */
+  /// The pre prefix.
   ppre: & 'static str,
-  /** The prefix. */
+  /// The prefix.
   pref: & 'static str,
-  /** The header. */
+  /// The header.
   head: & 'static str,
-  /** The trailer. */
+  /// The trailer.
   trail: & 'static str,
 }
 impl Format {
-  /** Default formatter. */
+  /// Default formatter.
   pub fn default() -> Self {
     Format {
       ppre: ";", pref: "|", head: "=====|", trail: "=====|"
@@ -70,23 +70,23 @@ impl Formatter for Format {
 
 
 
-/** Style things for printing. */
+/// Style things for printing.
 pub trait Styler: Clone {
-  /** Emphasizes something. */
+  /// Emphasizes something.
   #[inline]
   fn emph(& self, & str) -> String ;
-  /** Makes something happy (success). */
+  /// Makes something happy (success).
   #[inline]
   fn happy(& self, & str) -> String ;
-  /** Makes something sad (warning). */
+  /// Makes something sad (warning).
   #[inline]
   fn sad(& self, & str) -> String ;
-  /** Makes something bad (error). */
+  /// Makes something bad (error).
   #[inline]
   fn bad(& self, & str) -> String ;
 }
 
-/** No styling. */
+/// No styling.
 #[derive(Clone)]
 pub struct NoStyle ;
 impl Styler for NoStyle {
@@ -96,20 +96,20 @@ impl Styler for NoStyle {
   fn bad(& self, s: & str) -> String { s.to_string() }
 }
 
-/** Custom styling. */
+/// Custom styling.
 #[derive(Clone)]
 pub struct Style {
-  /** Emphasis style. */
+  /// Emphasis style.
   em: AStyle,
-  /** Happy style. */
+  /// Happy style.
   ha: AStyle,
-  /** Sad style. */
+  /// Sad style.
   sa: AStyle,
-  /** Bad style. */
+  /// Bad style.
   ba: AStyle
 }
 impl Style {
-  /** Default style. */
+  /// Default style.
   pub fn default() -> Self {
     use ansi::Colour::* ;
     Style {
@@ -137,35 +137,35 @@ impl Styler for Style {
 
 
 
-/** Logger used by kino at top level. */
+/// Logger used by kino at top level.
 #[derive(Clone)]
 pub struct MasterLog<F, S> {
-  /** Formatting. */
+  /// Formatting.
   fmt: F,
-  /** Styling. */
+  /// Styling.
   stl: S,
 }
 
 impl<F, S: Clone> MasterLog<F, S> {
-  /** A clone of the styler of a log. */
+  /// A clone of the styler of a log.
   pub fn styler(& self) -> S { self.stl.clone() }
-  /** The formatter. */
+  /// The formatter.
   #[inline(always)]
   pub fn fmt(& self) -> & F { & self.fmt }
-  /** The styler. */
+  /// The styler.
   #[inline(always)]
   pub fn stl(& self) -> & S { & self.stl }
 }
 
 impl MasterLog<Format, Style> {
-  /** Creates a default log. */
+  /// Creates a default log.
   pub fn default() -> Self {
     MasterLog { fmt: Format::default(), stl: Style::default() }
   }
 }
 
 impl MasterLog<NoFormat, NoStyle> {
-  /** Creates a no formatting, no styling log. */
+  /// Creates a no formatting, no styling log.
   pub fn empty() -> Self {
     MasterLog { fmt: NoFormat, stl: NoStyle }
   }
@@ -182,32 +182,32 @@ impl<
   F: Formatter,
   S: Styler,
 > MasterLog<F, S> {
-  /** Emphasizes something. */
+  /// Emphasizes something.
   pub fn mk_emph(& self, s: & str) -> String { self.stl.emph(s) }
-  /** Makes something happy. */
+  /// Makes something happy.
   pub fn mk_happy(& self, s: & str) -> String { self.stl.happy(s) }
-  /** Makes something sad. */
+  /// Makes something sad.
   pub fn mk_sad(& self, s: & str) -> String { self.stl.sad(s) }
-  /** Makes something bad. */
+  /// Makes something bad.
   pub fn mk_bad(& self, s: & str) -> String { self.stl.bad(s) }
 
-  /** Prints a separation between log sections. */
+  /// Prints a separation between log sections.
   pub fn sep(& self) {
     println!("")
   }
 
-  /** Prints a newline in a log section. */
+  /// Prints a newline in a log section.
   pub fn nl(& self) {
     println!("{} {}", self.fmt.ppre(), self.fmt.pref())
   }
 
-  /** Prints a trailer line. */
+  /// Prints a trailer line.
   pub fn trail(& self) {
     println!("{} {}{}", self.fmt.ppre(), self.fmt.pref(), self.fmt.trail()) ;
     self.sep()
   }
 
-  /** Prints a title line. */
+  /// Prints a title line.
   pub fn title(& self, e: & str) {
     println!(
       "{} {}{} {}",
@@ -215,14 +215,14 @@ impl<
     )
   }
 
-  /** Prints some log lines. */
+  /// Prints some log lines.
   pub fn print(& self, e: & str) {
     for line in e.lines() {
       println!("{} {} {}", self.fmt.ppre(), self.fmt.pref(), line)
     }
   }
 
-  /** Logs something with a prefix. */
+  /// Logs something with a prefix.
   pub fn pref_log(
     & self, pref: & str, title: & super::Tek, bla: & str
   ) {
@@ -234,29 +234,38 @@ impl<
     }
   }
 
-  /** Logs some text line by line. */
+  /// Logs some text line by line.
   pub fn log(& self, t: & super::Tek, bla: & str) {
     self.pref_log(self.fmt.pref(), t, bla) ;
     self.nl()
   }
 
-  /** Prints some happy text line by line. */
+  /// Prints some happy text line by line.
   pub fn happy(& self, t: & super::Tek, bla: & str) {
     self.pref_log( & self.mk_happy( self.fmt.pref() ), t, bla ) ;
     self.nl()
   }
 
-  /** Prints some sad text line by line. */
+  /// Prints some sad text line by line.
   pub fn sad(& self, t: & super::Tek, bla: & str) {
     self.pref_log( & self.mk_sad( self.fmt.pref() ), t, bla ) ;
     self.nl()
   }
 
-  /** Prints some bad text line by line. */
+  /// Prints some bad text line by line.
   pub fn bad(& self, t: & super::Tek, bla: & str) {
     self.pref_log( & self.mk_bad( self.fmt.pref() ), t, bla ) ;
     self.nl()
   }
+
+  /// Alias for `bad(& Tek::Kino, blah)`, to make `MasterLog` compatible with
+  /// `try_error!`.
+  pub fn error(& self, bla: & str) {
+    self.bad(& super::Tek::Kino, bla)
+  }
+
+  /// Does nothing, to make `MasterLog` compatible with `try_error!`.
+  pub fn done<T>(& self, _: T) {}
 
   /// Logs a `safe` end of analysis.
   pub fn log_safe(& self) {
@@ -321,16 +330,33 @@ impl<
     self.nl()
   }
 
-  /** Logs the fact that a property proved some techniques. */
+  /// Logs a `unknown` end of analysis without any unknown properties.
+  pub fn just_log_unknown(& self) {
+    let pref = format!(
+      "{} {}",
+      self.fmt.ppre(),
+      self.mk_sad( self.fmt.pref() )
+    ) ;
+    println!(
+      "{} {}",
+      pref,
+      self.mk_sad( "done, analysis was inconclusive")
+    ) ;
+    println!("{}", pref) ;
+    println!("unknown") ;
+    self.nl()
+  }
+
+  /// Logs the fact that a property proved some techniques.
   pub fn log_proved(
-    & self, t: & super::Tek, props: & [Sym], info: & ::msg::Info
+    & self, t: & super::Tek, props: & [Sym], info: & Offset
   ) {
     let pref = format!(
       "{} {}", self.fmt.ppre(), self.mk_happy(self.fmt.pref())
     ) ;
     println!(
-      "{} {} proved {} propertie(s) {}:",
-      pref, self.emph(t.to_str()), props.len(), info
+      "{} {} proved {} propertie(s) at {}:",
+      pref, self.emph(t.desc()), props.len(), info
     ) ;
     println!("{}", pref) ;
     println!("(proved") ;
@@ -342,7 +368,7 @@ impl<
     self.nl()
   }
 
-  /** Logs a cex for some properties. */
+  /// Logs a cex for some properties.
   pub fn log_cex(
     & self, t: & super::Tek, cex: & Cex, props: & [Sym]
   ) {

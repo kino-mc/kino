@@ -8,14 +8,8 @@
 // except according to those terms.
 #![deny(missing_docs)]
 
-/*! Bounded model-checking.
+//! Bounded model-checking.
 
-# To do
-
-* factor code for check of the initial state and the succeeding ones
-* check that unrolling of the transition relation is sat
-
-*/
 
 extern crate term ;
 extern crate system ;
@@ -75,7 +69,7 @@ fn bmc<
   let mut k = Offset2::init() ;
 
   let mut unroller = try_error!(
-    Unroller::mk(& sys, solver), event,
+    Unroller::mk(& sys, & props, solver), event,
     "while creating unroller"
   ) ;
 

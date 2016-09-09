@@ -9,29 +9,28 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Transition system library.
-
-## Hash consing
-
-[`Sym`][sym type] and [`Term`][term type] come from the kinō
-[`term`][term crate] crate and are hash consed. Remember that one should
-**never** create more that one [Factory][factory struct] for these. It is
-thread-safe and can be cloned.
-[`Context`][context struct] holds one for parsing.
-
-## To do
-
-* more clever input consumption in [`Context`][context struct]
-* less copy in [`Context`][context struct]
-* more informative parse error (depency checking)
-* integrate type checking in parser
-
-[sym type]: ../term/type.Sym.html (Sym type)
-[term type]: ../term/type.Term.html (Term type)
-[term crate]: ../term/index.html (term crate)
-[factory struct]: ../term/struct.Factory.html (Factory struct)
-[context struct]: ctxt/struct.Context.html (Context struct)
-*/
+//! Transition system library.
+//! 
+//! ## Hash consing
+//! 
+//! [`Sym`][sym type] and [`Term`][term type] come from the kinō
+//! [`term`][term crate] crate and are hash consed. Remember that one should
+//! **never** create more that one [Factory][factory struct] for these. It is
+//! thread-safe and can be cloned.
+//! [`Context`][context struct] holds one for parsing.
+//! 
+//! ## To do
+//! 
+//! * more clever input consumption in [`Context`][context struct]
+//! * less copy in [`Context`][context struct]
+//! * more informative parse error (depency checking)
+//! * integrate type checking in parser
+//! 
+//! [sym type]: ../term/type.Sym.html (Sym type)
+//! [term type]: ../term/type.Term.html (Term type)
+//! [term crate]: ../term/index.html (term crate)
+//! [factory struct]: ../term/struct.Factory.html (Factory struct)
+//! [context struct]: ctxt/struct.Context.html (Context struct)
 
 
 #[macro_use]
@@ -46,14 +45,14 @@ mod base ;
 mod type_check ;
 mod parse ;
 
-/** Real types of the elements of a context. */
+/// Real types of the elements of a context.
 pub mod real_sys {
   pub use base::{
     Sig, Args, Uf, Fun, Prop, Sys, Callable
   } ;
 }
 
-/** Parses, type checks and remembers the input. */
+/// Parses, type checks and remembers the input.
 pub mod ctxt {
   pub use super::base::Callable ;
   pub use super::parse::{
@@ -67,19 +66,19 @@ pub use base::CallSet ;
 
 pub use parse::Cex ;
 
-/** A signature, a list of types. Used only in `Uf`. */
+/// A signature, a list of types. Used only in `Uf`.
 pub type Sig = Arc<base::Sig> ;
-/** A list of typed formal parameters. */
+/// A list of typed formal parameters.
 pub type Args = Arc<base::Args> ;
-/** An uninterpreted function. */
+/// An uninterpreted function.
 pub type Uf = Arc<base::Uf> ;
-/** A function (actually a macro in SMT-LIB). */
+/// A function (actually a macro in SMT-LIB).
 pub type Fun = Arc<base::Fun> ;
-/** Wraps an (uninterpreted) function. */
+/// Wraps an (uninterpreted) function.
 pub type Callable = Arc<base::Callable> ;
-/** A property. */
+/// A property.
 pub type Prop = Arc<base::Prop> ;
-/** A transition system. */
+/// A transition system.
 pub type Sys = Arc<base::Sys> ;
 
 
