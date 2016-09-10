@@ -372,7 +372,6 @@ impl<
   pub fn log_cex(
     & self, t: & super::Tek, cex: & Cex, props: & [Sym]
   ) {
-    use std::io::stdout ;
     let pref = format!(
       "{} {}", self.fmt.ppre(), self.mk_bad(self.fmt.pref())
     ) ;
@@ -388,9 +387,10 @@ impl<
     //   println!("{}   {}", pref, line)
     // } ;
     println!("{}", pref) ;
-    cex.write_vmt(props, & mut stdout()).expect(
-      "could not write counterexample to stdout"
-    ) ;
+    cex.print_vmt(props) ;
+    // cex.write_vmt(props, & mut stdout()).expect(
+    //   "could not write counterexample to stdout"
+    // ) ;
     self.nl()
   }
 }

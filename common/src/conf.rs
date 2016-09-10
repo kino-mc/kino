@@ -645,7 +645,7 @@ impl Master {
   }
 
   /// Default top level configuration.
-  fn default() -> Self {
+  pub fn default() -> Self {
     Master {
       scopes: vec![ "bmc", "kind", "twind", "tig", "pruner" ],
       bmc: Some( Bmc::default() ),

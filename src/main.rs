@@ -61,7 +61,6 @@ fn main() {
 
   let factory = term::Factory::mk() ;
   let mut context = Context::mk(factory, 10000) ;
-
   log.title( & format!("opening \"{}\"", file) ) ;
   match File::open(& file) {
     Ok(mut f) => {

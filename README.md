@@ -41,15 +41,25 @@ future:
 
 # Build and run
 
+To run kinō you need a SMT solver installed and in your path. For now, only
+[Z3][z3] is supported. It must be in your path with command `z3`, although you
+can tell kinō to use your own using the CLAs.
+
 Building running etc. follows the standard cargo workflow. A few example
-systems can be found in `rsc/tsv/`. For instance
+systems can be found in `rsc/simple/` and `rsc/from_kind`. For instance
 
 ```bash
-> cargo run rsc/tsv/modular_four.tsv
+> cargo run rsc/simple/modular_four.vmt
 ```
 
-To run kinō you need a SMT solver installed and in your path.
-For now, only [Z3][z3] is supported. It must be in your path with command `z3`.
+(This will run kinō in `debug` mode, which is **extremely** slower than in
+`release` because of all the runtime checks performed in `debug`.)
+
+## Tests
+
+(Almost) all systems in `rsc` are associated with a test in `tests/`. However
+currently cargo behaves oddly with kinō, and is very much non-deterministic.
+This seems to come from the heavy use of parallelism in kinō.
 
 # NB
 

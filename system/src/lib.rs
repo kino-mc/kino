@@ -62,7 +62,7 @@ pub mod ctxt {
   pub use type_check::type_check ;
 }
 
-pub use base::CallSet ;
+pub use base::{ CallSet, PropStatus } ;
 
 pub use parse::Cex ;
 

@@ -211,6 +211,42 @@ impl Cex {
 
     write!(fmt, ")\n")
   }
+  /// Prints a counterexample vmt-style.
+  pub fn print_vmt(
+    & self, props: & [ Sym ]
+  ) {
+    print!("(cex\n  ( ") ;
+    for prop in props.iter() {
+      print!("{} ", prop)
+    }
+    print!(")\n") ;
+
+    // Printing function symbols.
+    if self.no_state.is_empty() {
+      print!("  () ; no function symbols\n")
+    } else {
+      print!("  ( ; function symbols:") ;
+      for (ref sym, ref cst) in self.no_state.iter() {
+        print!(
+          "\n    (declare-fun {} () {} {})", sym, cst.typ(), cst
+        )
+      }
+      print!("\n  )\n") ;
+    }
+
+    // Printing states.
+    let mut off = Offset::zero() ;
+    while let Some( ref cex ) = self.trace.get(& off) {
+      print!("  ; state {}:\n  (and\n", off) ;
+      for (ref sym, ref cst) in cex.iter() {
+        print!("    (= {} {})\n", sym, cst)
+      }
+      print!("  )\n") ;
+      off = off.nxt()
+    }
+
+    print!(")\n")
+  }
   /// Formats a counterexample human-style.
   pub fn format(& self) -> String {
     use std::cmp::max ;

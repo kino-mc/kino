@@ -964,7 +964,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
   }
 
   /// Returns the list of non-inhibited properties that evaluate to false in
-  /// their **next** version for some offset in a solver.
+  /// their **state** version for some offset in a solver.
   pub fn get_false_state<
     'a, S: SolverTrait<'a>
   >(
@@ -972,11 +972,11 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
   ) -> Res<Vec<Key>> {
     let mut terms = Vec::with_capacity(self.terms_1.len()) ;
     let mut back_map = HashMap::with_capacity(self.terms_1.len()) ;
-    for (ref key, & (_, ref next, _, _)) in self.terms_1.iter() {
+    for (ref key, & (ref state, _, _, _)) in self.terms_1.iter() {
       if ! self.inhibited.contains(key) {
-        terms.push(next.clone()) ;
+        terms.push(state.clone()) ;
         match back_map.insert(
-          next.clone(), key.clone()
+          state.clone(), key.clone()
         ) {
           None => (),
           Some(old) => return Err(
@@ -984,7 +984,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
               "term {}\n\
               already mapped to key {}\n\
               trying to map it to {}",
-              next, old, key
+              state, old, key
             )
           ),
         }

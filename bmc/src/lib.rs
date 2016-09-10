@@ -1,4 +1,4 @@
-// Copyright 2015 Adrien Champion. See the COPYRIGHT file at the top-level
+// Copyright 2016 Adrien Champion. See the COPYRIGHT file at the top-level
 // directory of this distribution.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -30,7 +30,7 @@ use system::{ Sys, Prop } ;
 
 use unroll::* ;
 
-/** Bounded model-checking. */
+/// Bounded model-checking.
 pub struct Bmc ;
 unsafe impl Send for Bmc {}
 impl CanRun<conf::Bmc> for Bmc {
@@ -95,14 +95,14 @@ fn bmc<
   // event.log("asserting one-state invariants") ;
   try_error!(
     unroller.assert_os_invs(& k), event,
-    "while asserting init"
+    "while asserting one state invariants"
   ) ;
 
   props.reset_inhibited() ;
 
   // Check for init is separate since only one-state properties must be
   // checked.
-  let mut doing_init = false ;
+  let mut doing_init = true ;
 
   'unroll: loop {
 
@@ -192,7 +192,11 @@ fn bmc<
         if is_sat {
           // event.log("sat, getting falsified properties") ;
           let falsified = try_error!(
-            props.get_false_next(unroller.solver(), & k), event,
+            if doing_init {
+              props.get_false_state(unroller.solver(), & k)
+            } else {
+              props.get_false_next(unroller.solver(), & k)
+            }, event,
             "could not retrieve falsified properties"
           ) ;
           let model = try_error!(
@@ -219,17 +223,32 @@ fn bmc<
         }
 
       } else {
-        // No more properties to check, done.
-        event.log( & format!("no property left at {}", k) ) ;
-        event.done_at(k.curr()) ;
-        return ()
+        if props.none_left() {
+          // No more properties to check, done.
+          event.log( & format!("no property left at {}", k) ) ;
+          event.done_at(k.curr()) ;
+          return ()
+        } else {
+          // Keep going.
+          // Why? It seems at this point there's no property left. Well not
+          // necessarily.
+          //
+          // If we're `doing_init` we're only checking for one-state
+          // properties. There might be none, but there might be two-state
+          // properties left. In this case, we end up in this branch and we
+          // must keep going to check them.
+          break 'this_k
+        }
       }
 
     }
 
-    k = k.nxt() ;
+    if ! doing_init {
+      k = k.nxt()
+    } else {
+      doing_init = false
+    }
 
-    doing_init = false
   }
 }
 
