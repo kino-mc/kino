@@ -9,11 +9,18 @@
 
 //! Logging. */
 
+use std::time::Duration ;
+
 use ansi::Style as AStyle ;
 
 use term::{ Sym, Offset } ;
 
 use sys::Cex ;
+
+/// Formats a duration as seconds.
+pub fn fmt_duration(d: Duration) -> String {
+  format!("{}.{} seconds", d.as_secs(), d.subsec_nanos())
+}
 
 /// Formatting elements of a log.
 pub trait Formatter: Clone {
@@ -268,7 +275,7 @@ impl<
   pub fn done<T>(& self, _: T) {}
 
   /// Logs a `safe` end of analysis.
-  pub fn log_safe(& self) {
+  pub fn log_safe(& self, time: Duration) {
     let pref = format!(
       "{} {}",
       self.fmt.ppre(),
@@ -276,7 +283,9 @@ impl<
     ) ;
     println!(
       "{} {}",
-      pref, self.mk_happy( "done, system is safe")
+      pref, self.mk_happy(
+        & format!( "done, system is safe in {}", fmt_duration(time) )
+      )
     ) ;
     println!("{}", pref) ;
     println!("safe") ;
@@ -284,7 +293,7 @@ impl<
   }
 
   /// Logs an `unsafe` end of analysis.
-  pub fn log_unsafe(& self) {
+  pub fn log_unsafe(& self, time: Duration) {
     let pref = format!(
       "{} {}",
       self.fmt.ppre(),
@@ -293,7 +302,9 @@ impl<
     println!(
       "{} {}",
       pref,
-      self.mk_bad( "done, system is unsafe")
+      self.mk_bad(
+        & format!( "done, system is unsafe in {}", fmt_duration(time) )
+      )
     ) ;
     println!("{}", pref) ;
     println!("unsafe") ;
@@ -303,7 +314,7 @@ impl<
   /// Logs a `unknown` end of analysis.
   pub fn log_unknown<
     'a, Props: Iterator<Item = & 'a Sym>
-  >(& self, props: Props) {
+  >(& self, props: Props, time: Duration) {
     let pref = format!(
       "{} {}",
       self.fmt.ppre(),
@@ -312,7 +323,11 @@ impl<
     println!(
       "{} {}",
       pref,
-      self.mk_sad( "done, analysis was inconclusive")
+      self.mk_sad(
+        & format!(
+          "done, analysis was inconclusive in {}", fmt_duration(time)
+        )
+      )
     ) ;
     println!(
       "{} could not (dis)prove",

@@ -172,8 +172,8 @@ fn prune< 'a, S: SolverTrait<'a> >(
         "while deactivating negative actlit"
       ) ;
       try_str!(
-        invs.inhibit(& falsified),
-        "while inhibiting {} falsified properties", falsified.len()
+        invs.forget(unroller.solver(), falsified.iter()),
+        "while forgetting {} falsified properties", falsified.len()
       ) ;
       for falsified in falsified.into_iter() {
         non_trivial_invs.insert(falsified) ; ()

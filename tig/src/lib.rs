@@ -98,10 +98,12 @@ fn invgen<
   conf: Arc<conf::Tig>, solver_1: S, solver_2: S, sys: Sys, event: & mut Event,
   graph_log: GraphLog
 ) {
+  use std::time::Instant ;
   use graph::* ;
   use lsd::top_only::* ;
 
   let max_k = * conf.max() ;
+  let unroll_step = * conf.step_roll() ;
 
   let factory = solver_1.parser().clone() ;
 
@@ -121,7 +123,8 @@ fn invgen<
   // event.log("creating graph") ;
   let mut graph = PartialGraph::of(
     & factory,
-    Graph::<Bool>::mk(& sys, rep, class)
+    Graph::<Bool>::mk(& sys, rep, class),
+    & (* conf)
   ) ;
 
   // event.log("creating base checker") ;
@@ -153,6 +156,8 @@ fn invgen<
 
     let mut is_done = false ;
     let mut inner_cnt = 0 ;
+    let start = Instant::now() ;
+
     'stabilize: while ! is_done {
       is_done = try_error!(
         graph.stabilize_next_class(
@@ -161,8 +166,30 @@ fn invgen<
         ), event,
         "while stabilizing at {}", cnt
       ) ;
+
+      try_error!(
+        base.restart(), event, "while restarting base at {}", cnt - 1
+      ) ;
+      try_error!(
+        step.restart(), event, "while restarting step at {}", cnt - 1
+      ) ;
+
       inner_cnt += 1
     }
+
+    let time = Instant::now() - start ;
+
+    event.log(
+      & format!(
+        "graph stablized at {} in {}.{}",
+        cnt, time.as_secs(), time.subsec_nanos()
+      )
+    ) ;
+
+    try_error!(
+      graph.k_split_all(& mut base, & mut step, & mut known_invars, event),
+      event, "while splitting all at {}", cnt
+    ) ;
 
     try_error!(
       base.restart(), event, "while restarting base at {}", cnt - 1
@@ -170,152 +197,23 @@ fn invgen<
     let base_len = try_error!(
       base.unroll(), event, "while unrolling base to {}", cnt
     ) ;
+    debug_assert!( base_len == cnt ) ;
+
+    cnt += 1 ;
+
     try_error!(
       step.restart(), event, "while restarting step at {}", cnt - 1
     ) ;
-    cnt += 1 ;
-    let step_len = try_error!(
-      step.unroll(), event, "while unrolling step to {}", cnt
-    ) ;
-    debug_assert!( base_len == cnt - 1 ) ;
-    debug_assert!( step_len == cnt     ) ;
+    if unroll_step {
+      let step_len = try_error!(
+        step.unroll(), event, "while unrolling step to {}", cnt
+      ) ;
+      debug_assert!( step_len == cnt )
+    }
 
     graph.clear()
 
   }
-
-  // 'work: while max_k.map_or(true, |max| cnt <= max) {
-  //   event.log( & format!("starting invgen with {} unrollings", cnt) ) ;
-  //   // event.log( & format!("starting base stabilization ({})", cnt) ) ;
-    
-  //   let mut base_cnt = 0 ;
-
-  //   'base: loop {
-  //     let candidates: Vec<TmpTerm> = graph.candidates(
-  //       |cand| known.contains(cand)
-  //     ).into_iter().collect() ;
-  //     if candidates.is_empty() {
-  //       event.log(
-  //         & format!(
-  //           "on {} at {}\n\
-  //           no non-trivial candidate in the graph\n\
-  //           graph is stale, stopping",
-  //           sys.sym(), cnt
-  //         )
-  //       ) ;
-  //       break 'work
-  //     }
-  //     match try_error!(
-  //       base.k_falsify(candidates), event,
-  //       "while looking for {}-falsification ({})", cnt, base_cnt
-  //     ) {
-  //       Some(eval) => try_error!(
-  //         graph.split(eval), event,
-  //         "while splitting graph in base at {}, {}", cnt, base_cnt
-  //       ),
-  //       None => break 'base,
-  //     }
-      
-  //     // let file_path = format!("{}/tig_{}_{}.dot", graph_dir, cnt, base_cnt) ;
-  //     // try_error!(
-  //     //   graph.dot_dump( & file_path ), event,
-  //     //   "could not dump graph to file `{}`", file_path
-  //     // ) ;
-  //     base_cnt += 1
-  //   }
-
-  //   // event.log(
-  //   //   & format!("done stabilizing in base ({})", cnt)
-  //   // ) ;
-
-  //   let candidates: TmpTermMap<()> = try_error!(
-  //     graph.all_candidates( |cand| known.contains(cand) ), event,
-  //     "while generating all candidates of graph ({})", cnt
-  //   ).into_iter().map(
-  //     |cand| (cand, ())
-  //   ).collect() ;
-
-  //   try_error!(
-  //     base.unroll(), event,
-  //     "could not unroll base checker ({})", cnt
-  //   ) ;
-
-  //   // event.log(
-  //   //   & format!(
-  //   //     "extracting invariants from {} candidates ({})", candidates.len(), cnt
-  //   //   )
-  //   // ) ;
-
-  //   let mut step = try_error!(
-  //     base.to_step(), event,
-  //     "could not morph base checker to step checker ({})", cnt
-  //   ) ;
-
-  //   let candidate_count = candidates.len() ;
-
-  //   let (invars, _) = try_error!(
-  //     step.k_split(candidates), event,
-  //     "could not k-split {} candidates in step ({})", candidate_count, cnt
-  //   ) ;
-  //   let invar_count = invars.len() ;
-
-  //   let mut invariants = STermSet::with_capacity(invars.len()) ;
-  //   for (invar, _) in invars.into_iter() {
-  //     known.insert(invar.clone()) ;
-  //     use term::UnTermOps ;
-  //     let invar = try_error!(
-  //       invar.to_term_safe(& factory), event,
-  //       "could not turn tmp term in term"
-  //     ) ;
-  //     invariants.insert(
-  //       STerm::One(
-  //         try_error!(
-  //           factory.debump(& invar), event,
-  //           "could not debump term {}", invar
-  //         ),
-  //         invar
-  //       )
-  //     ) ;
-  //     ()
-  //   }
-  //   if ! invariants.is_empty() {
-  //     event.invariants(sys.sym(), invariants)
-  //   }
-
-  //   // let blah = format!(
-  //   //   "on {} at {}\n\
-  //   //   found {} invariants for system {} from {} candidates",
-  //   //   sys.sym(), cnt,
-  //   //   invar_count, sys.sym(), candidate_count
-  //   // ) ;
-  //   // for (term, _) in invars.iter() {
-  //   //   blah = format!("{}\n  - {}", blah, term)
-  //   // }
-  //   // event.log( & blah ) ;
-
-  //   if invar_count == candidate_count {
-  //     // Everything's invariant, stopping.
-  //     event.log(
-  //       & format!(
-  //         "on {} at {}\n\
-  //         all terms encoded by the graph have been proved invariant\n\
-  //         stopping",
-  //         sys.sym(), cnt
-  //       )
-  //     ) ;
-  //     break 'work
-  //   }
-
-  //   base = try_error!(
-  //     step.to_base(), event,
-  //     "could not morph step checker to base checker ({})", cnt
-  //   ) ;
-
-  //   cnt += 1 ;
-
-  //   ()
-
-  // }
 
   event.done_at( & Offset::of_int(cnt) ) ;
 }

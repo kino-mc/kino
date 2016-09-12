@@ -18,12 +18,12 @@ use base::{
 } ;
 use sym::Sym ;
 
-/** Underlying representation of variables. */
-#[derive(Debug,Clone,PartialEq,Eq,PartialOrd,Ord,Hash)]
+/// Underlying representation of variables.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RealVar {
-  /** Non-stateful variable. */
+  /// Non-stateful variable.
   Var(Sym),
-  /** Stateful variable. */
+  /// Stateful variable.
   SVar(Sym, State),
 }
 impl RealVar {
@@ -36,7 +36,7 @@ impl RealVar {
     }
   }
 
-  /** Bumps a variable in the current state to the next state. */
+  /// Bumps a variable in the current state to the next state.
   #[inline(always)]
   pub fn bump(& self) -> Result<Self,bool> {
     match * self {
@@ -48,7 +48,7 @@ impl RealVar {
     }
   }
 
-  /** The symbol stored in a variable. */
+  /// The symbol stored in a variable.
   #[inline(always)]
   pub fn sym(& self) -> & Sym {
     match * self {
@@ -72,7 +72,7 @@ impl fmt::Display for RealVar {
   }
 }
 
-/** Hash consed variable. */
+/// Hash consed variable.
 pub type Var = HConsed<RealVar> ;
 
 impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for RealVar {
@@ -101,15 +101,15 @@ impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Var {
   }
 }
 
-/** Hash cons table for variables. */
+/// Hash cons table for variables.
 pub type VarConsign = HConsign<RealVar> ;
 
-/** Can create non-stateful stateful variables. */
+/// Can create non-stateful stateful variables.
 pub trait VarMaker<Symbol, Out> {
-  /** Creates a non-stateful variable. */
+  /// Creates a non-stateful variable.
   #[inline]
   fn var(& self, Symbol) -> Out ;
-  /** Creates a stateful variable. */
+  /// Creates a stateful variable.
   #[inline]
   fn svar(& self, Symbol, State) -> Out ;
 }

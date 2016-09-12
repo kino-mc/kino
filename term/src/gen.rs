@@ -159,7 +159,7 @@ fn rand_arith_to_bool<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
 /** Returns a random arith to arith operator. */
 fn rand_arith_to_arith<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
   use Operator::* ;
-  let ops = vec![ Add, Sub, Neg, Mul, Div ] ;
+  let ops = vec![ Add, Sub, Mul, Div ] ;
   ops[ rand_int(rng, ops.len()) ]
 }
 

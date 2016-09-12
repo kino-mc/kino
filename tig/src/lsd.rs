@@ -34,10 +34,11 @@ pub trait StepTrait<
   Val: Domain, B: BaseTrait<Val, Self>
 >: Lsd<Val, B, Self> where Self: Sized {
   /// Splits the input set in two: the terms unfalsifiable terms in a
-  /// k-induction check for the current depth, and the rest.
-  fn k_split<Info>(
-    & mut self, TmpTermMap<Info>
-  ) -> Res<(TmpTermMap<Info>, TmpTermMap<Info>)> ;
+  /// k-induction check for the current depth, and the rest which is left
+  /// in the original map.
+  fn k_split<Info: Clone>(
+    & mut self, & mut TmpTermMap<Info>
+  ) -> Res<TmpTermMap<Info>> ;
 }
 
 /// High-level LSD features.
@@ -324,27 +325,25 @@ pub mod top_only {
   impl<
     'a, Val: Domain, Solver: SolverTrait<'a>
   > StepTrait< Val, Base<Val, Solver> > for Step<Val, Solver> {
-    fn k_split<Info>(
-      & mut self, in_map: TmpTermMap<Info>
-    ) -> Res<(TmpTermMap<Info>, TmpTermMap<Info>)> {
+    fn k_split<Info: Clone>(
+      & mut self, in_map: & mut TmpTermMap<Info>
+    ) -> Res<TmpTermMap<Info>> {
       if in_map.is_empty() {
-        return Ok(( TmpTermMap::new(), TmpTermMap::new() ))
+        return Ok( TmpTermMap::new() )
       }
 
       let len = in_map.len() ;
-      let tenth_of_len = 1 + len / 10 ;
-      let mut rest = TmpTermMap::with_capacity( len - tenth_of_len ) ;
 
       // Creating one actlit per term to maximize solver learning.
       let mut map = TmpTermMap::with_capacity(len) ;
       let mut positive = Vec::with_capacity(len) ;
-      for (term, info) in in_map.into_iter() {
+      for (term, info) in in_map.iter() {
         let actlit = try_str!(
           self.unroller.fresh_actlit(),
           "[Step::k_split] while declaring activation literal at {}", self.k
         ) ;
         positive.push( actlit.activate_term( term.clone() ) ) ;
-        let prev = map.insert(term, (info, actlit.name())) ;
+        let prev = map.insert(term.clone(), (info.clone(), actlit.name())) ;
         debug_assert!( prev.is_none() )
       }
 
@@ -417,10 +416,7 @@ pub mod top_only {
             if ! term_is_true {
               // Falsified, remove from `map` and put in `rest`.
               match map.remove(& term) {
-                Some( (info, _) ) => {
-                  let pre = rest.insert(term, info) ;
-                  debug_assert!( pre.is_none() )
-                },
+                Some( _ ) => (),
                 None => return Err(
                   format!(
                     "[Step::k_split] unknown term {:?} in `to_check`", term
@@ -439,14 +435,19 @@ pub mod top_only {
         // If we got unsat then we're done.
         if ! is_sat { break 'split }
       }
-      debug_assert!( map.len() + rest.len() == len ) ;
 
       map.shrink_to_fit() ;
-      let map = map.into_iter().map(
-        | ( term, (info, _) )| (term, info)
+      let map: TmpTermMap<Info> = map.into_iter().map(
+        | ( term, (info, _) )| {
+          let prev = in_map.remove(& term) ;
+          debug_assert!( prev.is_some() ) ;
+          (term, info)
+        }
       ).collect() ;
-      rest.shrink_to_fit() ;
-      Ok( (map, rest) )
+
+      debug_assert!( map.len() + in_map.len() == len ) ;
+
+      Ok( map )
     }
   }
 

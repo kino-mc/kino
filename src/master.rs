@@ -72,6 +72,7 @@ impl Master {
     _assumptions: Option<Vec<Term>>,
     conf: conf::Master
   ) -> Result<(), ()> {
+    use std::time::Instant ;
 
     let mut invar_map = HashMap::new() ;
     invar_map.insert(sys.sym().clone(), STermSet::new()) ;
@@ -153,6 +154,8 @@ impl Master {
 
     // Result returned when exting the loop.
     let mut result = Ok(()) ;
+
+    let start_time = Instant::now() ;
 
     // Entering message loop.
     'msg_loop: loop {
@@ -332,6 +335,8 @@ impl Master {
       }
     }
 
+    let time = Instant::now() - start_time ;
+
     let some_prop_disproved = try_log_run!(
       c.some_prop_disproved(& props), log, {
         log.just_log_unknown() ;
@@ -347,7 +352,7 @@ impl Master {
 
     if ! some_prop_disproved {
       if ! some_prop_unknown {
-        log.log_safe()
+        log.log_safe(time)
       } else {
         log.log_unknown(
           try_log_run!(
@@ -355,11 +360,12 @@ impl Master {
               log.just_log_unknown() ;
               return Err(())
             }, "during post-run analysis"
-          ).into_iter()
+          ).into_iter(),
+          time
         )
       }
     } else {
-      log.log_unsafe()
+      log.log_unsafe(time)
     }
 
     log.trail() ;

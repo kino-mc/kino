@@ -239,7 +239,6 @@ named!{ pub operator_parser<Operator>,
     map!( tag!("distinct"), |_| Operator::Distinct ) |
     map!( tag!("+"), |_| Operator::Add ) |
     map!( tag!("-"), |_| Operator::Sub ) |
-    map!( tag!("-"), |_| Operator::Neg ) |
     map!( tag!("*"), |_| Operator::Mul ) |
     map!( tag!("/"), |_| Operator::Div ) |
     map!( tag!("<="), |_| Operator::Le ) |

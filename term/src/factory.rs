@@ -376,7 +376,7 @@ impl Factory {
       },
       _ => (),
     } ;
-    self.op(Operator::Neg, vec![ term ])
+    self.op(Operator::Sub, vec![ term ])
   }
 
   /// Creates a multiplication.

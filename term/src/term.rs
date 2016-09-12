@@ -45,8 +45,6 @@ pub enum Operator {
   Add,
   /** Minus operator. */
   Sub,
-  /** Unary minus operator. */
-  Neg,
   /** Multiplication operator. */
   Mul,
   /** Division operator. */
@@ -68,7 +66,7 @@ impl Operator {
     use self::Operator::* ;
     match * self {
       // Unary.
-      Not | Neg => Some(1u8),
+      Not => Some(1u8),
       // Binary.
       Div | Le | Ge | Lt | Gt => Some(2),
       // Ternary.
@@ -195,24 +193,6 @@ impl Operator {
         } else {
           Ok(Type::Bool)
         }
-      },
-
-      Neg => {
-        if sig.len() != 1 {
-          return Err( (
-            None,
-            format!(
-              "operator unary minus expects one argument, got {}", sig.len()
-            )
-          ) )
-        } ;
-        if sig[0] != Type::Int && sig[0] != Type::Rat {
-          return Err( (
-            Some( vec![0] ),
-            format!("operator unary minus expects Int or Real, got {}", sig[0])
-          ) )
-        } ;
-        Ok( sig[0] )
       },
 
       Add | Sub | Mul | Div => {
@@ -439,24 +419,6 @@ impl Operator {
         }
       },
 
-      Neg => {
-        if args.len() != 1 {
-          return Err(
-            format!(
-              "operator unary minus expects one argument, got {}", args.len()
-            )
-          )
-        } ;
-        match args[0].get().neg() {
-          Ok(cst) => Ok( factory.mk_rcst(cst) ),
-          Err(cst) => Err(
-            format!(
-              "operator unary minus cannot be applied to {}", cst
-            )
-          )
-        }
-      },
-
       Add => {
         let mut args = args.into_iter() ;
         if let Some(arg) = args.next() {
@@ -479,7 +441,9 @@ impl Operator {
         let mut args = args.into_iter() ;
         if let Some(arg) = args.next() {
           let mut res = arg.get().clone() ;
+          let mut unary = true ;
           for arg in args {
+            unary = false ;
             match res.sub(& arg) {
               Ok(cst) => res = cst,
               Err(cst) => return Err(
@@ -487,7 +451,12 @@ impl Operator {
               ),
             }
           } ;
-          Ok( factory.mk_rcst(res) )
+          if unary {
+            res = res.neg().unwrap()
+          }
+          Ok(
+            factory.mk_rcst(res)
+          )
         } else {
           Err("operator Sub applied to nothing".to_string())
         }
@@ -656,7 +625,6 @@ impl Writable for Operator {
         Operator::Distinct => "distinct",
         Operator::Add => "+",
         Operator::Sub => "-",
-        Operator::Neg => "-",
         Operator::Mul => "*",
         Operator::Div => "/",
         Operator::Le => "<=",

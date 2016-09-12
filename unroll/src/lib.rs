@@ -1020,7 +1020,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
     'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, o: & Offset2
-  ) -> Res<Vec<Key>> {
+  ) -> Res< Vec<Key> > {
     let mut terms = Vec::with_capacity(
       (self.terms_1.len() * 2) + self.terms_2.len()
     ) ;
@@ -1085,15 +1085,92 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
     for ((t, _), v) in vec {
       match * v.get() {
         real_term::Cst::Bool(true) => (),
-        real_term::Cst::Bool(false) => match back_map.remove(& t) {
-          Some(key) => keys.push( key.clone() ),
+        real_term::Cst::Bool(false) => match back_map.get(& t) {
+          Some(ref key) => keys.push( (** key).clone() ),
           None => {
+            let t1 = t ;
             let mut s = format!(
-              "[TermManager::get_false_next] unknown {}", t
+              "[TermManager::get_false_next] \
+              can't find term `t1` in map back\n{}", t1
             ) ;
-            for (ref t, ref sym) in back_map.iter() {
-              s = format!("{}\n  {} -> {}", s, t, sym) ;
-            } ;
+            let t1_str = format!("{}", t1) ;
+
+            for (t2, _) in back_map.iter() {
+              let t2_str = format!("{}", t2) ;
+              if t1_str == t2_str {
+                s = format!(
+                  "{}\nterm is present in map though, analyzing problem\n\
+                  t1's hash is {}\nt2's hash is {}", s, t1.hkey(), t2.hkey()
+                ) ;
+                match (t1.get(), t2.get()) {
+                  (
+                    & real_term::Term::Op(_, ref t1_subs),
+                    & real_term::Term::Op(_, ref t2_subs),
+                  ) => {
+                    for (
+                      t1_sub, t2_sub
+                    ) in t1_subs.iter().zip( t2_subs.iter() ) {
+                      if t1_sub.hkey() != t2_sub.hkey() {
+                        s = format!("{}\nhash inconsistency:\nlvl 1:", s) ;
+                        s = format!(
+                          "{}\n  t1: {} {}", s, t1_sub.hkey(), t1_sub
+                        ) ;
+                        s = format!(
+                          "{}\n  t2: {} {}", s, t2_sub.hkey(), t2_sub
+                        ) ;
+                        match (t1_sub.get(), t2_sub.get()) {
+                          (
+                            & real_term::Term::Op(_, ref t1_subs),
+                            & real_term::Term::Op(_, ref t2_subs),
+                          ) => {
+                            for (
+                              t1_sub, t2_sub
+                            ) in t1_subs.iter().zip( t2_subs.iter() ) {
+                              if t1_sub.hkey() != t2_sub.hkey() {
+                                s = format!(
+                                  "{}\nlvl 2:\n  t1: {} {}", s, t1_sub.hkey(), t1_sub
+                                ) ;
+                                s = format!(
+                                  "{}\n  t2: {} {}", s, t2_sub.hkey(), t2_sub
+                                ) ;
+                                match (t1_sub.get(), t2_sub.get()) {
+                                  (
+                                    & real_term::Term::Op(_, ref t1_subs),
+                                    & real_term::Term::Op(_, ref t2_subs),
+                                  ) => {
+                                    let mut aaa = true ;
+                                    for (
+                                      t1_sub, t2_sub
+                                    ) in t1_subs.iter().zip( t2_subs.iter() ) {
+                                      if t1_sub.hkey() != t2_sub.hkey() {
+                                        s = format!(
+                                          "{}\nlvl 3:\n  t1: {} {}", s, t1_sub.hkey(), t1_sub
+                                        ) ;
+                                        s = format!(
+                                          "{}\n  t2: {} {}", s, t2_sub.hkey(), t2_sub
+                                        ) ;
+                                        aaa = false
+                                      }
+                                    }
+                                    if aaa {
+                                      s = format!("{}\nno more hash inconsistency", s)
+                                    }
+                                  },
+                                  _ => (),
+                                }
+                              }
+                            }
+                          },
+                          _ => (),
+                        }
+                      }
+                    }
+                  },
+                  _ => panic!("aaaaa"),
+                }
+              }
+            }
+
             return Err(s)
           },
         },
@@ -1102,6 +1179,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
         ),
       }
     } ;
+    keys.shrink_to_fit() ;
     Ok(keys)
   }
 

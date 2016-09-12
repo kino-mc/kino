@@ -173,12 +173,38 @@ macro_rules! conf {
       $long:expr,
       $default:expr,
       $val:ident => $parser:expr
-    ) ),+
+    ), )+
+  } ) => (
+    conf!{
+      $name ($head) {
+        $( $item ($typ, $key, $shrt, $long, $default, $val => $parser), )+
+      } with ghosts {}
+    }
+  ) ;
+  ($name:ident ($head:expr) {
+    $( $item:ident (
+      $typ:ty,
+      $key:expr,
+      $shrt:expr,
+      $long:expr,
+      $default:expr,
+      $val:ident => $parser:expr
+    ), )+
+  } with ghosts {
+    $( $g_item:ident (
+      $g_typ:ty,
+      $g_key:expr,
+      $g_shrt:expr,
+      $g_long:expr,
+      $g_default:expr,
+      $g_val:ident => $g_parser:expr
+    ), )*
   } ) => (
     /// Configuration structure.
     pub struct $name {
       head: String,
-      $( $item: ConfItem<$typ> ),+
+      $( $item: ConfItem<$typ>, )+
+      $( $g_item: ConfItem<$g_typ>, )*
     }
     impl $name {
       /// Default configuration.
@@ -186,6 +212,7 @@ macro_rules! conf {
         $name {
           head: $head,
           $( $item: ConfItem::mk($key, $shrt, $long, $default), )+
+          $( $g_item: ConfItem::mk($g_key, $g_shrt, $g_long, $g_default), )*
         }
       }
       /// Multi-line description of the conf structure.
@@ -214,6 +241,13 @@ macro_rules! conf {
           & self.$item.val
         }
       )+
+      $(
+        /// Accessor.
+        #[inline(always)]
+        pub fn $g_item(& self) -> & $g_typ {
+          & self.$g_item.val
+        }
+      )*
     }
     impl HasSet for $name {
       fn set(& mut self, key: & str, val: & str) -> Result<(), String> {
@@ -227,6 +261,15 @@ macro_rules! conf {
               Err(e) => Err(e),
             },
           )+
+          $(
+            ($g_key, $g_val) => match $g_parser {
+              Ok(val) => {
+                self.$g_item.val = val ;
+                Ok(())
+              },
+              Err(e) => Err(e),
+            },
+          )*
           _ => Err(
             format!("unknown key \"{}\"", key)
           ),
@@ -279,7 +322,7 @@ conf!{
       "File to log the smt trace to.".to_string(),
       None,
       val => Option::<String>::of(val)
-    )
+    ),
   }
 }
 
@@ -320,7 +363,7 @@ conf!{
       "File to log the smt trace to.".to_string(),
       None,
       val => Option::<String>::of(val)
-    )
+    ),
   }
 }
 
@@ -354,7 +397,7 @@ conf!{
       "File to log the smt trace to.".to_string(),
       None,
       val => Option::<String>::of(val)
-    )
+    ),
   }
 }
 
@@ -409,7 +452,36 @@ conf!{
       "Directory to log the graphs to.".to_string(),
       None,
       val => Option::<String>::of(val)
-    )
+    ),
+  } with ghosts {
+    early_eqs (
+      bool,
+      "early_eqs", "[on/off]".to_string(),
+      "Activates early eq candidate discovery".to_string(),
+      true,
+      val => bool::of(val)
+    ),
+    early_cmps (
+      bool,
+      "early_cmps", "[on/off]".to_string(),
+      "Activates early cmp candidate discovery".to_string(),
+      false,
+      val => bool::of(val)
+    ),
+    late (
+      bool,
+      "late", "[on/off]".to_string(),
+      "Activates late candidate discovery".to_string(),
+      true,
+      val => bool::of(val)
+    ),
+    step_roll (
+      bool,
+      "step_roll", "[on/off]".to_string(),
+      "Activates step unrolling".to_string(),
+      true,
+      val => bool::of(val)
+    ),
   }
 }
 
@@ -443,7 +515,7 @@ conf!{
       "File to log the smt trace to.".to_string(),
       None,
       val => Option::<String>::of(val)
-    )
+    ),
   }
 }
 
