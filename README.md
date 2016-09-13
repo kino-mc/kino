@@ -45,6 +45,7 @@ implemented:
 - template-based invariant generation (`tig`)
     - one-state candidates only
     - bool candidates only
+- invariant pruner (`pruner`)
 
 future:
 
