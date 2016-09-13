@@ -4,12 +4,9 @@ Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for tra
 
 [![Build Status](https://travis-ci.org/kino-mc/kino.svg?branch=master)](https://travis-ci.org/kino-mc/kino)
 
-- builds: `debug`, `release`
+- builds: debug, release
+- platforms: linux, osx, windows
 - tests: none
-- platforms:
-    - linux
-    - osx
-    - windows
 
 # About
 
