@@ -15,16 +15,6 @@ engine of [Kind 2 model-checker](https://kind2-mc.github.io/kind2/). Unlike
 Kind 2 however, `kino` does not read Lustre files: it deals with system
 expressed in the VMT-LIB standard (to be published).
 
-Generally speaking, `kino` improves over Kind 2 because it
-
-- has a much smaller memory footprint (hence is faster),
-- runs on windows,
-- is (thread-)safer,
-- is faster because
-
-  - Rust does not do GC,
-  - and many optimizations not present in Kind 2 have been implemented.
-
 # Solvers
 
 supported:
