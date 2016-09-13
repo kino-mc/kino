@@ -269,7 +269,9 @@ impl Master {
           }
         },
 
-        Ok( PrunedInvariants(pruner, from, sym, set, old_card, at) ) => {
+        Ok(
+          PrunedInvariants(pruner, from, sym, set, old_card, at)
+        ) => if ! set.is_empty() {
           let mut blah = format!(
             "{} invariant{} discovered{}",
             set.len(),
