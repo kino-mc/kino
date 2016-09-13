@@ -41,13 +41,16 @@ implemented:
 
 - Bounded Model Checking (`bmc`)
 - K-induction (`kind`)
+- 2-induction (`twind`)
+- template-based invariant generation (`tig`)
+    - one-state candidates only
+    - bool candidates only
 
 future:
 
 - invariant generation
-    - [instantiation-based][graph based invgen]
-    - machine-learning-based from [ICE][ice invgen] and [C2I][c2i invgen]
-- test generation
+    - two-state candidates
+    - arith candidates
 
 # Build and run
 
