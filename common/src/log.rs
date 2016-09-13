@@ -117,6 +117,7 @@ pub struct Style {
 }
 impl Style {
   /// Default style.
+  #[cfg( not(windows) )]
   pub fn default() -> Self {
     use ansi::Colour::* ;
     Style {
@@ -124,6 +125,16 @@ impl Style {
       ha: Green.bold(),
       sa: Yellow.bold(),
       ba: Red.bold(),
+    }
+  }
+  /// Default style.
+  #[cfg(windows)]
+  pub fn default() -> Self {
+    Style {
+      em: AStyle::new(),
+      ha: AStyle::new(),
+      sa: AStyle::new(),
+      ba: AStyle::new(),
     }
   }
 }
