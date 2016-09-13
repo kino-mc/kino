@@ -1,6 +1,17 @@
 Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for transition systems.
 
+# Code status
+
 [![Build Status](https://travis-ci.org/kino-mc/kino.svg?branch=master)](https://travis-ci.org/kino-mc/kino)
+
+- builds: `debug`, `release`
+- tests: none
+- platforms:
+    - linux
+    - osx
+    - windows
+
+# About
 
 `kino` is a re-implementation from scratch, in Rust, of the core verification
 engine of [Kind 2 model-checker](https://kind2-mc.github.io/kind2/). Unlike
