@@ -54,9 +54,16 @@ pub type Candidates = TmpTermMap< CandInfo > ;
 
 /// Can check itself.
 pub trait CanCheck {
-  /// Checks itself.
+  /// Checks itself (in `debug`).
+  #[cfg( debug_assertions )]
   #[inline]
   fn check(& self) -> Res<()> ;
+  /// Does nothing (in `release`).
+  #[cfg( not(debug_assertions) )]
+  #[inline(always)]
+  fn check(& self) -> Res<()> {
+    Ok(())
+  }
 }
 
 /// Can stabilize itself given an evaluator.
@@ -497,34 +504,7 @@ impl<T: HasEdges> CanCheck for T {
       },
     }
   }
-  #[cfg( not(debug_assertions) )]
-  fn check(& self) -> Res<()> {
-    Ok(())
-  }
 }
-
-
-
-// /// Can learn and communicate invariants.
-// pub trait LearnerTrait<Val: Domain> {
-//   /// Learns from a `base` checker. Discovers invariants thanks to the `step`
-//   /// checker and communicates them through `event`.
-//   ///
-//   /// # In practice
-//   ///
-//   /// Stabilizes an equivalence class, extracts invariants. Once the class is
-//   /// stable, extracts invariants. Then, stabilizes all edges leading to this
-//   /// class, and extracts invariants once it's done.
-//   fn learn<
-//     Base, Step, GraphLog: Fn(& Self, & str, & str) -> Res<()>
-//   >(
-//     & mut self,
-//     base: & mut Base, step: & mut Step, event: & mut Event,
-//     graph_log: & GraphLog, tag: & str,
-//   ) -> Res<
-//     bool
-//   > where Base: BaseTrait<Val, Step>, Step: StepTrait<Val, Base> ;
-// }
 
 
 
@@ -846,6 +826,8 @@ impl<
 
     let err_pref = "[Learner::stabilize_next_class_and_edges]" ;
 
+    self.candidates.clear() ;
+
     let current = match try_str!(
       self.stabilize_next_class(
         |slf| slf.get_next(), base, step, event, graph_log, & tag
@@ -923,8 +905,8 @@ impl<
 
   /// Returns all the step terms for the graph. Equivalent to calling
   /// `step_terms_of_class` and `step_terms_of_edges` on all classes.
-  fn step_terms(& mut self) -> Res<bool> {
-    let err_pref = "[Learner::step_terms]" ;
+  fn step_cands(& mut self) -> Res<bool> {
+    let err_pref = "[Learner::step_cands]" ;
     let mut new_stuff = false ;
     for (rep, _) in self.graph.classes() {
       new_stuff = new_stuff || try_str!(
@@ -952,7 +934,7 @@ impl<
     let err_pref = "[PartialGraph::k_split_all]" ;
     self.candidates.clear() ;
     let new_stuff = try_str!(
-      self.step_terms(),
+      self.step_cands(),
       "{} during step term extraction", err_pref
     ) ;
     if new_stuff {
@@ -1072,6 +1054,7 @@ impl<Val: Domain> Graph<Val> {
 
   /// Isolates a representative. Returns the old kids and parents of the rep.
   pub fn isolate(& mut self, rep: & Term) -> Res<(TermSet, TermSet)> {
+    let err_pref = "[Graph::isolate]" ;
     let kids = if let Some( kids ) = self.map_for.remove(rep) {
       self.map_for.insert(rep.clone(), TermSet::new()) ;
       for kid in kids.iter() {
@@ -1079,17 +1062,15 @@ impl<Val: Domain> Graph<Val> {
           let was_there = kid_parents.remove(rep) ;
           debug_assert!( was_there )
         } else {
-          return Err(
-            format!(
-              "[isolate] unknown kid {} of rep {} in `map_bak`", kid, rep
-            )
+          error!(
+            "{} unknown kid {} of rep {} in `map_bak`", err_pref, kid, rep
           )
         }
       }
       kids
     } else {
-      return Err(
-        format!("[isolate] unknown rep {} in `map_for`", rep)
+      error!(
+        "{} unknown rep {} in `map_for`", err_pref, rep
       )
     } ;
 
@@ -1100,18 +1081,15 @@ impl<Val: Domain> Graph<Val> {
           let was_there = parent_kids.remove(rep) ;
           debug_assert!( was_there )
         } else {
-          return Err(
-            format!(
-              "[isolate] unknown parent {} of rep {} in `map_for`", parent, rep
-            )
+          error!(
+            "{} unknown parent {} of rep {} in `map_for`",
+            err_pref, parent, rep
           )
         }
       }
       parents
     } else {
-      return Err(
-        format!("[isolate] unknown rep {} in `map_bak`", rep)
-      )
+      error!("{} unknown rep {} in `map_bak`", err_pref, rep)
     } ;
 
     Ok( (kids, parents) )
@@ -1164,12 +1142,6 @@ impl<Val: Domain> Graph<Val> {
   pub fn add_kids(
     & mut self, rep: & Term, kids: TermSet
   ) -> () {
-    // if ! kids.is_empty() {
-    //   println!("      linking {} to", rep) ;
-    //   for kid in kids.iter() {
-    //     println!("      - {}", kid)
-    //   }
-    // }
     // Update backward edges.
     for kid in kids.iter() {
       match self.map_bak.get_mut(kid) {
@@ -1217,12 +1189,6 @@ impl<Val: Domain> Graph<Val> {
   pub fn add_kids_ref(
     & mut self, rep: & Term, kids: & TermSet
   ) -> Res<()> {
-    // if ! kids.is_empty() {
-    //   println!("      linking {} to", rep) ;
-    //   for kid in kids.iter() {
-    //     println!("      - {}", kid)
-    //   }
-    // }
     // Update backward edges.
     for kid in kids.iter() {
       match self.map_bak.get_mut(kid) {
@@ -1255,9 +1221,7 @@ impl<Val: Domain> Graph<Val> {
         // Add the new kids.
         self.map_for.insert(rep.clone(), set) ;
       },
-      None => return Err(
-        format!("[add_kids] unknown rep {}", rep)
-      ),
+      None => error!("[Graph::add_kids] unknown rep {}", rep),
     }
 
     Ok(())
@@ -1272,13 +1236,14 @@ impl<Val: Domain> Graph<Val> {
   pub fn dot_dump(& self, path: & str) -> Res<()> {
     use std::fs::File ;
     use std::process::Command ;
+    let err_pref = "[Graph::dot_dump]" ;
     let mut file = try_str!(
       File::create(path),
-      "could not create file {}", path
+      "{} could not create file {}", err_pref, path
     ) ;
     try_str!(
       self.dot_fmt(& mut file),
-      "could not dump graph as dot in file {}", path
+      "{} could not dump graph as dot in file {}", err_pref, path
     ) ;
     let mut child = try_str!(
       Command::new("dot").arg("-Tpdf").arg("-o").arg(
@@ -1300,23 +1265,26 @@ impl<Val: Domain> Graph<Val> {
         for line in reader.lines() {
           let line = try_str!(
             line,
-            "{}\n[< could not retrieve line of stdout >]", err
+            "{}\n[< {} could not retrieve line of stdout >]", err, err_pref
           ) ;
           err = format!("{}\n{}", err, line)
         }
         Err(err)
       } else {
         Err(
-          format!("{}\n[< could not retrieve stdout of process >]", err)
+          format!(
+            "{}\n[< {} could not retrieve stdout of process >]", err_pref, err
+          )
         )
       }
     }
   }
 
   /// Formats a graph in dot format.
-  pub fn dot_fmt<W: io::Write>(& self, w: & mut W) -> io::Result<()> {
+  pub fn dot_fmt<W: io::Write>(& self, w: & mut W) -> Res<()> {
+    let err_pref = "[Graph::dot_fmt]" ;
     // Header.
-    try!(
+    try_str!(
       write!(
         w,
         "\
@@ -1332,15 +1300,15 @@ digraph mode_graph {{
 
 \
         "
-      )
+      ), "{} while writing edge header", err_pref
     ) ;
 
     // Printing edges forward.
     for (rep, kids) in self.map_for.iter() {
       let size = match self.classes.get(rep) {
         Some(class) => class.len(),
-        None => panic!(
-          "[dot_fmt] rep {} has no equivalence class", rep
+        None => error!(
+          "{} rep {} has no equivalence class", err_pref, rep
         )
       } ;
       let value = match self.values.get(rep) {
@@ -1350,15 +1318,15 @@ digraph mode_graph {{
       for kid in kids.iter() {
         let kid_size = match self.classes.get(kid) {
           Some(class) => class.len(),
-          None => panic!(
-            "[dot_fmt] rep {} has no equivalence class", kid
+          None => error!(
+            "{} rep {} has no equivalence class", err_pref, kid
           )
         } ;
         let kid_value = match self.values.get(kid) {
           Some(v) => format!("{}", v),
           None => format!("_"),
         } ;
-        try!(
+        try_str!(
           write!(
             w,
             "  \
@@ -1366,7 +1334,7 @@ digraph mode_graph {{
                 constraint = false\n  \
               ] ;\n\
             ", rep, size, value, kid, kid_size, kid_value
-          )
+          ), "{} while writing forward edge", err_pref
         )
       }
     } ;
@@ -1375,8 +1343,8 @@ digraph mode_graph {{
     for (rep, parents) in self.map_bak.iter() {
       let size = match self.classes.get(rep) {
         Some(class) => class.len(),
-        None => panic!(
-          "[dot_fmt] rep {} has no equivalence class", rep
+        None => error!(
+          "{} rep {} has no equivalence class", err_pref, rep
         )
       } ;
       let value = match self.values.get(rep) {
@@ -1386,15 +1354,15 @@ digraph mode_graph {{
       for parent in parents.iter() {
         let parent_size = match self.classes.get(parent) {
           Some(class) => class.len(),
-          None => panic!(
-            "[dot_fmt] rep {} has no equivalence class", parent
+          None => error!(
+            "{} rep {} has no equivalence class", err_pref, parent
           )
         } ;
         let parent_value = match self.values.get(parent) {
           Some(v) => format!("{}", v),
           None => format!("_"),
         } ;
-        try!(
+        try_str!(
           write!(
             w,
             "  \
@@ -1402,11 +1370,11 @@ digraph mode_graph {{
                 color = \"red\"\n  \
               ] ;\n\
             ", parent, parent_size, parent_value, rep, size, value
-          )
+          ), "{} while writing backward edge", err_pref
         )
       }
     } ;
-    try!(
+    try_str!(
       write!(
         w,
         "  \
@@ -1420,7 +1388,7 @@ digraph mode_graph {{
 
 \
         "
-      )
+      ), "{} while writing class header", err_pref
     ) ;
 
     // Printing classes.
@@ -1429,14 +1397,14 @@ digraph mode_graph {{
         Some(v) => format!("{}", v),
         None => format!("_"),
       } ;
-      try!(
+      try_str!(
         write!(
           w,
           "  \
             \"{} ({})\" -> \"\
           ",
           rep, rep_value
-        )
+        ), "{} while writing class arrow", err_pref
       ) ;
       let mut first = true ;
       for term in class.iter() {
@@ -1444,14 +1412,23 @@ digraph mode_graph {{
           first = false ;
           ""
         } else { "\\n" } ;
-        try!(
-          write!(w, "{}{}", pref, term)
+        try_str!(
+          write!(w, "{}{}", pref, term),
+          "{} while writing class arrow", err_pref
         )
       }
-      try!( write!(w, "\" ;\n") )
+      try_str!(
+        write!(w, "\" ;\n"),
+        "{} while writing class arrow", err_pref
+      )
     }
 
-    write!(w, "}}\n")
+    Ok(
+      try_str!(
+        write!(w, "}}\n"),
+        "{} during final newline", err_pref
+      )
+    )
   }
 
   /// Class corresponding to a representative.
@@ -1461,8 +1438,8 @@ digraph mode_graph {{
   ) -> Result<& 'a TermSet, String> {
     match self.classes.get(rep) {
       Some(set) => Ok(set),
-      None => Err(
-        format!("[Graph::class_of] representative `{}` is unknown", rep)
+      None => error!(
+        "[Graph::class_of] representative `{}` is unknown", rep
       ),
     }
   }
@@ -1474,8 +1451,8 @@ digraph mode_graph {{
   ) -> Result<& 'a mut TermSet, String> {
     match self.classes.get_mut(rep) {
       Some(set) => Ok(set),
-      None => Err(
-        format!("[Graph::class_mut_of] representative {} is unknown", rep)
+      None => error!(
+        "[Graph::class_mut_of] representative {} is unknown", rep
       ),
     }
   }
@@ -1487,8 +1464,8 @@ digraph mode_graph {{
   ) -> Result<& 'a TermSet, String> {
     match self.map_for.get(rep) {
       Some(set) => Ok(set),
-      None => Err(
-        format!("[Graph::kids_of] representative {} is unknown", rep)
+      None => error!(
+        "[Graph::kids_of] representative {} is unknown", rep
       ),
     }
   }
@@ -1500,8 +1477,8 @@ digraph mode_graph {{
   ) -> Result<& 'a mut TermSet, String> {
     match self.map_for.get_mut(rep) {
       Some(set) => Ok(set),
-      None => Err(
-        format!("[Graph::kids_mut_of] representative {} is unknown", rep)
+      None => error!(
+        "[Graph::kids_mut_of] representative {} is unknown", rep
       ),
     }
   }
@@ -1520,10 +1497,8 @@ digraph mode_graph {{
         }
         Ok(true)
       },
-      None => Err(
-        format!(
-          "[Graph::has_valued_parents] representative {} is unknown", rep
-        )
+      None => error!(
+        "[Graph::has_valued_parents] representative {} is unknown", rep
       ),
     }
   }
@@ -1535,8 +1510,8 @@ digraph mode_graph {{
   ) -> Result<& 'a TermSet, String> {
     match self.map_bak.get(rep) {
       Some(set) => Ok(set),
-      None => Err(
-        format!("[Graph::parents_of] representative {} is unknown", rep)
+      None => error!(
+        "[Graph::parents_of] representative {} is unknown", rep
       ),
     }
   }
@@ -1548,8 +1523,8 @@ digraph mode_graph {{
   ) -> Result<& 'a mut TermSet, String> {
     match self.map_bak.get_mut(rep) {
       Some(set) => Ok(set),
-      None => Err(
-        format!("[Graph::parents_mut_of] representative {} is unknown", rep)
+      None => error!(
+        "[Graph::parents_mut_of] representative {} is unknown", rep
       ),
     }
   }
@@ -1568,7 +1543,7 @@ digraph mode_graph {{
     // Getting the right equivalence class. */
     let class = try_str!(
       self.class_mut_of(rep),
-      "[drop_member] retrieving class of {}", rep
+      "[Graph::drop_member] retrieving class of {}", rep
     ) ;
     // Removing element.
     Ok( class.remove(elem) )
@@ -1584,26 +1559,25 @@ digraph mode_graph {{
   pub fn split_class(
     & mut self, rep: & Term, eval: & mut Eval<Val>
   ) -> Res< Chain<Val, ()> > {
+    let err_pref = "[Graph::split_class]" ;
     // Starting with an empty chain.
     let mut chain = Chain::nil() ;
     
     {
       let class = match self.classes.get(rep) {
         Some(class) => class,
-        None => return Err(
-          format!("[split_class] representative {} is unknown", rep)
-        ),
+        None => error!("{} representative {} is unknown", err_pref, rep),
       } ;
       // Evaluate representative first.
       chain = try_str!(
         chain.insert(
           try_str!(
             eval.eval_term(rep),
-            "[split_class] while evaluating representative"
+            "{} while evaluating representative", err_pref
           ),
           rep.clone()
         ),
-        "[split_class] while inserting representative in the chain"
+        "{} while inserting representative in the chain", err_pref
       ) ;
       // Evaluate everyone and insert as needed.
       for term in class.iter() {
@@ -1611,11 +1585,11 @@ digraph mode_graph {{
           chain.insert(
             try_str!(
               eval.eval_term(term),
-              "[split_class] while evaluating term for rep {}", rep
+              "{} while evaluating term for rep {}", err_pref, rep
             ),
             term.clone()
           ),
-          "[split_class] while inserting in chain for rep {}", rep
+          "{} while inserting in chain for rep {}", err_pref, rep
         ) ;
       }
     } ;
@@ -1638,40 +1612,14 @@ digraph mode_graph {{
   pub fn insert_chain(
     & mut self, rep: & Term, chain: Chain<Val, ()>
   ) -> Res<()> {
+    let err_pref = "[Graph::insert_chain]" ;
     if chain.is_empty() {
-      return Err(
-        format!("cannot insert an empty chain")
-      )
+      error!("{} cannot insert an empty chain", err_pref)
     }
 
     let (kids, to_update) = try_str!(
-      self.isolate(rep), "while link breaking"
+      self.isolate(rep), "{} while link breaking", err_pref
     ) ;
-
-    // // Break forward edges from `rep` and retrieve kids.
-    // let kids = match self.map_for.remove(rep) {
-    //   Some(kids) => {
-    //     self.map_for.insert(rep.clone(), TermSet::new()) ;
-
-    //     kids
-    //   },
-    //   None => return Err(
-    //     format!("[insert_chain] rep {} has no kids in the graph", rep)
-    //   ),
-    // } ;
-
-    // // Break backward edges from `rep` and retrieve parents.
-    // let to_update = match self.map_bak.remove(rep) {
-    //   Some(parents) => {
-    //     self.map_bak.insert(rep.clone(), TermSet::new()) ;
-    //     parents
-    //   },
-    //   None => return Err(
-    //     format!("[insert_chain] rep {} has no parents in the graph", rep)
-    //   ),
-    // } ;
-
-    // self.check("check, link breaking") ;
 
     // Create links between elements of the chain.
     let _ = chain.fold(
@@ -1703,7 +1651,7 @@ digraph mode_graph {{
           for parent in set.into_iter() {
             try_str!(
               self.add_kids_ref(& parent, & kids),
-              "[insert_chain] while linking on an empty chain"
+              "{} while linking on an empty chain", err_pref
             )
           }
         },
@@ -1726,9 +1674,7 @@ digraph mode_graph {{
             // Retrieving the value of the parent.
             let parent_value = match self.values.get(& parent) {
               Some(v) => v.clone(),
-              None => return Err(
-                format!("[insert_chain] parent {} has no value", parent)
-              ),
+              None => error!("{} parent {} has no value", err_pref, parent),
             } ;
 
             // Can we insert anything above this parent?
@@ -1755,8 +1701,8 @@ digraph mode_graph {{
                   kids,
                   try_str!(
                     self.parents_of(& parent),
-                    "[insert_chain] while retrieving parents of parent {} (1)",
-                    parent
+                    "{} while retrieving parents of parent {} (1)",
+                    err_pref, parent
                   ).clone()
                 ))
               } else {
@@ -1769,7 +1715,7 @@ digraph mode_graph {{
               // Nothing to insert above. Link kids to parent and to top.
               try_str!(
                 self.add_kids_ref(& parent, & kids),
-                "[insert_chain] while adding kids to parent {} (2)", parent
+                "{} while adding kids to parent {} (2)", err_pref, parent
               ) ;
               self.add_kids(& top_rep, kids) ;
               stack.push(
@@ -1778,8 +1724,8 @@ digraph mode_graph {{
                   TermSet::new(),
                   try_str!(
                     self.parents_of(& parent),
-                    "[insert_chain] while retrieving parents of parent {} (2)",
-                    parent
+                    "{} while retrieving parents of parent {} (2)",
+                    err_pref, parent
                   ).clone()
                 )
               )
@@ -1829,6 +1775,7 @@ impl< Val: Domain > CanStabilize for Graph<Val> {
     //            been split.
     // This is forced by starting from orphan nodes in the graph, splitting
     // them, and then iterating on their kids.
+    let err_pref = "[Graph::split]" ;
 
     // Clear `values` memory.
     self.values.clear() ;
@@ -1849,12 +1796,12 @@ impl< Val: Domain > CanStabilize for Graph<Val> {
       {
         let kids = try_str!(
           self.kids_of(& rep),
-          "[split] while retrieving the kids of rep {}", rep
+          "{} while retrieving the kids of rep {}", err_pref, rep
         ) ;
         for kid in kids.iter() {
           if try_str!(
             self.has_valued_parents_except(kid, & rep),
-            "[split] while checking if kid {} has valued parents", kid
+            "{} while checking if kid {} has valued parents", err_pref, kid
           ) {
             to_do.insert(kid.clone()) ;
             ()
@@ -1868,12 +1815,12 @@ impl< Val: Domain > CanStabilize for Graph<Val> {
       // Split equivalence class.
       let chain = try_str!(
         self.split_class(& rep, eval),
-        "[split] while splitting rep {}", rep
+        "{} while splitting rep {}", err_pref, rep
       ) ;
       // Insert resulting chain.
       try_str!(
         self.insert_chain(& rep, chain),
-        "[split] while inserting chain after splitting rep {}", rep
+        "{} while inserting chain after splitting rep {}", err_pref, rep
       ) ;
 
     }
