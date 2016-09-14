@@ -56,7 +56,7 @@ pub type Candidates = TmpTermMap< CandInfo > ;
 pub trait CanCheck {
   /// Checks itself.
   #[inline]
-  fn check(& self, & Event) -> Res<()> ;
+  fn check(& self) -> Res<()> ;
 }
 
 /// Can stabilize itself given an evaluator.
@@ -77,7 +77,7 @@ pub trait CanLog {
 pub trait HasClasses: CanStabilize + CanLog {
   /// Creates a `Self` from a system and a single class given as a
   /// representative and the members of the class.
-  fn mk(sys: Sys, rep: Term, class: TermSet) -> Self ;
+  fn mk(rep: Term, class: TermSet) -> Self ;
   /// The equivalence classes.
   #[inline]
   fn classes(& self) -> & Classes ;
@@ -476,17 +476,13 @@ pub trait HasEdges : HasClasses {
 
 impl<T: HasEdges> CanCheck for T {
   #[cfg(debug_assertions)]
-  fn check(& self, event: & Event) -> Res<()> {
-    event.log("checking graph...") ;
+  fn check(& self) -> Res<()> {
     let res = match self.check_classes() {
       Ok(()) => self.check_edges(),
       err => err
     } ;
     match res {
-      Ok(()) => {
-        event.log("graph check successful...") ;
-        Ok(())
-      },
+      Ok(()) => Ok(()),
       Err(mut e) => {
         let file = format!("error_graph") ;
         match self.log_to(& file) {
@@ -502,7 +498,7 @@ impl<T: HasEdges> CanCheck for T {
     }
   }
   #[cfg( not(debug_assertions) )]
-  fn check(& self, _: & Event) -> Res<()> {
+  fn check(& self) -> Res<()> {
     Ok(())
   }
 }
@@ -572,7 +568,7 @@ impl<
   ) -> Self {
     Learner {
       sys: sys.sym().clone(),
-      graph: Graph::mk(sys, rep, class),
+      graph: Graph::mk(rep, class),
       known: TmpTermSet::with_capacity(211),
       stable: TermSet::with_capacity(17),
       factory: factory,
@@ -655,7 +651,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(event),
+      self.graph.check(),
       "{} on input graph", err_pref
     ) ;
 
@@ -727,7 +723,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(event),
+      self.graph.check(),
       "{} on input graph", err_pref
     ) ;
 
@@ -785,7 +781,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(event),
+      self.graph.check(),
       "{} after eq stabilization", err_pref
     ) ;
 
@@ -892,7 +888,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(event),
+      self.graph.check(),
       "{} after cmp stabilization", err_pref
     ) ;
 
@@ -918,7 +914,7 @@ impl<
     debug_assert!( wasnt_there ) ;
 
     try_str!(
-      self.graph.check(event),
+      self.graph.check(),
       "{} after cmp invariant extraction", err_pref
     ) ;
 
@@ -983,8 +979,6 @@ pub fn mk_bool_learner(
 
 /// The graph structure, storing the nodes and the edges.
 pub struct Graph<Val: Domain> {
-  /// System the graph's for.
-  sys: Sys,
   /// Forward edges between representatives.
   map_for: TermMap<TermSet>,
   /// Backward edges between representatives.
@@ -1000,56 +994,10 @@ pub struct Graph<Val: Domain> {
 
 impl<Val: Domain> Graph<Val> {
 
-  /// Checks the graph's consistency.
-  #[cfg(not(release))]
-  fn check(& self, blah: & str) -> bool {
-    if self.map_for.len() != self.map_bak.len() {
-      panic!(
-        "[{}] inconsistent size map_for ({}) and map_bak ({})",
-        blah, self.map_for.len(), self.map_bak.len()
-      )
-    }
-    for (rep, kids) in self.map_for.iter() {
-      for kid in kids.iter() {
-        match self.map_bak.get(kid) {
-          None => panic!("could not retrieve parents of {}", kid),
-          Some(kid_parents) => if ! kid_parents.contains(rep) {
-            panic!(
-              "[{}] found {} -> {} in map_for, but not in map_bak",
-              blah, rep, kid
-            )
-          },
-        }
-      }
-    }
-    for (rep, parents) in self.map_bak.iter() {
-      for parent in parents.iter() {
-        match self.map_for.get(parent) {
-          None => panic!("could not retrieve parents of {}", parent),
-          Some(parent_kids) => if ! parent_kids.contains(rep) {
-            panic!(
-              "[{}] found {} -> {} in map_for, but not in map_bak",
-              blah, parent, rep
-            )
-          },
-        }
-      }
-    }
-    true
-  }
-
-  /// Checks the graph's consistency.
-  #[cfg(release)]
-  #[inline(always)]
-  fn check(& self, blah: & str) -> bool {
-    true
-  }
-
   /// Creates an empty graph.
   #[inline]
-  fn with_capacity(capa: usize, sys: Sys) -> Self {
+  fn with_capacity(capa: usize) -> Self {
     Graph {
-      sys: sys,
       map_for: TermMap::with_capacity( capa ),
       map_bak: TermMap::with_capacity( capa ),
       classes: TermMap::with_capacity( capa ),
@@ -1209,8 +1157,6 @@ impl<Val: Domain> Graph<Val> {
     // Add the new kids.
     self.map_for.insert(rep.clone(), set) ;
 
-    self.check("check, add_kid") ;
-
     ()
   }
 
@@ -1261,8 +1207,6 @@ impl<Val: Domain> Graph<Val> {
         ()
       },
     }
-
-    self.check("check, add_kids") ;
 
     ()
   }
@@ -1315,8 +1259,6 @@ impl<Val: Domain> Graph<Val> {
         format!("[add_kids] unknown rep {}", rep)
       ),
     }
-
-    self.check("check add_kids_ref") ;
 
     Ok(())
   }
@@ -1941,9 +1883,9 @@ impl< Val: Domain > CanStabilize for Graph<Val> {
 }
 
 impl< Val: Domain > HasClasses for Graph<Val> {
-  fn mk(sys: Sys, rep: Term, class: TermSet) -> Self {
+  fn mk(rep: Term, class: TermSet) -> Self {
     // Creating empty graph.
-    let mut graph = Graph::with_capacity(class.len() / 3, sys.clone()) ;
+    let mut graph = Graph::with_capacity(class.len() / 3) ;
     // `rep` has no kids.
     graph.map_for.insert(
       rep.clone(), TermSet::with_capacity(class.len() / 10)
@@ -1966,762 +1908,4 @@ impl< Val: Domain > HasEdges for Graph<Val> {
   fn mut_edges_for(& mut self) -> & mut Classes { & mut self.map_for }
   fn edges_bak(& self) -> & Classes { & self.map_bak }
   fn mut_edges_bak(& mut self) -> & mut Classes { & mut self.map_bak }
-}
-
-
-
-/// Partial graph stabilizer.
-///
-/// The query scheme for this graph is different than that over the complete
-/// graph. Here, each class is looked at separately. If it is falsifiable, we
-/// get a model and stabilize the whole graph with it.
-///
-/// If it is not falsifiable, then it is stable and we extract the actual
-/// invariants from the class. Then, we check if the class has any parents and
-/// stabilize the edges with the parents, before identifying the actual
-/// invariants in the edges too.
-///
-/// It is safe to do this because of the functional invariant of the approach:
-/// > **We try to stabilize a class iff all its parents are already stable.**
-pub struct PartialGraph<Val: Domain> {
-  /// The complete graph.
-  graph: Graph<Val>,
-  /// The representatives of the stable equivalence classes.
-  stable: TermSet,
-  /// Factory, for `TmpTerm` transformation.
-  factory: Factory,
-  /// Previous candidate invariants to check again.
-  candidates: TmpTermMap< Option< (Term, Term) > >,
-  /// Activates early eq invariant discovery.
-  early_eqs: bool,
-  /// Activates early cmp invariant discovery.
-  early_cmps: bool,
-}
-impl<Val: Domain> PartialGraph<Val> {
-  /// Creates a partial graph stabilizer from a graph.
-  #[inline]
-  pub fn of(
-    factory: & Factory, graph: Graph<Val>, conf: & conf::Tig
-  ) -> Self {
-    // let orphans = graph.orphans() ;
-    PartialGraph {
-      graph: graph,
-      stable: TermSet::with_capacity(17),
-      factory: factory.clone(),
-      candidates: TmpTermMap::with_capacity(209),
-      early_eqs: * conf.early_eqs(),
-      early_cmps: * conf.early_cmps(),
-    }
-  }
-
-  /// Prepares the partial graph for a new stabilization phase.
-  #[inline]
-  pub fn clear(& mut self) {
-    self.stable.clear() ;
-    self.candidates.clear() ;
-  }
-
-  /// Extracts a representative from `self.to_do`.
-  #[inline]
-  fn get_next(& mut self) -> Option<Term> {
-    // let next = match self.to_do.iter().next() {
-    //   Some(next) => next.clone(),
-    //   None => return None,
-    // } ;
-    // let was_there = self.to_do.remove(& next) ;
-    // debug_assert!( was_there ) ;
-    // Some(next)
-
-    // Look for unstable rep with stable parents.
-    'rep_loop: for (rep, parents) in self.graph.map_bak.iter() {
-      // Skip if stable.
-      if self.stable.contains(rep) { continue 'rep_loop }
-      // Inspect parents.
-      'parent_loop: for parent in parents.iter() {
-        // Skip the rep if parent's not stable.
-        if ! self.stable.contains(parent) { continue 'rep_loop }
-      }
-      // Reachable only if all parents are stable.
-      return Some( rep.clone() )
-    }
-    // Reachable only if no unstable rep has all its parents stable (graph is
-    // stable).
-    return None
-  }
-
-  /// Terms for the equality chain between members of a class.
-  ///
-  /// None if class is a singleton.
-  fn base_terms_of_class(& self, rep: & Term, known: & mut TmpTermSet) -> Res<
-    Option< Vec<TmpTerm> >
-  > {
-    if let Some(class) = self.graph.classes.get(rep) {
-      // Early return if class is empty.
-      if class.is_empty() {
-        return Ok( None )
-      }
-
-      let mut terms = Vec::with_capacity(class.len()) ;
-      for term in class.iter() {
-        if let Some(eq) = Val::mk_eq(rep, term) {
-          if ! known.contains(& eq) { terms.push( eq ) }
-        }
-      }
-      Ok( Some(terms) )
-
-    } else {
-      Err(
-        format!(
-          "[PartialGraph::base_terms_of_class] \
-          unknown rep `{}`", rep
-        )
-      )
-    }
-  }
-
-  /// Candidate terms encoding all equalities between members of a class.
-  ///
-  /// Actually depends on the cardinality of `rep`'s class. If it's too big,
-  /// then only equalities with the representative are produced.
-  ///
-  /// Each candidate term is mapped to a pair `(rep, term)` with the semantics
-  /// that if a candidate term is invariant, then `term` can be dropped from
-  /// the class of `rep`.
-  ///
-  /// Returns true iff some new candidates were generated.
-  fn step_terms_of_class(
-    & mut self, rep: & Term, known: & mut TmpTermSet
-  ) -> Res<bool> {
-    let rep_class = try_str!(
-      self.graph.class_of(rep),
-      "[PartialGraph::step_terms_of_class] \
-      while retrieving class of `{}`", rep
-    ) ;
-    // Early return if class is empty.
-    if rep_class.is_empty() {
-      return Ok( false )
-    }
-
-    let generate_all = rep_class.len() <= 7 ;
-
-    let mut iter = rep_class.iter() ;
-    // Generate all terms.
-    while let Some(term) = iter.next() {
-      if let Some(eq) = Val::mk_eq(rep, term) {
-        if ! known.contains(& eq) {
-          let previous = self.candidates.insert(
-            eq, Some( (rep.clone(), term.clone()) )
-          ) ;
-          debug_assert!( previous.is_none() )
-        }
-      }
-      if generate_all {
-        for trm in iter.clone() {
-          if let Some(eq) = Val::mk_eq(term, trm) {
-            if ! known.contains(& eq) {
-              let previous = self.candidates.insert(
-                eq, Some( (rep.clone(), trm.clone()) )
-              ) ;
-              debug_assert!( previous.is_none() )
-            }
-          }
-        }
-      }
-    }
-    Ok( true )
-  }
-
-  /// Terms for the relations between a representative and its parents.
-  ///
-  /// None if rep has no parents.
-  fn base_terms_of_edges(& self, rep: & Term, known: & mut TmpTermSet) -> Res<
-    Option< Vec<TmpTerm> >
-  > {
-    let parents = try_str_opt!(
-      self.graph.map_bak.get(rep),
-      "[PartialGraph::base_terms_of_edges] \
-      unknown rep `{}`", rep
-    ) ;
-
-    // Early return if class is empty.
-    if parents.is_empty() {
-      return Ok( None )
-    }
-
-    let mut terms = Vec::with_capacity(parents.len()) ;
-    for parent in parents.iter() {
-      // println!("; | {} -> {}\n; |", parent, rep) ;
-      if let Some(cmp) = Val::mk_cmp(parent, rep) {
-        if ! known.contains(& cmp) {
-          terms.push( cmp )
-        }
-      }
-    }
-    Ok(
-      if ! terms.is_empty() {
-        Some(terms)
-      } else {
-        None
-      }
-    )
-  }
-
-  /// Candidate terms encoding all edges between members of a class.
-  ///
-  /// Actually depends on the cardinality of `rep`'s class, and that of its
-  /// parents. When a class is too big, then it is ignored and only edges
-  /// from/to the representative are considered.
-  ///
-  /// Candidate terms are mapped to `()` since we don't want to remember
-  /// anything about them. Info is for equivalences, where we can drop one a
-  /// term from the class.
-  fn step_terms_of_edges(
-    & mut self, rep: & Term, known: & mut TmpTermSet
-  ) -> Res<bool> {
-    self.candidates.clear() ;
-    let rep_parents = try_str!(
-      self.graph.parents_of(rep),
-      "[PartialGraph::step_terms_of_edges] \
-      while retrieving parents of `{}`", rep
-    ) ;
-    let rep_class = try_str!(
-      self.graph.class_of(rep),
-      "[PartialGraph::step_terms_of_edges] \
-      while retrieving class of `{}`", rep
-    ) ;
-    // Early return if no parents.
-    if rep_parents.is_empty() {
-      return Ok( false )
-    }
-
-    let rep_generate_all = rep_class.len() <= 7 ;
-
-    // Generate all terms.
-    for parent in rep_parents.iter() {
-      // `parent => rep`
-      // println!("; | (1) {} => {}\n; |", parent, rep) ;
-      if let Some(cmp) = Val::mk_cmp(parent, rep) {
-        if ! known.contains(& cmp) {
-          let previous = self.candidates.insert(cmp, None) ;
-          debug_assert!( previous.is_none() )
-        }
-      }
-      for term in rep_class.iter() {
-        // `parent => term`
-        // println!("; | (2) {} => {}\n; |", parent, term) ;
-        if let Some(cmp) = Val::mk_cmp(parent, term) {
-          if ! known.contains(& cmp) {
-            let previous = self.candidates.insert(cmp, None) ;
-            debug_assert!( previous.is_none() )
-          }
-        }
-      }
-      let parent_class = try_str!(
-        self.graph.class_of(parent),
-        "[PartialGraph::step_terms_of_edges] \
-        while retrieving class of `{}`, parent of `{}`", parent, rep
-      ) ;
-
-      let parent_generate_all = parent_class.len() <= 10 ;
-
-      for parent_term in parent_class.iter() {
-        // `parent_term => rep`
-        // println!("; | (3) {} => {}\n; |", parent_term, rep) ;
-        if let Some(cmp) = Val::mk_cmp(parent_term, rep) {
-          if ! known.contains(& cmp) {
-            let previous = self.candidates.insert(cmp, None) ;
-            debug_assert!( previous.is_none() )
-          }
-        }
-
-        if rep_generate_all && parent_generate_all {
-          for term in rep_class.iter() {
-            // `parent_term => term`
-            // println!("; | (4) {} => {}\n; |", parent_term, term) ;
-            if let Some(cmp) = Val::mk_cmp(parent_term, term) {
-              if ! known.contains(& cmp) {
-                let previous = self.candidates.insert(cmp, None) ;
-                debug_assert!( previous.is_none() )
-              }
-            }
-          }
-        }
-      }
-    }
-    Ok( true )
-  }
-
-  /// Returns all the step terms for the graph. Equivalent to calling
-  /// `step_terms_of_class` and `step_terms_of_edges` on all classes.
-  fn step_terms(
-    & mut self, known: & mut TmpTermSet
-  ) -> Res<bool> {
-    let mut set = TermSet::with_capacity( self.graph.classes.len() ) ;
-    for (ref rep, _) in self.graph.classes.iter() {
-      set.insert( (* rep).clone() ) ;
-    }
-    let mut new_stuff = false ;
-    for rep in set.into_iter() {
-      new_stuff = new_stuff || try_str!(
-        self.step_terms_of_class(& rep, known),
-        "[PartialGraph::step_terms] on the class of rep `{}`", rep
-      ) ;
-      new_stuff = new_stuff || try_str!(
-        self.step_terms_of_edges(& rep, known),
-        "[PartialGraph::step_terms] on the edges of rep `{}`", rep
-      )
-    }
-    Ok( new_stuff )
-  }
-
-  /// `k`-splits some candidates using a step solver. Handles communication
-  /// too.
-  pub fn k_split<Base, Step>(
-    & mut self, base: & mut Base, step: & mut Step,
-    known: & mut TmpTermSet, event: & mut Event
-  ) -> Res<()>
-  where Base: BaseTrait<Val, Step>, Step: StepTrait<Val, Base> {
-    use common::msg::MsgDown ;
-    use term::{ STerm, STermSet, UnTermOps } ;
-
-    match event.recv() {
-      None => (),
-      Some(msgs) => for msg in msgs {
-        match msg {
-          MsgDown::Forget(_, _) => (),
-          MsgDown::Invariants(sym, invs) => if self.graph.sys.sym() == & sym  {
-            // event.log(
-            //   & format!("received {} invariants", invs.len())
-            // ) ;
-            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-            try_str!(
-              base.add_invs(invs.clone()),
-              "[PartiaGraph::k_split] \
-              while adding invariants from supervisor to base at {}",
-              base.unroll_len()
-            ) ;
-            try_str!(
-              step.add_invs(invs),
-              "[PartiaGraph::k_split] \
-              while adding invariants from supervisor to step at {}",
-              step.unroll_len()
-            ) ;
-          },
-          _ => event.error("unknown message"),
-        }
-      },
-    }
-
-    self.graph.check("before k-split") ;
-
-    let invars = try_str!(
-      step.k_split(& mut self.candidates),
-      "[PartialGraph::k_split] step query"
-    ) ;
-
-    if ! invars.is_empty() {
-      let mut set = STermSet::with_capacity(invars.len()) ;
-      for (invar, info) in invars.into_iter() {
-        if let Some( (rep, to_drop) ) = info {
-          try_str!(
-            self.graph.drop_member(& rep, & to_drop),
-            "[PartialGraph::k_split] \
-            while dropping `{}` from the class of `{}`", to_drop, rep
-          ) ;
-        }
-        let wasnt_there = known.insert(invar.clone()) ;
-        debug_assert!(wasnt_there) ;
-        let invar = try_str!(
-          invar.to_term_safe(& self.factory),
-          "[PartialGraph::k_split] while building one-state invariant"
-        ) ;
-        let wasnt_there = set.insert(
-          STerm::One(
-            try_str!(
-              self.factory.debump(& invar),
-              "[PartialGraph::k_split] while building one-state invariant"
-            ),
-            invar
-          )
-        ) ;
-        debug_assert!( wasnt_there )
-      } ;
-      event.invariants_at( self.graph.sys.sym(), set, base.unroll_len() )
-    }
-    Ok(())
-  }
-
-  /// Looks for invariants in the whole graph.
-  pub fn k_split_all<Base, Step>(
-    & mut self, base: & mut Base, step: & mut Step,
-    known: & mut TmpTermSet, event: & mut Event
-  ) -> Res<()>
-  where Base: BaseTrait<Val, Step>, Step: StepTrait<Val, Base> {
-    self.candidates.clear() ;
-    let new_stuff = try_str!(
-      self.step_terms(known),
-      "[PartialGraph::k_split_all] during step term extraction"
-    ) ;
-    if new_stuff {
-      // use std::time::Instant ;
-      // let cand_count = self.candidates.len() ;
-      // event.log(
-      //   & format!(
-      //     "k-splitting {} candidates from {} classes",
-      //     cand_count, self.graph.classes.len()
-      //   )
-      // ) ;
-      // let start = Instant::now() ;
-      let res = self.k_split(base, step, known, event) ;
-      // let time = Instant::now() - start ;
-      // event.log(
-      //   & format!(
-      //     "done k-splitting {} candidates in {}.{} seconds",
-      //     cand_count, time.as_secs(), time.subsec_nanos()
-      //   )
-      // ) ;
-      res
-    } else { Ok(()) }
-  }
-
-  /// Stabilizes an equivalence class, extracts invariants.
-  /// **Communicates invariants itself.** Returns `true` iff the graph is
-  /// stable in base.
-  ///
-  /// Once the class is stable, extracts invariants. Then, stabilizes all
-  /// edges leading to this class, and extracts invariants once it's done.
-  ///
-  /// # TO DO
-  ///
-  /// Make `k_split`ting a loop so that it builds on the invariants it finds.
-  pub fn stabilize_next_class<
-    Base, Step, GraphLog: Fn(& Graph<Val>, & str, & str) -> Res<()>
-  >(
-    & mut self, base: & mut Base, step: & mut Step, event: & mut Event,
-    known: & mut TmpTermSet, graph_log: & GraphLog, tag: String,
-  ) -> Res< bool >
-  where Base: BaseTrait<Val, Step>, Step: StepTrait<Val, Base> {
-    use common::msg::MsgDown ;
-    use std::time::Instant ;
-
-    debug_assert!( base.unroll_len() + 1 >= step.unroll_len() ) ;
-
-    debug_assert!(
-      self.graph.check(
-        "[PartialGraph::stabilize_next_class] original graph"
-      )
-    ) ;
-
-    let mut next = match self.get_next() {
-      Some(next) => next,
-      None => return Ok(true),
-    } ;
-
-    // event.log(
-    //   & format!("starting base eq stabilization from `{}`", next)
-    // ) ;
-
-    try_str!(
-      graph_log(& self.graph, & tag, "0"),
-      "could not dump graph as dot"
-    ) ;
-
-    match event.recv() {
-      None => (),
-      Some(msgs) => for msg in msgs {
-        match msg {
-          MsgDown::Forget(_, _) => (),
-          MsgDown::Invariants(sym, invs) => if self.graph.sys.sym() == & sym  {
-            // event.log(
-            //   & format!("received {} invariants", invs.len())
-            // ) ;
-            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-            try_str!(
-              base.add_invs(invs.clone()),
-              "while adding invariants from supervisor to base at {}",
-              base.unroll_len()
-            ) ;
-            try_str!(
-              step.add_invs(invs),
-              "while adding invariants from supervisor to step at {}",
-              step.unroll_len()
-            ) ;
-          },
-          _ => event.error("unknown message"),
-        }
-      },
-    }
-
-    self.graph.check("before partial eq stabilization") ;
-
-    let time_start = Instant::now() ;
-
-    // Stabilize the graph class by class until one is stable.
-    'base_eq: loop {
-
-      let to_check = if let Some(to_check) = try_str!(
-        self.base_terms_of_class(& next, known),
-        "[PartialGraph::stabilize_next_class] \
-        while getting eq base terms of `{}`", next
-      ) {
-        to_check
-      } else {
-        // event.log(
-        //   & format!("`{}` is alone, moving on", next)
-        // ) ;
-        break 'base_eq
-      } ;
-
-      // event.log(
-      //   & format!("partial-eq-stabilizing, {} terms", to_check.len())
-      // ) ;
-
-      let eval_opt = try_str!(
-        base.k_falsify(to_check),
-        "[PartialGraph::stabilize_next_class] \
-        during `k_falsify` query for eqs of `{}`", next
-      ) ;
-
-      if let Some(mut eval) = eval_opt {
-        // event.log("class is not stable, splitting") ;
-        try!( self.graph.split(& mut eval) ) ;
-        next = try_str_opt!(
-          self.get_next(),
-          "[PartialGraph::stabilize_next_class] \
-          graph was just split for eqs but no next rep found"
-        )
-      } else {
-        // event.log("class is stable, moving on") ;
-        break 'base_eq
-      }
-
-    }
-    // At this point, `next` is the representative of a stable class with
-    // stable parents.
-
-    try_str!(
-      graph_log(& self.graph, & tag, "1"),
-      "could not dump graph as dot"
-    ) ;
-
-    debug_assert!(
-      self.graph.check(
-        "[PartialGraph::stabilize_next_class] after eq stabilization"
-      )
-    ) ;
-
-    match event.recv() {
-      None => (),
-      Some(msgs) => for msg in msgs {
-        match msg {
-          MsgDown::Forget(_, _) => (),
-          MsgDown::Invariants(sym, invs) => if self.graph.sys.sym() == & sym  {
-            // event.log(
-            //   & format!("received {} invariants", invs.len())
-            // ) ;
-            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-            try_str!(
-              base.add_invs(invs.clone()),
-              "while adding invariants from supervisor to base at {}",
-              base.unroll_len()
-            ) ;
-            try_str!(
-              step.add_invs(invs),
-              "while adding invariants from supervisor to step at {}",
-              step.unroll_len()
-            ) ;
-          },
-          _ => event.error("unknown message"),
-        }
-      },
-    }
-
-    self.graph.check("before eq invariant extraction") ;
-
-    let time_base_eq = Instant::now() ;
-
-    // Extract invariant from the equivalence class of `next`.
-    self.candidates.clear() ;
-    if self.early_eqs && try_str!(
-      self.step_terms_of_class(& next, known),
-      "[PartialGraph::stabilize_next_class] \
-      while preparing `k_split` eq query over rep `{}`", next
-    ) {
-      try_str!(
-        self.k_split(base, step, known, event),
-        "[PartialGraph::stabilize_next_class] \n\
-        during `k_split` eq query over rep `{}`", next
-      )
-    } ;
-
-    match event.recv() {
-      None => (),
-      Some(msgs) => for msg in msgs {
-        match msg {
-          MsgDown::Forget(_, _) => (),
-          MsgDown::Invariants(sym, invs) => if self.graph.sys.sym() == & sym  {
-            // event.log(
-            //   & format!("received {} invariants", invs.len())
-            // ) ;
-            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-            try_str!(
-              base.add_invs(invs.clone()),
-              "while adding invariants from supervisor to base at {}",
-              base.unroll_len()
-            ) ;
-            try_str!(
-              step.add_invs(invs),
-              "while adding invariants from supervisor to step at {}",
-              step.unroll_len()
-            ) ;
-          },
-          _ => event.error("unknown message"),
-        }
-      },
-    }
-
-    // try_str!(
-    //   base.restart(), "while restarting base at {}", base.unroll_len()
-    // ) ;
-    // try_str!(
-    //   step.restart(), "while restarting step at {}", step.unroll_len()
-    // ) ;
-
-    // Stabilize the graph until the edges between `next` and its parents are
-    // stable.
-
-    // event.log(
-    //   & format!("stabilizing edges leading to `{}`", next)
-    // ) ;
-
-    self.graph.check(
-      "[PartialGraph::stabilize_next_class] after eq invariant extraction"
-    ) ;
-
-    let time_step_eq = Instant::now() ;
-
-    'base_cmp: loop {
-
-      // event.log(
-      //   & format!("partial-cmp-stabilizing `{}`", next)
-      // ) ;
-
-      let to_check = if let Some(to_check) = try_str!(
-        self.base_terms_of_edges(& next, known),
-        "[PartialGraph::stabilize_next_class] \
-        while getting cmp base terms of `{}`", next
-      ) {
-        to_check
-      } else {
-        // event.log(
-        //   & format!("`{}` has no non-trivial parents, moving on", next)
-        // ) ;
-        break 'base_cmp
-      } ;
-
-      // event.log(
-      //   & format!("partial-cmp-stabilizing, {} terms", to_check.len())
-      // ) ;
-
-      let eval_opt = try_str!(
-        base.k_falsify(to_check),
-        "[PartialGraph::stabilize_next_class] \
-        during `k_falsify` query for cmps of `{}`", next
-      ) ;
-
-      if let Some(mut eval) = eval_opt {
-        // event.log("edges are not stable, splitting") ;
-        try!( self.graph.split(& mut eval) )
-      } else {
-        // event.log("edges are stable, moving on") ;
-        break 'base_cmp
-      }
-
-    }
-    // At this point, all edges leading to `next` are stable.
-
-    try_str!(
-      graph_log(& self.graph, & tag, "0"),
-      "could not dump graph as dot"
-    ) ;
-
-    self.graph.check(
-      "[PartialGraph::stabilize_next_class] after cmp stabilization"
-    ) ;
-
-    match event.recv() {
-      None => (),
-      Some(msgs) => for msg in msgs {
-        match msg {
-          MsgDown::Forget(_, _) => (),
-          MsgDown::Invariants(sym, invs) => if self.graph.sys.sym() == & sym  {
-            // event.log(
-            //   & format!("received {} invariants", invs.len())
-            // ) ;
-            // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-            try_str!(
-              base.add_invs(invs.clone()),
-              "while adding invariants from supervisor to base at {}",
-              base.unroll_len()
-            ) ;
-            try_str!(
-              step.add_invs(invs),
-              "while adding invariants from supervisor to step at {}",
-              step.unroll_len()
-            ) ;
-          },
-          _ => event.error("unknown message"),
-        }
-      },
-    }
-
-    let time_base_cmp = Instant::now() ;
-
-    // Extract invariant from the edges leading `next`.
-    self.candidates.clear() ;
-    if self.early_cmps && try_str!(
-      self.step_terms_of_edges(& next, known),
-      "[PartialGraph::stabilize_next_class] \
-      while preparing `k_split` cmp query over rep `{}`", next
-    ) {
-      try_str!(
-        self.k_split(base, step, known, event),
-        "[PartialGraph::stabilize_next_class] \n\
-        during `k_split` cmp query over rep `{}`", next
-      )
-    } ;
-
-    let time_step_cmp = Instant::now() ;
-
-    let (_t_1, _t_2, _t_3, _t_4) = (
-      time_base_eq - time_start,
-      time_step_eq - time_base_eq,
-      time_base_cmp - time_step_eq,
-      time_step_cmp - time_base_cmp
-    ) ;
-
-    // event.log(
-    //   & format!(
-    //     "stats:\n  \
-    //     base eq:  {:>4}.{}\n  \
-    //     step eq:  {:>4}.{}\n  \
-    //     base cmp: {:>4}.{}\n  \
-    //     step cmp: {:>4}.{}\n",
-    //     t_1.as_secs(), t_1.subsec_nanos(),
-    //     t_2.as_secs(), t_2.subsec_nanos(),
-    //     t_3.as_secs(), t_3.subsec_nanos(),
-    //     t_4.as_secs(), t_4.subsec_nanos(),
-    //   )
-    // ) ;
-
-    let wasnt_there = self.stable.insert(next) ;
-    debug_assert!( wasnt_there ) ;
-
-    self.graph.check(
-      "[PartialGraph::stabilize_next_class] after cmp invariant extraction"
-    ) ;
-
-    Ok(false)
-  }
-
 }
