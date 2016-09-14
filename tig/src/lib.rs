@@ -123,7 +123,7 @@ fn invgen<
   // event.log("creating graph") ;
   let mut graph = PartialGraph::of(
     & factory,
-    Graph::<Bool>::mk(& sys, rep, class),
+    Graph::<Bool>::mk(sys.clone(), rep, class),
     & (* conf)
   ) ;
 
