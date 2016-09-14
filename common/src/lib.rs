@@ -31,17 +31,21 @@ use term::smt::{
 
 use sys::{ Prop, Sys } ;
 
+/// Literally `return Err( format!( $($args),+ ) )`.
+#[macro_export]
+macro_rules! error {
+  ( $($args:expr),+ ) => (
+    return Err( format!( $($args),+ ) )
+  )
+}
+
 /// Try for `Result<T, String>`, appends something to error messages.
 #[macro_export]
 macro_rules! try_str {
   ($e:expr, $($blah:expr),+) => (
     match $e {
       Ok(res) => res,
-      Err(msg) => return Err(
-        format!(
-          "{}\n{}", format!( $($blah),+ ), msg
-        )
-      ),
+      Err(msg) => error!("{}\n{}", format!( $($blah),+ ), msg),
     }
   ) ;
 }
@@ -52,9 +56,7 @@ macro_rules! try_str_opt {
   ($e:expr, $($blah:expr),+) => (
     match $e {
       Some(res) => res,
-      None => return Err(
-        format!( $($blah),+ )
-      ),
+      None => error!( $($blah),+ ),
     }
   ) ;
 }

@@ -29,6 +29,464 @@ use chain::* ;
 use lsd::* ;
 
 
+/// Map from representatives to their class.
+pub type Classes = TermMap< TermSet > ;
+
+/// Map from representatives to their kids/parents.
+pub type Edges = TermMap< TermSet > ;
+
+/// Candidate invariant info.
+///
+/// Stores the information needed to drop a term from an equivalence class:
+/// the representative of the class and the term to drop.
+///
+/// This is used when generating candidates from equivalence classes. If the
+/// candidate is indeed invariant, then the rhs of the equality can be dropped
+/// from the class it belongs to.
+///
+/// Candidates from edges just store `None`.
+pub type CandInfo = Option<(Term, Term)> ;
+
+/// A set of candidate invariants.
+pub type Candidates = TmpTermMap< CandInfo > ;
+
+/// Has equivalence classes.
+pub trait HasClasses< Val: Domain > {
+  /// The equivalence classes.
+  #[inline]
+  fn classes(& self) -> & Classes ;
+  /// Equivalence class of a representative.
+  #[inline]
+  fn class_of(& self, rep: & Term) -> Res<& TermSet> {
+    Ok(
+      try_str_opt!(
+        self.classes().get(rep),
+        "[HasClasses::class_of] \
+        unknown rep `{}`", rep
+      )
+    )
+  }
+  /// Checks the equivalence classes of a graph.
+  ///
+  /// Checks that
+  /// - no term appears in two equivalence classes;
+  /// - no representative appears in a class.
+  #[inline]
+  fn check_classes(& self) -> Res<()> {
+    use std::collections::{ HashSet, HashMap } ;
+    let mut reps = HashSet::with_capacity( self.classes().len() ) ;
+    let mut trms = HashMap::with_capacity( self.classes().len() * 10 ) ;
+
+    for (rep, class) in self.classes().iter() {
+      // Is `rep` a member of some other class?
+      if let Some(rep_bis) = trms.get(rep) {
+        error!(
+          "rep `{}` is also a member of the class of `{}`", rep, rep_bis
+        )
+      }
+      let was_there = reps.insert(rep) ;
+      assert!( ! was_there ) ;
+      for trm in class.iter() {
+        // Is `trm` also a representative?
+        if reps.contains(trm) {
+          error!(
+            "rep `{}` is also a member of the class of `{}`", trm, rep
+          )
+        }
+        // Is `trm` in another class?
+        if let Some(rep_bis) = trms.insert(trm, rep) {
+          error!(
+            "term `{}` is a member of both `{}` and `{}`", trm, rep, rep_bis
+          )
+        }
+      }
+    }
+
+    Ok(())
+  }
+
+  /// The equivalence classes, mutable version.
+  #[inline]
+  fn mut_classes(& mut self) -> & mut Classes ;
+  /// Equivalence class of a representative.
+  #[inline]
+  fn mut_class_of(& mut self, rep: & Term) -> Res<& mut TermSet> {
+    Ok(
+      try_str_opt!(
+        self.mut_classes().get_mut(rep),
+        "[HasClasses::mut_class_of] \
+        unknown rep `{}`", rep
+      )
+    )
+  }
+  /// Drops a term from an equivalence class.
+  #[inline]
+  fn drop_term(& mut self, rep: & Term, trm: & Term) -> Res<bool> {
+    Ok(
+      try_str!(
+        self.mut_class_of(rep),
+        "[HasClasses::drop_term] \
+        while dropping term `{}` from `{}`", trm, rep
+      ).remove(trm)
+    )
+  }
+  /// The classes currently considered stable.
+  #[inline]
+  fn stable(& self) -> & TermSet ;
+  /// The classes currently considered stable, mutable version.
+  #[inline]
+  fn mut_stable(& mut self) -> & mut TermSet ;
+
+  /// Terms for the equality chain between members of a class.
+  ///
+  /// None if class is a singleton.
+  fn base_cands_of_class(
+    & self, rep: & Term, known: & TmpTermSet
+  ) -> Res< Option< Vec<TmpTerm> > > {
+    let class = try_str!(
+      self.class_of(rep),
+      "[HasClasses::base_cands_of_class] \
+      while retrieving class of `{}`", rep
+    ) ;
+    // Early return if class is empty.
+    if class.is_empty() {
+      return Ok( None )
+    }
+
+    let mut terms = Vec::with_capacity(class.len()) ;
+    for term in class.iter() {
+      if let Some(eq) = Val::mk_eq(rep, term) {
+        if ! known.contains(& eq) { terms.push( eq ) }
+      }
+    }
+    Ok( Some(terms) )
+  }
+
+  /// Candidate terms encoding all equalities between members of a class.
+  ///
+  /// Actually depends on the cardinality of `rep`'s class. If it's too big,
+  /// then only equalities with the representative are produced.
+  ///
+  /// Each candidate term is mapped to a pair `(rep, term)` with the semantics
+  /// that if a candidate term is invariant, then `term` can be dropped from
+  /// the class of `rep`.
+  ///
+  /// Returns true iff some new candidates were generated.
+  fn step_cands_of_class(
+    & self, rep: & Term, candidates: & mut Candidates, known: & TmpTermSet
+  ) -> Res<bool> {
+    let rep_class = try_str!(
+      self.class_of(rep),
+      "[PartialGraph::step_cands_of_class] \
+      while retrieving class of `{}`", rep
+    ) ;
+    // Early return if class is empty.
+    if rep_class.is_empty() {
+      return Ok( false )
+    }
+
+    let generate_all = rep_class.len() <= 7 ;
+
+    let mut iter = rep_class.iter() ;
+    // Generate all terms.
+    while let Some(term) = iter.next() {
+      if let Some(eq) = Val::mk_eq(rep, term) {
+        if ! known.contains(& eq) {
+          let previous = candidates.insert(
+            eq, Some( (rep.clone(), term.clone()) )
+          ) ;
+          debug_assert!( previous.is_none() )
+        }
+      }
+      if generate_all {
+        for trm in iter.clone() {
+          if let Some(eq) = Val::mk_eq(term, trm) {
+            if ! known.contains(& eq) {
+              let previous = candidates.insert(
+                eq, Some( (rep.clone(), trm.clone()) )
+              ) ;
+              debug_assert!( previous.is_none() )
+            }
+          }
+        }
+      }
+    }
+    Ok( true )
+  }
+}
+
+/// Has no edges, equivalence classes only.
+pub trait HasNoEdges< Val: Domain > : HasClasses<Val> {
+  /// Clears the stable class cache.
+  fn clear_stable(& mut self) {
+    self.mut_stable().clear()
+  }
+  /// Extracts a representative for an unstable class, if any.
+  fn choose_unstable(& self) -> Option< & Term > {
+    let stable = self.stable() ;
+    for (rep, _) in self.classes() {
+      if ! stable.contains(rep) {
+        return Some( rep )
+      }
+    }
+    None
+  }
+
+  /// Checks the whole graph.
+  #[inline(always)]
+  #[cfg(debug_assertions)]
+  fn check(& self) -> Res<()> {
+    self.check_classes()
+  }
+  /// Checks the whole graph.
+  #[inline(always)]
+  #[cfg( not(debug_assertions) )]
+  fn check(& self) -> Res<()> {
+    Ok(())
+  }
+}
+
+/// Has edges.
+pub trait HasEdges< Val: Domain > : HasClasses<Val> {
+  /// The forward edges.
+  #[inline]
+  fn edges_for(& self) -> & Edges ;
+  /// The forward edges, mutable version.
+  #[inline]
+  fn mut_edges_for(& mut self) -> & mut Edges ;
+  /// The kids of a representative.
+  #[inline]
+  fn kids_of(& self, rep: & Term) -> Res< & TermSet > {
+    Ok(
+      try_str_opt!(
+        self.edges_for().get(rep),
+        "[HasEdges::kids_of] unknown rep `{}`", rep
+      )
+    )
+  }
+
+  /// The backward edges.
+  #[inline]
+  fn edges_bak(& self) -> & Edges ;
+  /// The backward edges, mutable version.
+  #[inline]
+  fn mut_edges_bak(& mut self) -> & mut Edges ;
+  /// The parents of a representative.
+  #[inline]
+  fn parents_of(& self, rep: & Term) -> Res< & TermSet > {
+    Ok(
+      try_str_opt!(
+        self.edges_bak().get(rep),
+        "[HasEdges::parents_of] unknown rep `{}`", rep
+      )
+    )
+  }
+
+  /// Checks the edges of a graph.
+  ///
+  /// Checks that
+  /// - all representatives are defined in `edges_for` and `edges_bak`;
+  /// - `rep -> kid` in `edges_for` iff `kid -> rep` in `edges_bak`.
+  #[inline]
+  fn check_edges(& self) -> Res<()> {
+    // All representatives defined.
+    for (rep, _) in self.classes().iter() {
+      if ! self.edges_for().contains_key(rep) {
+        error!(
+          "rep `{}`\nis not defined in kid map", rep
+        )
+      }
+      if ! self.edges_bak().contains_key(rep) {
+        error!(
+          "rep `{}`\nis not defined in parent map", rep
+        )
+      }
+    }
+    // `rep -> kid` => `kid <- rep`
+    for (rep, kids) in self.edges_for().iter() {
+      for kid in kids.iter() {
+        if let Ok( parents ) = self.parents_of(kid) {
+          if ! parents.contains(rep) {
+            error!(
+              "kid `{}`\nof `{}`\n\
+              inverse relation not found in parent map", kid, rep
+            )
+          }
+        } else {
+          error!(
+            "kid `{}`\nof `{}`\n\
+            undefined in parent map", kid, rep
+          )
+        }
+      }
+    }
+    // `rep <- parent` => `parent -> rep`
+    for (rep, parents) in self.edges_bak().iter() {
+      for parent in parents.iter() {
+        if let Ok( kids ) = self.kids_of(parent) {
+          if ! kids.contains(rep) {
+            error!(
+              "parent `{}`\nof `{}`\n\
+              inverse relation not found in kid map", parent, rep
+            )
+          }
+        } else {
+          error!(
+            "parent `{}`\nof `{}`\n\
+            undefined in kid map", parent, rep
+          )
+        }
+      }
+    }
+    Ok(())
+  }
+
+  /// Checks the whole graph.
+  #[inline(always)]
+  #[cfg(debug_assertions)]
+  fn check(& self) -> Res<()> {
+    try!( self.check_classes() ) ;
+    self.check_edges()
+  }
+  /// Checks the whole graph.
+  #[inline(always)]
+  #[cfg( not(debug_assertions) )]
+  fn check(& self) -> Res<()> {
+    Ok(())
+  }
+
+  /// Terms for the relations between a representative and its parents.
+  ///
+  /// None if rep has no parents.
+  fn base_cands_of_edges(
+    & self, rep: & Term, known: & mut TmpTermSet
+  ) -> Res< Option< Vec<TmpTerm> > > {
+    let parents = try_str!(
+      self.parents_of(rep),
+      "[HasEdges::base_cands_of_edges] \
+      while retrieving parents of `{}`", rep
+    ) ;
+
+    // Early return if class is empty.
+    if parents.is_empty() {
+      return Ok( None )
+    }
+
+    let mut terms = Vec::with_capacity(parents.len()) ;
+    for parent in parents.iter() {
+      if let Some(cmp) = Val::mk_cmp(parent, rep) {
+        if ! known.contains(& cmp) {
+          terms.push( cmp )
+        }
+      }
+    }
+    Ok(
+      if ! terms.is_empty() {
+        terms.shrink_to_fit() ;
+        Some(terms)
+      } else {
+        None
+      }
+    )
+  }
+
+  /// Candidate terms encoding all edges between members of a class.
+  ///
+  /// Actually depends on the cardinality of `rep`'s class, and that of its
+  /// parents. When a class is too big, then it is ignored and only edges
+  /// from/to the representative are considered.
+  ///
+  /// Candidate terms are mapped to `()` since we don't want to remember
+  /// anything about them. Info is for equivalences, where we can drop one a
+  /// term from the class.
+  fn step_cands_of_edges(
+    & self, rep: & Term, candidates: & mut Candidates, known: & mut TmpTermSet
+  ) -> Res<bool> {
+    let rep_parents = try_str!(
+      self.parents_of(rep),
+      "[HasEdges::step_cands_of_edges] while retrieving parents of `{}`", rep
+    ) ;
+    let rep_class = try_str!(
+      self.class_of(rep),
+      "[HasEdges::step_cands_of_edges] while retrieving class of `{}`", rep
+    ) ;
+    // Early return if no parents.
+    if rep_parents.is_empty() {
+      return Ok( false )
+    }
+
+    let rep_generate_all = rep_class.len() <= 7 ;
+
+    // Generate all terms.
+    for parent in rep_parents.iter() {
+      if let Some(cmp) = Val::mk_cmp(parent, rep) {
+        if ! known.contains(& cmp) {
+          let previous = candidates.insert(cmp, None) ;
+          debug_assert!( previous.is_none() )
+        }
+      }
+      for term in rep_class.iter() {
+        if let Some(cmp) = Val::mk_cmp(parent, term) {
+          if ! known.contains(& cmp) {
+            let previous = candidates.insert(cmp, None) ;
+            debug_assert!( previous.is_none() )
+          }
+        }
+      }
+      let parent_class = try_str!(
+        self.class_of(parent),
+        "[HasEdges::step_cands_of_edges] \
+        while retrieving class of `{}`, parent of `{}`", parent, rep
+      ) ;
+
+      let parent_generate_all = parent_class.len() <= 10 ;
+
+      for parent_term in parent_class.iter() {
+        if let Some(cmp) = Val::mk_cmp(parent_term, rep) {
+          if ! known.contains(& cmp) {
+            let previous = candidates.insert(cmp, None) ;
+            debug_assert!( previous.is_none() )
+          }
+        }
+
+        if rep_generate_all && parent_generate_all {
+          for term in rep_class.iter() {
+            if let Some(cmp) = Val::mk_cmp(parent_term, term) {
+              if ! known.contains(& cmp) {
+                let previous = candidates.insert(cmp, None) ;
+                debug_assert!( previous.is_none() )
+              }
+            }
+          }
+        }
+      }
+    }
+    Ok( true )
+  }
+
+  /// Returns all the step terms for the graph. Equivalent to calling
+  /// `step_cands_of_class` and `step_cands_of_edges` on all classes.
+  fn step_cands(
+    & self, candidates: & mut Candidates, known: & mut TmpTermSet
+  ) -> Res<bool> {
+    let mut new_stuff = false ;
+    for (rep, _) in self.classes().into_iter() {
+      new_stuff = new_stuff || try_str!(
+        self.step_cands_of_class(rep, candidates, known),
+        "[HasEdges::step_cands] \
+        during extraction of class candidates for rep `{}`", rep
+      ) ;
+      new_stuff = new_stuff || try_str!(
+        self.step_cands_of_edges(rep, candidates, known),
+        "[HasEdges::step_cands] \
+        during extraction of edge candidates for rep `{}`", rep
+      )
+    }
+    Ok( new_stuff )
+  }
+}
+
+
 /// The graph structure, storing the nodes and the edges.
 pub struct Graph<Val: Domain> {
   /// System the graph's for.
