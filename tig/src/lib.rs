@@ -40,6 +40,7 @@ pub mod eval ;
 pub mod mine ;
 pub mod chain ;
 pub mod graph ;
+use graph::CanLog ;
 pub mod lsd ;
 
 
@@ -52,7 +53,6 @@ impl CanRun<conf::Tig> for Tig {
   fn run(
     & self, conf: Arc<conf::Tig>, sys: Sys, _: Vec<Prop>, mut event: Event
   ) {
-    // event.log("starting invgen") ;
 
     let mut solver_conf = conf.smt().clone().default().print_success() ;
     match * conf.smt_cmd() {
@@ -73,7 +73,7 @@ impl CanRun<conf::Tig> for Tig {
           ) ;
           invgen(
             conf.clone(), solver_1, solver_2, sys, & mut event,
-            |graph, tag1, tag2| graph.dot_dump(
+            |graph, tag1, tag2| graph.log_to(
               & format!("{}/graph_{}_{}.dot", dir, tag1, tag2)
             )
           )
@@ -93,26 +93,20 @@ impl CanRun<conf::Tig> for Tig {
 /// Runs invgen.
 fn invgen<
   'a, S: SolverTrait<'a>,
-  GraphLog: Fn(& graph::Graph<Bool>, & str, & str) -> Res<()>
+  GraphLog: Fn(
+    & graph::Learner< graph::Graph<Bool> >, & str, & str
+  ) -> Res<()>
 >(
   conf: Arc<conf::Tig>, solver_1: S, solver_2: S, sys: Sys, event: & mut Event,
   graph_log: GraphLog
 ) {
   use std::time::Instant ;
-  use graph::* ;
   use lsd::top_only::* ;
 
   let max_k = * conf.max() ;
   let unroll_step = * conf.step_roll() ;
 
   let factory = solver_1.parser().clone() ;
-
-  // event.log("mining system") ;
-  let (rep, class) = mine::bool(& factory, & sys, * conf.all_out()) ;
-
-  event.log(
-    & format!("running with {} candidate terms", class.len() + 1)
-  ) ;
 
   // let mut blah = format!("{} ->", rep) ;
   // for t in class.iter() {
@@ -121,10 +115,17 @@ fn invgen<
   // event.log(& blah) ;
 
   // event.log("creating graph") ;
-  let mut graph = PartialGraph::of(
-    & factory,
-    Graph::<Bool>::mk(sys.clone(), rep, class),
-    & (* conf)
+  // let mut graph = PartialGraph::of(
+  //   & factory,
+  //   Graph::<Bool>::mk(sys.clone(), rep, class),
+  //   & (* conf)
+  // ) ;
+  let mut graph = graph::mk_bool_learner(
+    sys.clone(), factory, & * conf
+  ) ;
+
+  event.log(
+    & format!("running with {} candidate terms", graph.len() + 1)
   ) ;
 
   // event.log("creating base checker") ;
@@ -150,7 +151,7 @@ fn invgen<
   } ;
 
   let mut cnt = 1 ;
-  let mut known_invars = TmpTermSet::with_capacity(107) ;
+  // let mut known_invars = TmpTermSet::with_capacity(107) ;
 
   'work: while max_k.map_or(true, |max| cnt <= max) {
 
@@ -158,11 +159,13 @@ fn invgen<
     let mut inner_cnt = 0 ;
     let start = Instant::now() ;
 
+    event.log( & format!("stabilizing at {}...", cnt) ) ;
+
     'stabilize: while ! is_done {
       is_done = try_error!(
-        graph.stabilize_next_class(
-          & mut base, & mut step, event, & mut known_invars,
-          & graph_log, format!("{}_{}", cnt, inner_cnt)
+        graph.stabilize_next_class_and_edges(
+          & mut base, & mut step, event,
+          & graph_log, & format!("{}_{}", cnt, inner_cnt)
         ), event,
         "while stabilizing at {}", cnt
       ) ;
@@ -187,7 +190,7 @@ fn invgen<
     ) ;
 
     try_error!(
-      graph.k_split_all(& mut base, & mut step, & mut known_invars, event),
+      graph.k_split_all(& mut base, & mut step, event),
       event, "while splitting all at {}", cnt
     ) ;
 

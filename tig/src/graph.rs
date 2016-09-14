@@ -17,7 +17,7 @@ use common::msg::Event ;
 use common::conf ;
 
 use term::{
-  Sym, Factory, Term, TermSet, TermMap
+  Sym, Factory, Term, TermSet, TermMap, Bool
 } ;
 use term::tmp::{ TmpTerm, TmpTermSet, TmpTermMap } ;
 
@@ -27,6 +27,7 @@ use Domain ;
 use eval::Eval ;
 use chain::* ;
 use lsd::* ;
+use mine ;
 
 
 /// Map from representatives to their class.
@@ -55,13 +56,7 @@ pub type Candidates = TmpTermMap< CandInfo > ;
 pub trait CanCheck {
   /// Checks itself.
   #[inline]
-  fn check(& self) -> Res<()> ;
-}
-
-/// Can yield a next representative.
-pub trait CanNext {
-  /// The next representative if any.
-  fn get_next(& self, ignore: & TermSet) -> Option<Term> ;
+  fn check(& self, & Event) -> Res<()> ;
 }
 
 /// Can stabilize itself given an evaluator.
@@ -74,8 +69,7 @@ pub trait CanStabilize {
 
 /// Can log itself.
 pub trait CanLog {
-  /// Logs itself to some file.
-  /// File path must be provided **with no extension**.
+  /// Logs itself to some file with `dot` extension.
   fn log_to(& self, & str) -> Res<()> ;
 }
 
@@ -116,8 +110,8 @@ pub trait HasClasses: CanStabilize + CanLog {
           "rep `{}` is also a member of the class of `{}`", rep, rep_bis
         )
       }
-      let was_there = reps.insert(rep) ;
-      assert!( ! was_there ) ;
+      let wasnt_there = reps.insert(rep) ;
+      assert!( wasnt_there ) ;
       for trm in class.iter() {
         // Is `trm` also a representative?
         if reps.contains(trm) {
@@ -251,33 +245,6 @@ pub trait HasNoEdges : HasClasses {
       }
     }
     None
-  }
-
-  /// Checks the whole graph.
-  #[inline(always)]
-  #[cfg(debug_assertions)]
-  fn check(& self) -> Res<()> {
-    match self.check_classes() {
-      Ok(()) => Ok(()),
-      Err(mut e) => {
-        let file = format!("error_graph") ;
-        match self.log_to(& file) {
-          Ok(()) => e = format!(
-            "{}\n(graph dumped as `{}`)", e, file
-          ),
-          Err(err) => e = format!(
-            "{}\ncould not dump graph as `{}`:\n{}", e, file, err
-          ),
-        }
-        Err(e)
-      },
-    }
-  }
-  /// Checks the whole graph.
-  #[inline(always)]
-  #[cfg( not(debug_assertions) )]
-  fn check(& self) -> Res<()> {
-    Ok(())
   }
 }
 
@@ -421,7 +388,7 @@ pub trait HasEdges : HasClasses {
   /// anything about them. Info is for equivalences, where we can drop one a
   /// term from the class.
   fn step_cands_of_edges(
-    & self, rep: & Term, candidates: & mut Candidates, known: & mut TmpTermSet
+    & self, rep: & Term, candidates: & mut Candidates, known: & TmpTermSet
   ) -> Res<bool> {
     let err_pref = "[HasEdges::step_cands_of_edges]" ;
     let rep_parents = try_str!(
@@ -509,13 +476,17 @@ pub trait HasEdges : HasClasses {
 
 impl<T: HasEdges> CanCheck for T {
   #[cfg(debug_assertions)]
-  fn check(& self) -> Res<()> {
+  fn check(& self, event: & Event) -> Res<()> {
+    event.log("checking graph...") ;
     let res = match self.check_classes() {
       Ok(()) => self.check_edges(),
       err => err
     } ;
     match res {
-      Ok(()) => Ok(()),
+      Ok(()) => {
+        event.log("graph check successful...") ;
+        Ok(())
+      },
       Err(mut e) => {
         let file = format!("error_graph") ;
         match self.log_to(& file) {
@@ -531,33 +502,33 @@ impl<T: HasEdges> CanCheck for T {
     }
   }
   #[cfg( not(debug_assertions) )]
-  fn check(& self) -> Res<()> {
+  fn check(& self, _: & Event) -> Res<()> {
     Ok(())
   }
 }
 
 
 
-/// Can learn and communicate invariants.
-pub trait LearnerTrait<Val: Domain> {
-  /// Learns from a `base` checker. Discovers invariants thanks to the `step`
-  /// checker and communicates them through `event`.
-  ///
-  /// # In practice
-  ///
-  /// Stabilizes an equivalence class, extracts invariants. Once the class is
-  /// stable, extracts invariants. Then, stabilizes all edges leading to this
-  /// class, and extracts invariants once it's done.
-  fn learn<
-    Base, Step, GraphLog: Fn(& Self, & str, & str) -> Res<()>
-  >(
-    & mut self,
-    base: & mut Base, step: & mut Step, event: & mut Event,
-    graph_log: & GraphLog, tag: & str,
-  ) -> Res<
-    bool
-  > where Base: BaseTrait<Val, Step>, Step: StepTrait<Val, Base> ;
-}
+// /// Can learn and communicate invariants.
+// pub trait LearnerTrait<Val: Domain> {
+//   /// Learns from a `base` checker. Discovers invariants thanks to the `step`
+//   /// checker and communicates them through `event`.
+//   ///
+//   /// # In practice
+//   ///
+//   /// Stabilizes an equivalence class, extracts invariants. Once the class is
+//   /// stable, extracts invariants. Then, stabilizes all edges leading to this
+//   /// class, and extracts invariants once it's done.
+//   fn learn<
+//     Base, Step, GraphLog: Fn(& Self, & str, & str) -> Res<()>
+//   >(
+//     & mut self,
+//     base: & mut Base, step: & mut Step, event: & mut Event,
+//     graph_log: & GraphLog, tag: & str,
+//   ) -> Res<
+//     bool
+//   > where Base: BaseTrait<Val, Step>, Step: StepTrait<Val, Base> ;
+// }
 
 
 
@@ -588,7 +559,7 @@ impl<Graph: HasClasses> CanLog for Learner<Graph> {
 }
 
 impl<
-  Graph: HasClasses + CanCheck + CanNext + CanStabilize
+  Graph: HasClasses + CanCheck + CanStabilize
 > Learner<Graph> {
 
   /// Creates a `Learner` from
@@ -609,6 +580,23 @@ impl<
       early_eqs: * conf.early_eqs(),
       early_cmps: * conf.early_cmps(),
     }
+  }
+
+  /// Clears the internal caches and memories of the learner.
+  ///
+  /// Must be called between increments of the lock-step driver.
+  pub fn clear(& mut self) -> () {
+    self.candidates.clear() ;
+    self.stable.clear()
+  }
+
+  /// Number of candidates in the underlying graph.
+  pub fn len(& self) -> usize {
+    let mut res = 0 ;
+    for (_, class) in self.graph.classes().iter() {
+      res += class.len() + 1
+    }
+    res
   }
 
 
@@ -650,12 +638,6 @@ impl<
     Ok(())
   }
 
-
-  /// A representative to stabilize.
-  fn get_next(& self) -> Option<Term> {
-    self.graph.get_next(& self.stable)
-  }
-
   /// `k`-splits some candidates using a step solver. Handles communication
   /// too.
   fn k_split<Base, Step>(
@@ -673,7 +655,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(),
+      self.graph.check(event),
       "{} on input graph", err_pref
     ) ;
 
@@ -727,9 +709,11 @@ impl<
   /// base.unroll_len() + 1 >= step.unroll_len()
   /// ```
   fn stabilize_next_class<
-    Base, Step, GraphLog: Fn(& Self, & str, & str) -> Res<()>
+    Base, Step,
+    GetNext: Fn(& Self) -> Option<Term>,
+    GraphLog: Fn(& Self, & str, & str) -> Res<()>
   >(
-    & mut self,
+    & mut self, get_next: GetNext,
     base: & mut Base, step: & mut Step, event: & mut Event,
     graph_log: & GraphLog, tag: & str,
   ) -> Res< Option<Term> > where
@@ -743,7 +727,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(),
+      self.graph.check(event),
       "{} on input graph", err_pref
     ) ;
 
@@ -752,7 +736,7 @@ impl<
       "{} could not dump graph as dot", err_pref
     ) ;
 
-    let mut next = match self.get_next() {
+    let mut next = match get_next(self) {
       Some(next) => next,
       None => return Ok( None ),
     } ;
@@ -778,7 +762,7 @@ impl<
         // event.log("class is not stable, splitting") ;
         try!( self.graph.split(& mut eval) ) ;
         next = try_str_opt!(
-          self.get_next(),
+          get_next(self),
           "{} graph was just split for eqs but no next rep found", err_pref
         )
       } else {
@@ -801,7 +785,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(),
+      self.graph.check(event),
       "{} after eq stabilization", err_pref
     ) ;
 
@@ -824,9 +808,26 @@ impl<
 
 
 impl<
-  Graph: HasClasses + HasEdges + CanNext + CanStabilize
+  Graph: HasEdges + CanStabilize
 > Learner<Graph> {
-
+  /// Returns a representative for an unstable class.
+  pub fn get_next(& self) -> Option<Term> {
+    // Look for unstable rep with stable parents.
+    'rep_loop: for (rep, parents) in self.graph.edges_bak().iter() {
+      // Skip if stable.
+      if self.stable.contains(rep) { continue 'rep_loop }
+      // Inspect parents.
+      'parent_loop: for parent in parents.iter() {
+        // Skip the rep if parent's not stable.
+        if ! self.stable.contains(parent) { continue 'rep_loop }
+      }
+      // Reachable only if all parents are stable.
+      return Some( rep.clone() )
+    }
+    // Reachable only if no unstable rep has all its parents stable (graph is
+    // stable).
+    return None
+  }
 
   /// Stabilizes an equivalence class, extracts invariants.
   /// **Communicates invariants itself.** Returns `true` iff the graph is
@@ -850,11 +851,14 @@ impl<
     let err_pref = "[Learner::stabilize_next_class_and_edges]" ;
 
     let current = match try_str!(
-      self.stabilize_next_class(base, step, event, graph_log, & tag),
+      self.stabilize_next_class(
+        |slf| slf.get_next(), base, step, event, graph_log, & tag
+      ),
       "{} during class stabilization", err_pref
     ) {
       Some(current) => current,
-      None => return Ok( false ),
+      // Graph is stable.
+      None => return Ok( true ),
     } ;
 
     'base_cmp: loop {
@@ -888,7 +892,7 @@ impl<
     ) ;
 
     try_str!(
-      self.graph.check(),
+      self.graph.check(event),
       "{} after cmp stabilization", err_pref
     ) ;
 
@@ -914,15 +918,65 @@ impl<
     debug_assert!( wasnt_there ) ;
 
     try_str!(
-      self.graph.check(),
+      self.graph.check(event),
       "{} after cmp invariant extraction", err_pref
     ) ;
 
     Ok(false)
   }
 
+  /// Returns all the step terms for the graph. Equivalent to calling
+  /// `step_terms_of_class` and `step_terms_of_edges` on all classes.
+  fn step_terms(& mut self) -> Res<bool> {
+    let err_pref = "[Learner::step_terms]" ;
+    let mut new_stuff = false ;
+    for (rep, _) in self.graph.classes() {
+      new_stuff = new_stuff || try_str!(
+        self.graph.step_cands_of_class(
+          rep, & mut self.candidates, & self.known
+        ),
+        "{} on the class of rep `{}`", err_pref, rep
+      ) ;
+      new_stuff = new_stuff || try_str!(
+        self.graph.step_cands_of_edges(
+          rep, & mut self.candidates, & self.known
+        ),
+        "{} on the edges of rep `{}`", err_pref, rep
+      )
+    }
+    Ok( new_stuff )
+  }
+
+  /// Looks for invariants in the whole graph.
+  pub fn k_split_all<Base, Step>(
+    & mut self, base: & mut Base, step: & mut Step, event: & mut Event
+  ) -> Res<()> where
+  Base: BaseTrait<Graph::Val, Step>,
+  Step: StepTrait<Graph::Val, Base> {
+    let err_pref = "[PartialGraph::k_split_all]" ;
+    self.candidates.clear() ;
+    let new_stuff = try_str!(
+      self.step_terms(),
+      "{} during step term extraction", err_pref
+    ) ;
+    if new_stuff {
+      self.k_split(base, step, event)
+    } else {
+      Ok(())
+    }
+  }
+
 }
 
+
+
+/// Creates a graph-based learner.
+pub fn mk_bool_learner(
+  sys: Sys, factory: Factory, conf: & conf::Tig
+) -> Learner< Graph<Bool> > {
+  let (rep, class) = mine::bool(& factory, & sys, * conf.all_out()) ;
+  Learner::mk(sys, rep, class, factory, conf)
+}
 
 
 
