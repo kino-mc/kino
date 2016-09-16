@@ -14,7 +14,7 @@ use std::fmt ;
 
 use base::{
   StateWritable, Writable, SVarWriter, PrintSmt2, PrintVmt, SymWritable,
-  Offset2, HConsed, HConsign, State, SymPrintStyle
+  Offset2, HConsed, HConsign, HConser, State, SymPrintStyle
 } ;
 use typ::Type ;
 use sym::Sym ;
@@ -857,7 +857,7 @@ pub trait VariableMaker {
 }
 impl VariableMaker for TermConsign {
   fn var(& self, var: Var) -> Term {
-    self.lock().unwrap().mk( V(var) )
+    self.mk( V(var) )
   }
 }
 
@@ -876,7 +876,7 @@ impl<
 }
 impl CstMaker<Cst, Term> for TermConsign {
   fn cst(& self, c: Cst) -> Term {
-    self.lock().unwrap().mk( C(c) )
+    self.mk( C(c) )
   }
 }
 
@@ -889,7 +889,7 @@ pub trait OpMaker {
 impl OpMaker for TermConsign {
   fn op(& self, op: Operator, mut args: Vec<Term>) -> Term {
     args.shrink_to_fit() ;
-    self.lock().unwrap().mk( Op(op, args) )
+    self.mk( Op(op, args) )
   }
 }
 
@@ -909,7 +909,7 @@ impl<
 impl AppMaker<Sym> for TermConsign {
   fn app(& self, id: Sym, mut args: Vec<Term>) -> Term {
     args.shrink_to_fit() ;
-    self.lock().unwrap().mk( App(id, args) )
+    self.mk( App(id, args) )
   }
 }
 
@@ -948,19 +948,19 @@ impl BindMaker<Term> for TermConsign {
   fn forall(& self, mut bind: Vec<(Sym, Type)>, term: Term) -> Term {
     bind.shrink_to_fit() ;
     if bind.is_empty() { term } else {
-      self.lock().unwrap().mk( Forall(bind, term) )
+      self.mk( Forall(bind, term) )
     }
   }
   fn exists(& self, mut bind: Vec<(Sym, Type)>, term: Term) -> Term {
     bind.shrink_to_fit() ;
     if bind.is_empty() { term } else {
-      self.lock().unwrap().mk( Exists(bind, term) )
+      self.mk( Exists(bind, term) )
     }
   }
   fn let_b(& self, mut bind: Vec<(Sym, Term)>, term: Term) -> Term {
     bind.shrink_to_fit() ;
     if bind.is_empty() { term } else {
-      self.lock().unwrap().mk( Let(bind, term) )
+      self.mk( Let(bind, term) )
     }
   }
 }

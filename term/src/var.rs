@@ -14,7 +14,7 @@ use std::fmt ;
 
 use base::{
   State, SVarWriter, StateWritable, SymPrintStyle, SymWritable,
-  HConsed, HConsign
+  HConsed, HConsign, HConser
 } ;
 use sym::Sym ;
 
@@ -115,10 +115,10 @@ pub trait VarMaker<Symbol, Out> {
 }
 impl VarMaker<Sym,Var> for VarConsign {
   fn var(& self, id: Sym) -> Var {
-    self.lock().unwrap().mk( RealVar::Var(id) )
+    self.mk( RealVar::Var(id) )
   }
   fn svar(& self, id: Sym, state: State) -> Var {
-    self.lock().unwrap().mk( RealVar::SVar(id, state) )
+    self.mk( RealVar::SVar(id, state) )
   }
 }
 

@@ -7,31 +7,31 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Constants. */
+//! Constants.
 
 use std::io ;
 use std::fmt ;
 
-use base::{ Writable, HConsed, HConsign } ;
+use base::{ Writable, HConsed, HConsign, HConser } ;
 use typ ;
 
 use self::RealCst::* ;
 
-/** Underlying representation of constants. */
+/// Underlying representation of constants.
 #[derive(
   Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash
 )]
 pub enum RealCst {
-  /** Boolean constant. */
+  /// Boolean constant.
   Bool(typ::Bool),
-  /** Integer constant. */
+  /// Integer constant.
   Int(typ::Int),
-  /** Rational constant. */
+  /// Rational constant.
   Rat(typ::Rat),
 }
 
 impl RealCst {
-  /** The type of a `RealCst`. */
+  /// The type of a `RealCst`.
   pub fn typ(& self) -> typ::Type {
     match * self {
       Bool(_) => typ::Type::Bool,
@@ -40,7 +40,7 @@ impl RealCst {
     }
   }
 
-  /** Adds two constants if possible. */
+  /// Adds two constants if possible.
   pub fn add(& self, rhs: & Self) -> Result<Self, Self> {
     match * self {
       Bool(_) => Err(self.clone()),
@@ -55,7 +55,7 @@ impl RealCst {
     }
   }
 
-  /** Substracts two constants if possible. */
+  /// Substracts two constants if possible.
   pub fn sub(& self, rhs: & Self) -> Result<Self, Self> {
     match * self {
       Bool(_) => Err(self.clone()),
@@ -70,7 +70,7 @@ impl RealCst {
     }
   }
 
-  /** Multiplies two constants if possible. */
+  /// Multiplies two constants if possible.
   pub fn mul(& self, rhs: & Self) -> Result<Self, Self> {
     match * self {
       Bool(_) => Err(self.clone()),
@@ -85,7 +85,7 @@ impl RealCst {
     }
   }
 
-  /** Divides two constants if possible. */
+  /// Divides two constants if possible.
   pub fn div(& self, in_rhs: & Self) -> Result<Self, Self> {
     use num::traits::Zero ;
     match * self {
@@ -109,7 +109,7 @@ impl RealCst {
     }
   }
 
-  /** Negates a constant if possible. */
+  /// Negates a constant if possible.
   pub fn neg(& self) -> Result<Self, Self> {
     match * self {
       Bool(_) => Err(self.clone()),
@@ -129,7 +129,7 @@ impl fmt::Display for RealCst {
   }
 }
 
-/** Hash consed constant. */
+/// Hash consed constant.
 pub type Cst = HConsed<RealCst> ;
 
 impl Writable for Cst {
@@ -143,12 +143,12 @@ impl Writable for Cst {
   }
 }
 
-/** Hash cons table for constants. */
+/// Hash cons table for constants.
 pub type CstConsign = HConsign<RealCst> ;
 
-/** Can create a hash consed constant. */
+/// Can create a hash consed constant.
 pub trait ConstMaker<Const> {
-  /** Creates a hash consed constant. */
+  /// Creates a hash consed constant.
   #[inline(always)]
   fn constant(& self, Const) -> Cst ;
 }
@@ -162,21 +162,21 @@ impl<
 }
 impl ConstMaker<typ::Bool> for CstConsign {
   fn constant(& self, b: typ::Bool) -> Cst {
-    self.lock().unwrap().mk( Bool(b) )
+    self.mk( Bool(b) )
   }
 }
 impl ConstMaker<typ::Int> for CstConsign {
   fn constant(& self, i: typ::Int) -> Cst {
-    self.lock().unwrap().mk( Int(i) )
+    self.mk( Int(i) )
   }
 }
 impl ConstMaker<typ::Rat> for CstConsign {
   fn constant(& self, r: typ::Rat) -> Cst {
-    self.lock().unwrap().mk( Rat(r) )
+    self.mk( Rat(r) )
   }
 }
 impl ConstMaker<RealCst> for CstConsign {
   fn constant(& self, cst: RealCst) -> Cst {
-    self.lock().unwrap().mk( cst )
+    self.mk( cst )
   }
 }

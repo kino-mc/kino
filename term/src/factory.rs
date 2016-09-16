@@ -10,7 +10,7 @@
 /*! Term factory stuff. */
 
 use std::collections::HashMap ;
-use std::sync::{ Mutex, Arc } ;
+use std::sync::{ RwLock, Arc } ;
 
 use nom::IResult ;
 
@@ -56,13 +56,13 @@ pub struct Factory {
   /// Maps terms to types, scoped. Lazy, computes types on demand.
   ///
   /// To use, make sure you manually insert the type of variables.
-  scoped_types: Arc< Mutex< HashMap<(Sym, Term), Type> > >,
+  scoped_types: Arc< RwLock< HashMap<(Sym, Term), Type> > >,
   /// Maps terms to types, global. Lazy, computes types on demand.
   ///
   /// To use, make sure you manually insert the type of variables.
-  unscoped_types: Arc< Mutex< HashMap<Term, Type> > >,
+  unscoped_types: Arc< RwLock< HashMap<Term, Type> > >,
   /// Maps function symbols to their type.
-  fun_types: Arc< Mutex< HashMap<Sym, Type> > >,
+  fun_types: Arc< RwLock< HashMap<Sym, Type> > >,
 }
 
 // /** Helper macro to create operators. */
@@ -103,13 +103,13 @@ impl Factory {
       cst: CstConsign::mk(),
       term: TermConsign::mk(),
       scoped_types: Arc::new(
-        Mutex::new( HashMap::with_capacity(107) )
+        RwLock::new( HashMap::with_capacity(107) )
       ),
       unscoped_types: Arc::new(
-        Mutex::new( HashMap::with_capacity(107) )
+        RwLock::new( HashMap::with_capacity(107) )
       ),
       fun_types: Arc::new(
-        Mutex::new( HashMap::with_capacity(107) )
+        RwLock::new( HashMap::with_capacity(107) )
       ),
     }
   }
@@ -119,7 +119,7 @@ impl Factory {
   pub fn cst_fold<
     T, F: Fn(T, & Cst) -> T
   >(& self, init: T, f: F) -> T {
-    self.cst.lock().unwrap().iter().fold(
+    self.cst.read().unwrap().iter().fold(
       init, | data, (_, snd) | f(data, snd)
     )
   }
@@ -129,7 +129,7 @@ impl Factory {
     & self, sym: Sym, typ: Type
   ) -> Result<(), String> {
     let sym_bak = sym.clone() ;
-    match self.fun_types.lock().unwrap().insert( sym, typ ) {
+    match self.fun_types.write().unwrap().insert( sym, typ ) {
       Some(t) if t != typ => Err(
         format!(
           "trying to redefine type of function {} from {} to {}",
@@ -148,7 +148,7 @@ impl Factory {
     match sym {
       Some(sym) => {
         let sym_bak = sym.clone() ;
-        match self.scoped_types.lock().unwrap().insert( (sym, term), typ ) {
+        match self.scoped_types.write().unwrap().insert( (sym, term), typ ) {
           Some(t) if t != typ => Err(
             format!(
               "trying to redefine type of {}::{} from {} to {}",
@@ -158,7 +158,7 @@ impl Factory {
           _ => Ok(())
         }
       },
-      None => match self.unscoped_types.lock().unwrap().insert( term, typ ) {
+      None => match self.unscoped_types.write().unwrap().insert( term, typ ) {
         Some(t) if t != typ => Err(
           format!(
             "trying to redefine type of {} from {} to {}",
@@ -214,7 +214,7 @@ impl Factory {
   ) -> Result<Type, String> {
     match scope {
       Some(scope) => {
-        match self.scoped_types.lock().unwrap().get(
+        match self.scoped_types.read().unwrap().get(
           & (scope.clone(), term.clone())
         ) {
           Some(typ) => Ok(* typ),
@@ -224,7 +224,7 @@ impl Factory {
         }
       },
       None => {
-        match self.unscoped_types.lock().unwrap().get( term ) {
+        match self.unscoped_types.read().unwrap().get( term ) {
           Some(typ) => Ok(* typ),
           None => Err(
             format!("can't type unknown term {}", term)

@@ -9,7 +9,7 @@
 
 #![deny(missing_docs)]
 
-//! Tinelli-style invariant generation.
+//! Template-based invariant generation.
 
 extern crate term ;
 extern crate system ;
@@ -170,12 +170,12 @@ fn invgen<
         "while stabilizing at {}", cnt
       ) ;
 
-      try_error!(
-        base.restart(), event, "while restarting base at {}", cnt - 1
-      ) ;
-      try_error!(
-        step.restart(), event, "while restarting step at {}", cnt - 1
-      ) ;
+      // try_error!(
+      //   base.restart(), event, "while restarting base at {}", cnt - 1
+      // ) ;
+      // try_error!(
+      //   step.restart(), event, "while restarting step at {}", cnt - 1
+      // ) ;
 
       inner_cnt += 1
     }
@@ -188,6 +188,8 @@ fn invgen<
         cnt, time.as_secs(), time.subsec_nanos()
       )
     ) ;
+
+    graph.clear() ;
 
     try_error!(
       graph.k_split_all(& mut base, & mut step, event),
@@ -213,8 +215,6 @@ fn invgen<
       ) ;
       debug_assert!( step_len == cnt )
     }
-
-    graph.clear()
 
   }
 

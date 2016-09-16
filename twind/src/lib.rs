@@ -298,7 +298,7 @@ fn twind<
               event.done_at( k.curr() ) ;
               break 'out
             }
-            sleep(duration) ;
+            sleep(duration)
           }
         }
       }

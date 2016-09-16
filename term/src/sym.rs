@@ -12,7 +12,7 @@
 use std::io ;
 use std::fmt ;
 
-use base::{ SymPrintStyle, SymWritable, HConsed, HConsign } ;
+use base::{ SymPrintStyle, SymWritable, HConsed, HConsign, HConser } ;
 
 
 /** Underlying representation of function symbols. */
@@ -69,11 +69,11 @@ pub trait SymMaker<T> {
 
 impl SymMaker<String> for SymConsign {
   fn sym(& self, sym: String) -> Sym {
-    self.lock().unwrap().mk( RealSym { sym: sym } )
+    self.mk( RealSym { sym: sym } )
   }
 }
 impl<'a> SymMaker<& 'a str> for SymConsign {
   fn sym(& self, sym: & 'a str) -> Sym {
-    self.lock().unwrap().mk( RealSym { sym: sym.to_string() } )
+    self.mk( RealSym { sym: sym.to_string() } )
   }
 }

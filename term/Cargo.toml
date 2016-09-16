@@ -7,5 +7,5 @@ authors = ["Adrien Champion <adrien.champion@email.com>"]
 num = "*"
 nom = "*"
 rand = "*"
-hashconsing = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git" }
-rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git" }
+hashconsing = { path = "../../../bitbucket/hashconsing/" }
+rsmt2 = "*"
