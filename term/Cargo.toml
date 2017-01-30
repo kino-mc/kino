@@ -1,6 +1,6 @@
 [package]
 name = "term"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
@@ -8,4 +8,4 @@ num = "*"
 nom = "*"
 rand = "*"
 hashconsing = "*"
-rsmt2 = { git = "https://github.com/kino-mc/rsmt2" }
+rsmt2 = "*"
