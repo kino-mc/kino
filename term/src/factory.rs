@@ -117,11 +117,9 @@ impl Factory {
   /// An iterator over the constants in the factory.
   #[inline]
   pub fn cst_fold<
-    T, F: Fn(T, & Cst) -> T
+    T, F: Fn(T, Cst) -> T
   >(& self, init: T, f: F) -> T {
-    self.cst.read().unwrap().iter().fold(
-      init, | data, (_, snd) | f(data, snd)
-    )
+    self.cst.read().unwrap().fold(f, init)
   }
 
   /// Inserts a type for a variable without doing anything else.

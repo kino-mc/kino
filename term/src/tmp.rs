@@ -5,7 +5,7 @@ Typically used for activation literals and conjunction of properties. */
 use std::collections::{ HashSet, HashMap } ;
 use std::fmt ;
 
-use rsmt2::Expr2Smt ;
+use rsmt2::{ Expr2Smt, Res } ;
 use super::{
   Term, Type, Operator, Offset2
 } ;
@@ -185,17 +185,22 @@ impl TmpTerm {
   fn inspect_write_stack(
     & self, writer: & mut ::std::io::Write, offset: & Offset2,
     stack: & mut Vec< Vec<TmpTerm> >
-  ) -> ::std::io::Result<()> {
+  ) -> Res<()> {
     use self::TmpTerm::* ;
     match * self {
-      Sym(ref id, _) => write!(writer, "{}", id),
+      Sym(ref id, _) => smt_cast_io!(
+        format!("writing id `{}`", id) => write!(writer, "{}", id)
+      ),
       Trm(ref term) => term.expr_to_smt2(writer, offset),
       Nod(ref op, ref kids) => {
         use write::Writable ;
         let mut kids = kids.clone() ;
         kids.reverse() ;
-        try!( write!(writer, "(") ) ;
-        try!( op.write(writer) ) ;
+        smtry_io!(
+          format!("writing opening for operator `{}`", op) =>
+            write!(writer, "(") ;
+            op.write(writer) ;
+        ) ;
         stack.push( kids ) ;
         Ok(())
       },
@@ -233,7 +238,7 @@ impl fmt::Display for TmpTerm {
 impl Expr2Smt<Offset2> for TmpTerm {
   fn expr_to_smt2(
     & self, writer: & mut ::std::io::Write, offset: & Offset2
-  ) -> ::std::io::Result<()> {
+  ) -> Res<()> {
     let mut stack = Vec::with_capacity(5) ;
     try!(
       self.inspect_write_stack(writer, offset, & mut stack)
@@ -242,10 +247,17 @@ impl Expr2Smt<Offset2> for TmpTerm {
     while let Some(mut kids) = stack.pop() {
       if let Some(term) = kids.pop() {
         stack.push(kids) ;
-        try!( write!(writer, " ") ) ;
-        try!( term.inspect_write_stack(writer, offset, & mut stack) ) ;
+        smtry_io!(
+          format!("writing expressions `{}` with offset `{}`", self, offset) =>
+            write!(writer, " ") ;
+            term.inspect_write_stack(writer, offset, & mut stack) ;
+        )
       } else {
-        try!( write!(writer, ")") )
+        smtry_io!(
+          format!(
+            "writing closing paren for expressions `{}`", self
+          ) => write!(writer, ")")
+        )
       }
     }
 

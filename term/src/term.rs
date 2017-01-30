@@ -637,7 +637,9 @@ impl Writable for Operator {
 }
 
 /** Underlying representation of terms. */
-#[derive(Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
+#[derive(
+  Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone
+)]
 pub enum RealTerm {
   /** A variable. */
   V(Var),

@@ -92,6 +92,7 @@ extern crate num ;
 extern crate nom ;
 extern crate rand ;
 extern crate hashconsing as hcons ;
+#[macro_use]
 extern crate rsmt2 ;
 
 use std::collections::{ HashSet, HashMap } ;
@@ -100,7 +101,7 @@ macro_rules! unimpl {
   () => ( panic!("not implemented") ) ;
 }
 
-pub use nom::{ IResult,  } ;
+pub use nom::{ IResult } ;
 
 mod base ;
 pub use base::{
@@ -180,62 +181,86 @@ pub mod smt {
   impl Sym2Smt<::Offset> for ::Sym {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, _: & ::Offset
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::SymWritable ;
       use base::SymPrintStyle ;
-      try!( write!(writer, "|") ) ;
-      try!( self.write(writer, SymPrintStyle::Internal) ) ;
-      write!(writer, "|")
+      smt_cast_io!(
+        format!("writing symbol `{}`", self) =>
+          write!(writer, "|") ;
+          self.write(writer, SymPrintStyle::Internal) ;
+          write!(writer, "|")
+      )
     }
   }
 
   impl Sym2Smt<::Offset2> for ::Sym {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, _: & ::Offset2
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::SymWritable ;
       use base::SymPrintStyle ;
-      try!( write!(writer, "|") ) ;
-      try!( self.write(writer, SymPrintStyle::Internal) ) ;
-      write!(writer, "|")
+      smt_cast_io!(
+        format!("writing symbol `{}`", self) =>
+          write!(writer, "|") ;
+          self.write(writer, SymPrintStyle::Internal) ;
+          write!(writer, "|")
+      )
     }
   }
 
   impl Sym2Smt<::Offset> for ::Var {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, info: & ::Offset
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::StateWritable ;
       use base::SymPrintStyle ;
-      self.write(writer, info, SymPrintStyle::Internal)
+      smt_cast_io!(
+        format!(
+          "writing symbol `{}` with offset `{}`", self, info
+        ) => self.write(
+          writer, info, SymPrintStyle::Internal
+        )
+      )
     }
   }
 
   impl Sym2Smt<::Offset2> for ::Var {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, info: & ::Offset2
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::StateWritable ;
       use base::SymPrintStyle ;
-      self.write(writer, info, SymPrintStyle::Internal)
+      smt_cast_io!(
+        format!(
+          "writing symbol `{}` with offset `{}`", self, info
+        ) => self.write(
+          writer, info, SymPrintStyle::Internal
+        )
+      )
     }
   }
 
   impl Expr2Smt<::Offset2> for ::Term {
     fn expr_to_smt2(
       & self, writer: & mut ::std::io::Write, offset: & ::Offset2
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::PrintSmt2 ;
-      self.to_smt2(writer, offset)
+      smt_cast_io!(
+        format!("writing `{}` with offset `{}`", self, offset) => self.to_smt2(
+          writer, offset
+        )
+      )
     }
   }
 
   impl Sort2Smt for ::Type {
     fn sort_to_smt2(
       & self, writer: & mut ::std::io::Write
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::Writable ;
-      self.write(writer)
+      smt_cast_io!(
+        format!("writing sort `{}`", self) => self.write(writer)
+      )
     }
   }
 }

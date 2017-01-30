@@ -381,7 +381,7 @@ pub trait Mkable {
   fn mk() -> Self ;
 }
 
-impl<T: Hash> Mkable for Arc<RwLock<HashConsign<T>>>{
+impl<T: Hash + Eq + Clone> Mkable for Arc<RwLock<HashConsign<T>>>{
   fn mk() -> Self {
     Arc::new(
       RwLock::new( HashConsign::empty() )
