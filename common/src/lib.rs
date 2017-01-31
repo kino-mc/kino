@@ -17,6 +17,8 @@
 extern crate ansi_term as ansi ;
 #[macro_use]
 extern crate nom ;
+#[macro_use]
+extern crate error_chain ;
 extern crate term ;
 extern crate system as sys ;
 
@@ -30,6 +32,59 @@ use term::smt::{
 } ;
 
 use sys::{ Prop, Sys } ;
+
+/// Kino errors using [`error-chain`](https://crates.io/crates/error-chain).
+pub mod errors {
+  error_chain!{
+    types {
+      Error, ErrorKind, ResExt, Res ;
+    }
+
+    links {
+      RSmt2(::term::errors::Error, ::term::errors::ErrorKind) #[doc = "
+        An error from the [`rsmt2`](https://crates.io/crates/rsmt2) library.
+      "] ;
+    }
+
+    errors {
+      #[doc = "Error while spawning solver process."]
+      SolverSpawnError(e: ::std::io::Error) {
+        description("error while spawning solver process")
+        display("could not spawn solver process: {:?}", e)
+      }
+
+      #[doc = "Trying to spawn a technique that's already running."]
+      TekDuplicateError(tek: ::Tek) {
+        description("trying to spawn a technique that's already running")
+        display("cannot spawn `{}`: already running", tek)
+      }
+
+      #[doc = "Trying to contact a technique that's not running."]
+      TekUnknownError(tek: ::Tek) {
+        description("unknown technique")
+        display("technique `{}` is not running", tek)
+      }
+
+      #[doc = "Error while spawning a technique."]
+      TekSpawnError(e: ::std::io::Error, tek: ::Tek) {
+        description("error while trying to spawn a technique")
+        display("error while spawning `{}`", tek)
+      }
+
+      #[doc = "Error while trying to receive a message."]
+      MsgRcvError(tek: ::Tek) {
+        description("error while trying to receive a message")
+        display("error during message reception in `{}`", tek)
+      }
+
+      #[doc = "Error while sending a message."]
+      MsgSndError(src: ::Tek, tgt: ::Tek) {
+        description("error while sending a message")
+        display("could not send message from `{}` to `{}`", src, tgt)
+      }
+    }
+  }
+}
 
 /// Literally `return Err( format!( $($args),+ ) )`.
 #[macro_export]
@@ -272,9 +327,6 @@ macro_rules! mk_two_solver_run {
 //   ) ;
 //   Ok( run(solver) )
 // }
-
-/// Result yielding a list of strings.
-pub type Res<T> = Result<T, String> ;
 
 /// Trait the techniques should implement so that kino can call them in a
 /// generic way.

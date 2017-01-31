@@ -103,6 +103,11 @@ macro_rules! unimpl {
 
 pub use nom::{ IResult } ;
 
+/// Re-export of `rsmt2`'s errors.
+pub mod errors {
+  pub use rsmt2::{ Error, ErrorKind, ResExt, Res } ;
+}
+
 mod base ;
 pub use base::{
   State, PrintSmt2, PrintVmt, Offset, Offset2, Smt2Offset

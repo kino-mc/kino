@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
-ansi_term = "0.7.2"
-nom = "1.2.0"
+ansi_term = "*"
+nom = "*"
+error-chain = "*"
 term = { path = "../term" }
 system = { path = "../system" }
