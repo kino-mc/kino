@@ -210,7 +210,7 @@ pub enum MsgUp {
   /// Warning message.
   Warning(Tek, String),
   /// Error message.
-  Error(Tek, String),
+  Error(Tek, ::errors::Error),
   /// Tek is done.
   Done(Tek, Info),
   /// KTrue.
@@ -309,6 +309,12 @@ impl Event {
     Event { s: s, r: r, t: t, f: f, k_true: k_true }
   }
 
+  /// The technique this event manager belongs to.
+  #[inline]
+  pub fn tek(& self) -> Tek {
+    self.t
+  }
+
   /// Sends a pruned invariant message upwards.
   pub fn pruned_invariants(
     & self, tek: Tek, sys: & Sym, invs: STermSet, old_card: usize,
@@ -375,9 +381,9 @@ impl Event {
     ).unwrap_or_else( exit )
   }
   /// Sends an error upwards.
-  pub fn error(& self, s: & str) {
+  pub fn error(& self, e: ::errors::Error) {
     self.s.send(
-      MsgUp::Error(self.t, s.to_string())
+      MsgUp::Error(self.t, e)
     ).unwrap_or_else( exit )
   }
   /// Sends a warning upwards.

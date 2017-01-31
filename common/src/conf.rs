@@ -738,7 +738,7 @@ impl Master {
     loop {
       if let Some(nxt) = args.next() {
         if "-o" == nxt {
-          use nom::{ Err, Needed } ;
+          use nom::Needed ;
           match args.next() {
             Some(options) => {
               match option_parser(options.as_bytes()) {
@@ -754,15 +754,6 @@ impl Master {
                     },
                   }
                 },
-                IResult::Error(
-                  Err::Position(err, p)
-                ) => return Err(
-                  format!(
-                    "could not parse options \"{}\":\n{:?}\n{}",
-                    options, err,
-                    String::from_utf8_lossy(p)
-                  )
-                ),
                 IResult::Error(e) => return Err(
                   format!("could not parse options \"{}\":\n{}", options, e)
                 ),

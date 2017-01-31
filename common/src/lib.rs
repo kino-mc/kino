@@ -53,6 +53,12 @@ pub mod errors {
         display("could not spawn solver process: {:?}", e)
       }
 
+      #[doc = "File IO error on smt log file."]
+      SmtLogFileError(e: ::std::io::Error) {
+        description("error on SMT log file")
+        display("error on SMT log file: {:?}", e)
+      }
+
       #[doc = "Trying to spawn a technique that's already running."]
       TekDuplicateError(tek: ::Tek) {
         description("trying to spawn a technique that's already running")
@@ -84,6 +90,21 @@ pub mod errors {
       }
     }
   }
+}
+
+/// Communicates an error and returns `()` if computation is an `Err`, yields
+/// the result (inside the `Ok`) otherwise.
+#[macro_export]
+macro_rules! log_try {
+  ($event:expr, $e:expr) => (
+    match $e {
+      Ok(res) => res,
+      Err(e) => {
+        $event.error(e) ;
+        return ()
+      },
+    }
+  ) ;
 }
 
 /// Literally `return Err( format!( $($args),+ ) )`.
@@ -205,25 +226,20 @@ macro_rules! mk_solver_run {
                 $run
               },
               Err(e) => {
-                let $err = & format!(
-                  "could not open smt log file \"{}\":\n{:?}", path, e
-                ) ;
+                let $err: $crate::errors::Error =
+                  $crate::errors::ErrorKind::SmtLogFileError(e).into() ;
                 $errun
               },
             }
           },
         },
         Err(e) => {
-          let $err = & format!(
-            "could not create solver from kid:\n{}", e
-          ) ;
+          let $err: $crate::errors::Error = e.into() ;
           $errun
         },
       },
       Err(e) => {
-        let $err = & format!(
-          "could not spawn solver kid:\n{}", e
-        ) ;
+        let $err: $crate::errors::Error = e.into() ;
         $errun
       },
     }
@@ -264,43 +280,33 @@ macro_rules! mk_two_solver_run {
                 $run
               },
               (Err(e), _) => {
-                let $err = & format!(
-                  "could not open smt log file \"{}\":\n{:?}", path_1, e
-                ) ;
+                let $err: $crate::errors::Error =
+                  $crate::errors::ErrorKind::SmtLogFileError(e).into() ;
                 $errun
               },
               (_, Err(e)) => {
-                let $err = & format!(
-                  "could not open smt log file \"{}\":\n{:?}", path_2, e
-                ) ;
+                let $err: $crate::errors::Error =
+                  $crate::errors::ErrorKind::SmtLogFileError(e).into() ;
                 $errun
               },
             }
           },
         },
         (Err(e), _) => {
-          let $err = & format!(
-            "could not create solver from kid:\n{}", e
-          ) ;
+          let $err: $crate::errors::Error = e.into() ;
           $errun
         },
         (_, Err(e)) => {
-          let $err = & format!(
-            "could not create solver from kid:\n{}", e
-          ) ;
+          let $err: $crate::errors::Error = e.into() ;
           $errun
         },
       },
       (Err(e), _) => {
-        let $err = & format!(
-          "could not spawn solver kid:\n{}", e
-        ) ;
+        let $err: $crate::errors::Error = e.into() ;
         $errun
       },
       (_, Err(e)) => {
-        let $err = & format!(
-          "could not spawn solver kid:\n{}", e
-        ) ;
+        let $err: $crate::errors::Error = e.into() ;
         $errun
       },
     }

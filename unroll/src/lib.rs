@@ -15,6 +15,8 @@ extern crate term ;
 extern crate system as sys ;
 #[macro_use]
 extern crate common ;
+#[macro_use]
+extern crate error_chain ;
 
 use std::collections::{ HashSet, HashMap } ;
 use std::hash::Hash ;
@@ -26,17 +28,39 @@ use term::{
   Type, Sym, Term, Model,
   Offset, Offset2, STerm, STermSet, real_term
 } ;
-use term::smt::* ;
+use term::smt::{
+  Expr2Smt
+} ;
 use term::tmp::* ;
 
 use sys::{ Prop, Sys, Callable } ;
 
-use common::{ Res, SolverTrait } ;
+use common::SolverTrait ;
+
+pub use common::errors ;
+use errors::* ;
 
 /// Manages some properties.
 pub type PropManager = TermManager<Sym> ;
 /// Manages some invariants.
 pub type InvManager = TermManager<STerm> ;
+
+macro_rules! chain_err {
+  (term man, $desc:expr => $e:expr) => (
+    chain_err!("TermManager", $desc => $e)
+  ) ;
+  (unroll, $desc:expr => $e:expr) => (
+    chain_err!("Unroller", $desc => $e)
+  ) ;
+  (actlit, $desc:expr => $e:expr) => (
+    chain_err!("Actlit", $desc => $e)
+  ) ;
+  ($id:expr, $desc:expr => $e:expr) => (
+    $e.chain_err(
+      || format!("[{}] {}", $id, $desc)
+    )
+  ) ;
+}
 
 /// Associates a key and a description to some type.
 #[derive(Clone)]
@@ -69,7 +93,7 @@ impl<T: Clone> Opt<T> {
 /// Defines the init and trans predicates of a system.
 fn define<'a, S: SolverTrait<'a>>(
   sys: & sys::Sys, solver: & mut S, o: & Offset2
-) -> UnitSmtRes {
+) -> Res<()> {
   let init = sys.init() ;
   try!(
     solver.define_fun(
@@ -78,6 +102,8 @@ fn define<'a, S: SolverTrait<'a>>(
       & Type::Bool,
       & init.2,
       o
+    ).chain_err(
+      || "while defining init predicate"
     )
   ) ;
   let trans = sys.trans() ;
@@ -87,6 +113,8 @@ fn define<'a, S: SolverTrait<'a>>(
     & Type::Bool,
     & trans.2,
     o
+  ).chain_err(
+    || "while defining trans predicate"
   )
 }
 
@@ -136,8 +164,10 @@ impl<
       // end_k: Offset2::init().pre(),
       act_factory: ActlitFactory::mk(),
     } ;
-    try_str!(
-      unroller.defclare_funs(props), "during function defclaration"
+    try!(
+      chain_err!(
+        unroll, "during initial setup" => unroller.defclare_funs(props)
+      )
     ) ;
     Ok(unroller)
   }
@@ -165,9 +195,12 @@ impl<
   #[inline]
   pub fn fresh_actlit(& mut self) -> Res<Actlit> {
     let actlit = self.act_factory.mk_fresh() ;
-    try_str!(
-      actlit.declare( & mut self.solver ),
-      "[Unroller::fresh_actlit] error at SMT level in declaration"
+    try!(
+      chain_err!(
+        unroll, "during fresh actlit declaration" => actlit.declare(
+          & mut self.solver
+        )
+      )
     ) ;
     Ok( actlit )
   }
@@ -175,10 +208,9 @@ impl<
   /// Deactivates an activation literal.
   #[inline]
   pub fn deactivate(& mut self, actlit: Actlit) -> Res<()> {
-    Ok(
-      try_str!(
-        actlit.deactivate(& mut self.solver),
-        "[Unroller::deactivate] error at SMT level"
+    chain_err!(
+      unroll, "during actlit deactivation" => actlit.deactivate(
+        & mut self.solver
       )
     )
   }
@@ -186,11 +218,8 @@ impl<
   /// Performs a check sat.
   #[inline]
   pub fn check_sat(& mut self) -> Res<bool> {
-    Ok(
-      try_str!(
-        self.solver.check_sat(),
-        "[Unroller::check_sat] error at SMT level"
-      )
+    chain_err!(
+      unroll, "during check sat" => self.solver.check_sat()
     )
   }
 
@@ -199,10 +228,9 @@ impl<
   pub fn check_sat_assuming(
     & mut self, idents: & [String]
   ) -> Res<bool> {
-    Ok(
-      try_str!(
-        self.solver.check_sat_assuming(idents, & ()),
-        "[Unroller::check_sat_assuming] error at SMT level"
+    chain_err!(
+      unroll, "during check sat assuming" => self.solver.check_sat_assuming(
+        idents, & ()
       )
     )
   }
@@ -212,11 +240,8 @@ impl<
   pub fn assert< Expr: Expr2Smt<Offset2> >(
     & mut self, expr: & Expr, info: & Offset2
   ) -> Res<()> {
-    Ok(
-      try_str!(
-        self.solver.assert(expr, info),
-        "[Unroller::assert] error at SMT level"
-      )
+    chain_err!(
+      unroll, "during assert" => self.solver.assert(expr, info)
     )
   }
 
@@ -224,7 +249,7 @@ impl<
     solver: & mut S, funs: T, offset: & Offset2,
     known: & mut HashSet<Sym>,
     rest: & mut HashSet<& 'b Callable>
-  ) -> UnitSmtRes {
+  ) -> Res<()> {
     use sys::real_sys::Callable::* ;
     for fun in funs {
       // println!("{}, known:", fun.sym()) ;
@@ -234,8 +259,10 @@ impl<
         Dec(ref fun_dec) => if ! known.contains(fun_dec.sym()) {
           known.insert( fun_dec.sym().clone() ) ;
           try!(
-            solver.declare_fun(
-              fun_dec.sym(), fun_dec.sig(), fun_dec.typ(), offset
+            chain_err!(
+              unroll, "during function declaration" => solver.declare_fun(
+                fun_dec.sym(), fun_dec.sig(), fun_dec.typ(), offset
+              )
             )
           )
         },
@@ -253,9 +280,11 @@ impl<
           if declare {
             known.insert( fun_def.sym().clone() ) ;
             try!(
-              solver.define_fun(
-                fun_def.sym(), fun_def.args(),
-                fun_def.typ(), fun_def.body(), offset
+              chain_err!(
+                unroll, "during function definition" => solver.define_fun(
+                  fun_def.sym(), fun_def.args(),
+                  fun_def.typ(), fun_def.body(), offset
+                )
               )
             )
           } else {
@@ -271,7 +300,7 @@ impl<
     solver: & mut S, syss: T, offset: & Offset2,
     known: & mut HashSet<Sym>,
     rest: & mut Vec< (Sys, ()) >
-  ) -> UnitSmtRes {
+  ) -> Res<()> {
     for & (ref sys, _) in syss {
       if ! known.contains( sys.sym() ) {
         let declare = {
@@ -286,7 +315,13 @@ impl<
         } ;
         if declare {
           known.insert( sys.sym().clone() ) ;
-          try!( define(sys, solver, & offset) )
+          try!(
+            chain_err!(
+              unroll, "during system definition" => define(
+                sys, solver, & offset
+              )
+            )
+          )
         } else {
           rest.push( (sys.clone(), ()) ) ; ()
         }
@@ -296,7 +331,7 @@ impl<
   }
 
   /// Declares/defines UFs, functions, and system init/trans predicates.
-  pub fn defclare_funs(& mut self, props: & [ Prop ]) -> UnitSmtRes {
+  pub fn defclare_funs(& mut self, props: & [ Prop ]) -> Res<()> {
     // Will not really be used.
     let offset = Offset2::init() ;
 
@@ -372,10 +407,14 @@ impl<
 
   /// Declares state variables at some offset.
   #[inline]
-  pub fn declare_svars(& mut self, o: & Offset) -> UnitSmtRes {
+  pub fn declare_svars(& mut self, o: & Offset) -> Res<()> {
     for & (ref var, ref typ) in self.sys.init().1.iter() {
       try!(
-        self.solver.declare_fun(var, & vec![], typ, o)
+        chain_err!(
+          unroll, "during svar declaration" => self.solver.declare_fun(
+            var, & vec![], typ, o
+          )
+        )
       )
     } ;
     Ok(())
@@ -387,11 +426,10 @@ impl<
     for inv in self.invs.iter() {
       if let STerm::One(ref curr, _) = * inv {
         try!(
-          self.solver.assert(curr, off).map_err(
-            |err| format!(
-              "[Unroller::assert_os_invs] \
-              while asserting one-state inv {} at {}\n{}", curr, off, err
-            )
+          chain_err!(
+            unroll,
+            format!("during one-state inv assertion ({})", off) =>
+            self.solver.assert(curr, off)
           )
         )
       }
@@ -402,11 +440,15 @@ impl<
   /// Asserts the init predicate. **Declares** state variables in the current
   /// offset.
   #[inline]
-  pub fn assert_init(& mut self, o: & Offset2) -> UnitSmtRes {
+  pub fn assert_init(& mut self, o: & Offset2) -> Res<()> {
     try!(
       self.declare_svars( o.curr() )
     ) ;
-    self.solver.assert( self.sys.init_term(), o )
+    chain_err!(
+      unroll, "during init predicate assertion" => self.solver.assert(
+        self.sys.init_term(), o
+      )
+    )
   }
 
   /// Unrolls the transition relation once. **Declares** state variables in
@@ -415,17 +457,13 @@ impl<
   fn just_unroll(& mut self, o: & Offset2) -> Res<()> {
     let off = if o.is_rev() { o.curr() } else { o.next() } ;
     try!(
-      self.declare_svars(off).map_err(
-        |err| format!(
-          "[Unroller::unroll] \
-          while declaring state at {}\n{}", off, err
-        )
+      chain_err!(
+        unroll, format!("during unrolling at {}", o) => self.declare_svars(off)
       )
     ) ;
-    self.solver.assert(self.sys.trans_term(), o).map_err(
-      |err| format!(
-        "[Unroller::unroll] \
-        while asserting trans at {}\n{}", o, err
+    chain_err!(
+      unroll, format!("during unrolling at {}", o) => self.solver.assert(
+        self.sys.trans_term(), o
       )
     )
   }
@@ -439,10 +477,11 @@ impl<
     try!( self.just_unroll(o) ) ;
     for inv in self.invs.iter() {
       try!(
-        self.solver.assert(inv.next(), o).map_err(
-          |err| format!(
-            "[Unroller::unroll] \
-            while asserting inv {} at {}\n{}", inv, o, err
+        chain_err!(
+          unroll, format!(
+            "while asserting invariant for unrolling at {}", o
+          ) => self.solver.assert(
+            inv.next(), o
           )
         )
       ) ;
@@ -470,11 +509,11 @@ impl<
       let inv = match * inv {
         STerm::One(ref curr, ref next) => {
           try!(
-            self.solver.assert(curr, o).map_err(
-              |err| format!(
-                "[Unroller::unroll] \
-                while asserting one-state inv {} at {}\n{}", inv, o.curr(), err
-              )
+            chain_err!(
+              unroll, format!(
+                "while asserting one-state invariants \
+                for init unrolling at {}", o
+              ) => self.solver.assert(curr, o)
             )
           ) ;
           next
@@ -482,11 +521,10 @@ impl<
         STerm::Two(ref next) => next,
       } ;
       try!(
-        self.solver.assert(inv, o).map_err(
-          |err| format!(
-            "[Unroller::unroll] \
-            while asserting inv {} at {}\n{}", inv, o, err
-          )
+        chain_err!(
+          unroll, format!(
+            "while asserting invariant for init unrolling at {}", o
+          ) => self.solver.assert(inv, o)
         )
       )
     }
@@ -504,18 +542,19 @@ impl<
   /// invariants in the first state of the trace (greater offset) and two-state
   /// invariants in the second state of the trace.
   pub fn unroll_bak(& mut self, o: & Offset2) -> Res<()> {
-    try!( self.just_unroll(o) ) ;
+    try!(
+      chain_err!( unroll, "during bak unrolling" => self.just_unroll(o) )
+    ) ;
     for inv in self.invs.iter() {
       let inv = match * inv {
         STerm::One(ref curr, _) => curr,
         STerm::Two(ref next) => next,
       } ;
       try!(
-        self.solver.assert(inv, o).map_err(
-          |err| format!(
-            "[Unroller::unroll] \
-            while asserting inv {} at {}\n{}", inv, o, err
-          )
+        chain_err!(
+          unroll, format!(
+            "while asserting invariant for bak unrolling at {}", o
+          ) =>  self.solver.assert(inv, o)
         )
       )
     }
@@ -555,12 +594,10 @@ impl<
       let next = match * inv {
         STerm::One(ref curr, ref next) => {
           try!(
-            self.solver.assert(curr, init_off).map_err(
-              |err| format!(
-                "[Unroller::add_invs] \
-                while asserting one-state inv {} at {}\n{}",
-                curr, init_off, err
-              )
+            chain_err!(
+              unroll, format!(
+                "while asserting one-state invariant at {}", init_off
+              ) => self.solver.assert(curr, init_off)
             )
           ) ;
           next
@@ -570,12 +607,10 @@ impl<
       let mut low = begin.clone() ;
       while end >= & low {
         try!(
-          self.solver.assert(next, & low).map_err(
-            |err| format!(
-              "[Unroller::add_invs] \
-              while asserting inv {} at {}\n{}",
-              next, low, err
-            )
+          chain_err!(
+            unroll, format!(
+              "while asserting invariant at {}", low
+            ) => self.solver.assert(next, & low)
           )
         ) ;
         low = low.nxt()
@@ -619,16 +654,15 @@ impl<
   pub fn get_model(& mut self, off: & Offset2) -> Res<Model> {
     use term::Smt2Offset ;
     let vars = self.get_model_vars() ;
-    let values = try_str!(
-      self.solver.get_values( & vars, off ),
-      "could not get values of (state) vars"
+    let values = try!(
+      self.solver.get_values( & vars, off )
     ) ;
     let mut model = Vec::with_capacity( values.len() ) ;
     for ( (term, off), val ) in values.into_iter() {
       let off = match off {
         Smt2Offset::No => None,
         Smt2Offset::One(off) => Some(off),
-        Smt2Offset::Two(lo, hi) => return Err(
+        Smt2Offset::Two(lo, hi) => bail!(
           format!(
             "unexpected two state ({},{}) term\n\
             terms should be one- or zero-state", lo, hi
@@ -638,9 +672,9 @@ impl<
       if let real_term::Term::V(ref var) = * term.get() {
         model.push( ( (var.clone(), off), val) )
       } else {
-        return Err(
+        bail!(
           format!(
-            "unexpected term {}\nall terms should be variables", term
+            "unexpected term {}, all terms should be variables", term
           )
         )
       }
@@ -698,9 +732,13 @@ impl Actlit {
   /// Declares an actlit.
   pub fn declare<
     'a, S: SolverTrait<'a>
-  >(& self, solver: & mut S) -> SmtRes<()> {
+  >(& self, solver: & mut S) -> Res<()> {
     let (id, ty) = ( self.name(), Type::Bool ) ;
-    solver.declare_fun(& id, & [], & ty, & ())
+    chain_err!(
+      actlit, "during declaration" => solver.declare_fun(
+        & id, & [], & ty, & ()
+      )
+    )
   }
 
   /// Builds an implication between the actlit and `rhs`.
@@ -711,9 +749,11 @@ impl Actlit {
   /// Deactivates an activation literal.
   pub fn deactivate<
     'a, S: SolverTrait<'a>
-  >(self, solver: & mut S) -> UnitSmtRes {
-    solver.assert(
-      & self.as_tmp_term().tmp_neg(), & self.offset
+  >(self, solver: & mut S) -> Res<()> {
+    chain_err!(
+      actlit, "during deactivation" => solver.assert(
+        & self.as_tmp_term().tmp_neg(), & self.offset
+      )
     )
   }
 }
@@ -760,11 +800,13 @@ impl TermManager<Sym> {
 
     for prop in props {
       let actlit = actlit_name_of(& prop) ;
-      try_str!(
-        solver.declare_fun(
-          & actlit, & [], & Type::Bool, & ()
-        ),
-        "[PropManager::mk] while declaring actlit {}", actlit
+      try!(
+        chain_err!(
+          term man, "during positive actlit declaration (Sym)" =>
+          solver.declare_fun(
+            & actlit, & [], & Type::Bool, & ()
+          )
+        )
       ) ;
       match prop.body().clone() {
         STerm::One(state, next) => {
@@ -811,12 +853,14 @@ impl TermManager<STerm> {
     let mut map_2 = HashMap::new() ;
 
     for sterm in sterms {
-      let actlit = format!("| actlit for candidate {}|", sterm.next().hkey()) ;
-      try_str!(
-        solver.declare_fun(
-          & actlit, & [], & Type::Bool, & ()
-        ),
-        "[TermManager::mk] while declaring actlit {}", actlit
+      let actlit = format!("| actlit for candidate {}|", sterm.next().uid()) ;
+      try!(
+        chain_err!(
+          term man, "during positive actlit declaration (STerm)" =>
+          solver.declare_fun(
+            & actlit, & [], & Type::Bool, & ()
+          )
+        )
       ) ;
       match sterm.clone() {
         STerm::One(state, next) => {
@@ -863,9 +907,12 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
           None => continue,
         },
       } ;
-      try_str!(
-        solver.assert( & format!("(not {})", actlit), & ()),
-        "[TermManager::forget] while deactivating {} ({})", key, actlit
+      try!(
+        chain_err!(
+          term man, "during actlit deactivation" => solver.assert(
+            & format!("(not {})", actlit), & ()
+          )
+        )
       ) ;
     }
     Ok(())
@@ -888,9 +935,15 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
     'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, at: & Offset2
-  ) -> UnitSmtRes {
+  ) -> Res<()> {
     for (_, & (_, _, ref act, _)) in self.terms_1.iter() {
-      try!( solver.assert(act, at) )
+      try!(
+        chain_err!(
+          term man, format!(
+            "during one-state prop activation at {}", at
+          ) => solver.assert(act, at)
+        )
+      )
     } ;
     Ok(())
   }
@@ -901,9 +954,15 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
     'a, S: SolverTrait<'a>
   >(
     & self, solver: & mut S, at: & Offset2
-  ) -> UnitSmtRes {
+  ) -> Res<()> {
     for (_, & (_, ref act, _)) in self.terms_2.iter() {
-      try!( solver.assert(act, at) )
+      try!(
+        chain_err!(
+          term man, format!(
+            "during two-state prop activation at {}", at
+          ) => solver.assert(act, at)
+        )
+      )
     } ;
     Ok(())
   }
@@ -979,9 +1038,9 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
           state.clone(), key.clone()
         ) {
           None => (),
-          Some(old) => return Err(
+          Some(old) => bail!(
             format!(
-              "term {}\n\
+              "[TermManager::get_false_state] term {}\n\
               already mapped to key {}\n\
               trying to map it to {}",
               state, old, key
@@ -990,21 +1049,26 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
         }
       }
     } ;
-    let values = try_str!(
-      solver.get_values(& terms, o),
-      "[TermManager::get_false_state] while retrieving values"
+    let values = try!(
+      chain_err!(
+        term man, format!(
+          "while retrieving values of props at {}", o
+        ) => solver.get_values(& terms, o)
+      )
     ) ;
     let mut keys = Vec::with_capacity(7) ;
     for ((t, _), v) in values {
       match * v.get() {
         real_term::Cst::Bool(true) => (),
         real_term::Cst::Bool(false) => keys.push(
-          try_str_opt!(
-            back_map.remove(& t),
-            "[TermManager::get_false_state] unknown term {}", t
-          ).clone()
+          match back_map.remove(& t) {
+            Some(t) => t.clone(),
+            None => bail!(
+              format!("[TermManager::get_false_state] unknown term {}", t)
+            ),
+          }
         ),
-        _ => return Err(
+        _ => bail!(
           format!(
             "[TermManager::get_false_state] unexpected term value {}", v
           )
@@ -1035,7 +1099,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
           next.clone(), key.clone()
         ) {
           None => (),
-          Some(old) => return Err(
+          Some(old) => bail!(
             format!(
               "[TermManager::get_false_next] term {}\n    \
               already mapped to property {}\n    \
@@ -1050,7 +1114,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
           state.clone(), key.clone()
         ) {
           None => (),
-          Some(old) => return Err(
+          Some(old) => bail!(
             format!(
               "[TermManager::get_false_next]term {}\n    \
               already mapped to key {}\n    \
@@ -1066,7 +1130,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
         terms.push(next.clone()) ;
         match back_map.insert(next.clone(), key.clone()) {
           None => (),
-          Some(old) => return Err(
+          Some(old) => bail!(
             format!(
               "[TermManager::get_false_next]term {}\n    \
               already mapped to key {}\n    \
@@ -1077,9 +1141,11 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
         }
       }
     } ;
-    let vec = try_str!(
-      solver.get_values(& terms, o),
-      "while retrieving values of terms at {}", o
+    let vec = try!(
+      chain_err!(
+        term man, "while retrieving term values for false next props" =>
+        solver.get_values(& terms, o)
+      )
     ) ;
     let mut keys = Vec::with_capacity(7) ;
     for ((t, _), v) in vec {
@@ -1100,7 +1166,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
               if t1_str == t2_str {
                 s = format!(
                   "{}\nterm is present in map though, analyzing problem\n\
-                  t1's hash is {}\nt2's hash is {}", s, t1.hkey(), t2.hkey()
+                  t1's hash is {}\nt2's hash is {}", s, t1.uid(), t2.uid()
                 ) ;
                 match (t1.get(), t2.get()) {
                   (
@@ -1110,13 +1176,13 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
                     for (
                       t1_sub, t2_sub
                     ) in t1_subs.iter().zip( t2_subs.iter() ) {
-                      if t1_sub.hkey() != t2_sub.hkey() {
+                      if t1_sub.uid() != t2_sub.uid() {
                         s = format!("{}\nhash inconsistency:\nlvl 1:", s) ;
                         s = format!(
-                          "{}\n  t1: {} {}", s, t1_sub.hkey(), t1_sub
+                          "{}\n  t1: {} {}", s, t1_sub.uid(), t1_sub
                         ) ;
                         s = format!(
-                          "{}\n  t2: {} {}", s, t2_sub.hkey(), t2_sub
+                          "{}\n  t2: {} {}", s, t2_sub.uid(), t2_sub
                         ) ;
                         match (t1_sub.get(), t2_sub.get()) {
                           (
@@ -1126,12 +1192,12 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
                             for (
                               t1_sub, t2_sub
                             ) in t1_subs.iter().zip( t2_subs.iter() ) {
-                              if t1_sub.hkey() != t2_sub.hkey() {
+                              if t1_sub.uid() != t2_sub.uid() {
                                 s = format!(
-                                  "{}\nlvl 2:\n  t1: {} {}", s, t1_sub.hkey(), t1_sub
+                                  "{}\nlvl 2:\n  t1: {} {}", s, t1_sub.uid(), t1_sub
                                 ) ;
                                 s = format!(
-                                  "{}\n  t2: {} {}", s, t2_sub.hkey(), t2_sub
+                                  "{}\n  t2: {} {}", s, t2_sub.uid(), t2_sub
                                 ) ;
                                 match (t1_sub.get(), t2_sub.get()) {
                                   (
@@ -1142,12 +1208,13 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
                                     for (
                                       t1_sub, t2_sub
                                     ) in t1_subs.iter().zip( t2_subs.iter() ) {
-                                      if t1_sub.hkey() != t2_sub.hkey() {
+                                      if t1_sub.uid() != t2_sub.uid() {
                                         s = format!(
-                                          "{}\nlvl 3:\n  t1: {} {}", s, t1_sub.hkey(), t1_sub
+                                          "{}\nlvl 3:\n  t1: {} {}",
+                                          s, t1_sub.uid(), t1_sub
                                         ) ;
                                         s = format!(
-                                          "{}\n  t2: {} {}", s, t2_sub.hkey(), t2_sub
+                                          "{}\n  t2: {} {}", s, t2_sub.uid(), t2_sub
                                         ) ;
                                         aaa = false
                                       }
@@ -1166,15 +1233,15 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
                       }
                     }
                   },
-                  _ => panic!("aaaaa"),
+                  _ => bail!("error while handling hash inconsistency"),
                 }
               }
             }
 
-            return Err(s)
+            bail!(s)
           },
         },
-        _ => return Err(
+        _ => bail!(
           format!("[TermManager::get_false_next] unexpected prop value {}", v)
         ),
       }
@@ -1189,11 +1256,7 @@ impl<Key: Hash + Clone + Eq + Display> TermManager<Key> {
     for key in keys.iter() {
       let was_not_there = self.inhibited.insert(key.clone()) ;
       if ! was_not_there {
-        return Err(
-          format!(
-            "[PropManager::inhibit] inhibited on property already inhibited"
-          )
-        )
+        bail!("[PropManager::inhibit] inhibited on property already inhibited")
       }
     }
     Ok(())

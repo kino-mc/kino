@@ -105,7 +105,7 @@ pub use nom::{ IResult } ;
 
 /// Re-export of `rsmt2`'s errors.
 pub mod errors {
-  pub use rsmt2::{ Error, ErrorKind, ResExt, Res } ;
+  pub use rsmt2::errors::{ Error, ErrorKind, ResExt, Res } ;
 }
 
 mod base ;
@@ -175,6 +175,7 @@ pub mod smt {
   use ::std::process::Command ;
 
   pub use ::rsmt2::* ;
+  use errors::* ;
 
   /** The default z3 command. */
   #[inline(always)]

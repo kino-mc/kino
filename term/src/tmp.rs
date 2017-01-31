@@ -5,7 +5,8 @@ Typically used for activation literals and conjunction of properties. */
 use std::collections::{ HashSet, HashMap } ;
 use std::fmt ;
 
-use rsmt2::{ Expr2Smt, Res } ;
+use rsmt2::Expr2Smt ;
+use errors::* ;
 use super::{
   Term, Type, Operator, Offset2
 } ;
