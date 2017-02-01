@@ -27,11 +27,11 @@ use term::{ Offset2, STermSet } ;
 use common::conf ;
 use common::SolverTrait ;
 use common::msg::{ Event, MsgDown } ;
+use common::errors::* ;
 
 use system::{ Sys, Prop } ;
 
 use unroll::* ;
-use unroll::errors::* ;
 
 /// Pruner.
 pub struct Pruner ;
@@ -72,21 +72,19 @@ fn pruner< 'a, S: SolverTrait<'a> >(
   let init = Offset2::init() ;
 
   let mut unroller = log_try!(
-    event, Unroller::mk(& sys, & [], solver).chain_err(
-      || "while creating unroller"
-    )
+    event, Unroller::mk(& sys, & [], solver)
+    => "while creating unroller"
   ) ;
 
   log_try!(
-    event, unroller.declare_svars( init.curr() ).chain_err(
-      || format!("while declaring state variables at {}", init.curr())
-    )
+    event, unroller.declare_svars(
+      init.curr()
+    ) => "while declaring state variables at {}", init.curr()
   ) ;
 
   log_try!(
-    event, unroller.unroll_init(& init).chain_err(
-      || format!("while unrolling system at {}", init)
-    )
+    event, unroller.unroll_init(& init)
+    => "while unrolling system at {}", init
   ) ;
 
   let mut to_do = None ;
@@ -98,9 +96,8 @@ fn pruner< 'a, S: SolverTrait<'a> >(
         match msg {
           MsgDown::Invariants(sym, invs) => if * sys == sym  {
             log_try!(
-              event, unroller.add_invs(invs, & init, & init).chain_err(
-                || "while adding invariants from supervisor"
-              )
+              event, unroller.add_invs(invs, & init, & init)
+              => "while adding invariants from supervisor"
             )
           },
           MsgDown::InvariantPruning(tek, sym, invs, info) => if * sys == sym {
@@ -134,26 +131,23 @@ fn prune< 'a, S: SolverTrait<'a> >(
 
   let mut non_trivial_invs = STermSet::with_capacity( invars.len() ) ;
 
-  let mut invs = try!(
-    InvManager::mk( invars, unroller.solver() ).chain_err(
-      || "while creating invariant manager"
-    )
+  let mut invs = try_chain!(
+    InvManager::mk( invars, unroller.solver() )
+    => "while creating invariant manager"
   ) ;
 
   'split: while let Some(one_inv_false) = invs.one_false_next() {
         
     // Setting up the negative actlit.
-    let actlit = try!(
-      unroller.fresh_actlit().chain_err(
-        || format!("while declaring activation literal at {}", k)
-      )
+    let actlit = try_chain!(
+      unroller.fresh_actlit()
+      => "while declaring activation literal at {}", k
     ) ;
     let implication = actlit.activate_term(one_inv_false) ;
 
-    try!(
-      unroller.assert(& implication, & k).chain_err(
-        || "while asserting property falsification"
-      )
+    try_chain!(
+      unroller.assert(& implication, & k)
+      => "while asserting property falsification"
     ) ;
 
     // Building list of actlits for this check.
@@ -161,33 +155,27 @@ fn prune< 'a, S: SolverTrait<'a> >(
     actlits.push(actlit.name()) ;
 
     // Check sat.
-    let is_sat = try!(
-      unroller.check_sat_assuming( & actlits ).chain_err(
-        || format!("during a `check_sat_assuming` query at {}", k)
-      )
+    let is_sat = try_chain!(
+      unroller.check_sat_assuming( & actlits )
+      => "during a `check_sat_assuming` query at {}", k
     ) ;
 
     if is_sat {
       // _event.log("sat, getting falsified invs") ;
-      let falsified = try!(
-        invs.get_false_next(unroller.solver(), & k).chain_err(
-          || "could not retrieve falsified properties"
-        )
+      let falsified = try_chain!(
+        invs.get_false_next(unroller.solver(), & k)
+        => "could not retrieve falsified properties"
       ) ;
       // _event.log(
       //   & format!("{} falsified invs", falsified.len())
       // ) ;
-      try!(
-        unroller.deactivate(actlit).chain_err(
-          || "while deactivating negative actlit"
-        )
+      try_chain!(
+        unroller.deactivate(actlit)
+        => "while deactivating negative actlit"
       ) ;
-      try!(
-        invs.forget(unroller.solver(), falsified.iter()).chain_err(
-          || format!(
-            "while forgetting {} falsified properties", falsified.len()
-          )
-        )
+      try_chain!(
+        invs.forget(unroller.solver(), falsified.iter())
+        => "while forgetting {} falsified properties", falsified.len()
       ) ;
       for falsified in falsified.into_iter() {
         non_trivial_invs.insert(falsified) ; ()

@@ -89,6 +89,8 @@ only non-zero denominator will push the problem to function symbol application. 
 
 extern crate num ;
 #[macro_use]
+extern crate error_chain ;
+#[macro_use]
 extern crate nom ;
 extern crate rand ;
 extern crate hashconsing as hcons ;
@@ -105,7 +107,59 @@ pub use nom::{ IResult } ;
 
 /// Re-export of `rsmt2`'s errors.
 pub mod errors {
-  pub use rsmt2::errors::{ Error, ErrorKind, ResExt, Res } ;
+  error_chain!{
+    types {
+      Error, ErrorKind, ResExt, Res ;
+    }
+    links {
+      RSmt2(::rsmt2::errors::Error, ::rsmt2::errors::ErrorKind)
+      #[doc = "[`rsmt2`](https://crates.io/crates/rsmt2) errors"] ;
+    }
+    errors {
+      #[doc = "Returned when a term evaluation fails."]
+      EvalError(s: String) {
+        description("evaluation error")
+        display("evaluation error: {}", s)
+      }
+
+      #[doc = "
+        Returned when a temp term transformation fails.
+      "]
+      TmpTransError {
+        description("temp term transformation error")
+        display("temp term transformation error")
+      }
+
+      #[doc = "Operator arity mismatch."]
+      OpArityError(op: ::Operator, found: usize, expected: & 'static str) {
+        description("operator arity mismatch")
+        display(
+          "arity mismatch, operator `{}` applied to {} operands (expected {})",
+          op, found, expected
+        )
+      }
+
+      #[doc = "Type mismatch on operator."]
+      OpTypeError(
+        op: ::Operator, found: ::Type, expected: ::Type, blah: Option<String>
+      ) {
+        description("operator type mismatch")
+        display(
+          "type mismatch on operator `{}`, expected {} but found {}{}",
+          op, expected, found, match * blah {
+            Some(ref blah) => format!(" {}", blah),
+            None => "".into(),
+          }
+        )
+      }
+
+      #[doc = "IO error"]
+      IoError(e: ::std::io::Error) {
+        description("IO error")
+        display("IO error {:?}", e)
+      }
+    }
+  }
 }
 
 mod base ;
@@ -175,7 +229,7 @@ pub mod smt {
   use ::std::process::Command ;
 
   pub use ::rsmt2::* ;
-  use errors::* ;
+  use ::rsmt2::errors::* ;
 
   /** The default z3 command. */
   #[inline(always)]

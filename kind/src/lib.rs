@@ -56,7 +56,7 @@ impl common::CanRun<conf::Kind> for KInd {
     mk_solver_run!(
       solver_conf, conf.smt_log(), "kind", event.factory(),
       solver => kind(solver, conf.clone(), sys, props, & mut event),
-      msg => event.error(msg)
+      err => event.error(err)
     )
   }
 }
@@ -73,16 +73,15 @@ fn kind<
   let check_offset = Offset2::init().rev() ;
   let mut k = check_offset.clone() ;
 
-  let mut unroller = try_error!(
-    Unroller::mk(& sys, & props, solver), event,
-    "while creating unroller"
+  let mut unroller = log_try!(
+    event, Unroller::mk(& sys, & props, solver)
+    => "while creating unroller"
   ) ;
 
   // event.log("creating manager, declaring actlits") ;
-  let mut props = try_error!(
-    PropManager::mk(props, unroller.solver()),
-    event,
-    "while creating property manager"
+  let mut props = log_try!(
+    event, PropManager::mk(props, unroller.solver())
+    => "while creating property manager"
   ) ;
 
   if props.none_left() {
@@ -98,21 +97,21 @@ fn kind<
   // ) ;
 
   // event.log("declare svar@0") ;
-  try_error!(
-    unroller.declare_svars(check_offset.next()), event,
-    // Unrolling backwards ~~~~~~~~~~~~~^^^^
-    "while declaring state variables"
+  log_try!(
+    event, unroller.declare_svars(check_offset.next())
+    // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~^^^^
+    => "while declaring state variables"
   ) ;
 
   // event.log( & format!("unroll {}", k) ) ;
-  try_error!(
-    unroller.unroll_init(& k), event,
-    "while unrolling system"
+  log_try!(
+    event, unroller.unroll_init(& k)
+    => "while unrolling system"
   ) ;
 
-  try_error!(
-    props.activate_state(unroller.solver(), & k), event,
-    "while activating one-state property"
+  log_try!(
+    event, props.activate_state(unroller.solver(), & k)
+    => "while activating one-state property"
   ) ;
 
   'out: loop {
@@ -136,22 +135,24 @@ fn kind<
       None => return (),
       Some(msgs) => for msg in msgs {
         match msg {
-          MsgDown::Forget(ps, _) => try_error!(
-            props.forget(unroller.solver(), ps.iter()), event,
-            "while forgetting some properties\n\
-            because of a `Forget` message (1)"
+          MsgDown::Forget(ps, _) => log_try!(
+            event, props.forget(unroller.solver(), ps.iter())
+            => "while forgetting some properties\n\
+              because of a `Forget` message (1)"
           ),
           MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
             // event.log(
             //   & format!("received {} invariants", invs.len())
             // ) ;
             // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-            try_error!(
-              unroller.add_invs(invs, & check_offset, & k), event,
-              "while adding invariants from supervisor"
+            log_try!(
+              event, unroller.add_invs(invs, & check_offset, & k)
+              => "while adding invariants from supervisor"
             )
           },
-          _ => event.error("unknown message")
+          msg => event.error(
+            format!("unexpected message `{:?}`", msg).into()
+          ),
         }
       },
     } ;
@@ -166,15 +167,15 @@ fn kind<
     'split: while let Some(one_prop_false) = props.one_false_next() {
         
       // Setting up the negative actlit.
-      let actlit = try_error!(
-        unroller.fresh_actlit(), event,
-        "while declaring activation literal at {}", k
+      let actlit = log_try!(
+        event, unroller.fresh_actlit()
+        => "while declaring activation literal at {}", k
       ) ;
       let implication = actlit.activate_term(one_prop_false) ;
 
-      try_error!(
-        unroller.assert(& implication, & check_offset), event,
-        "while asserting property falsification"
+      log_try!(
+        event, unroller.assert(& implication, & check_offset)
+        => "while asserting property falsification"
       ) ;
 
       // Building list of actlits for this check.
@@ -182,30 +183,30 @@ fn kind<
       actlits.push(actlit.name()) ;
 
       // Check sat.
-      let is_sat = try_error!(
-        unroller.check_sat_assuming( & actlits ), event,
-        "during a `check_sat_assuming` query at {}", k
+      let is_sat = log_try!(
+        event, unroller.check_sat_assuming( & actlits )
+        => "during a `check_sat_assuming` query at {}", k
       ) ;
 
       if is_sat {
         // event.log("sat, getting falsified props") ;
-        let falsified = try_error!(
-          props.get_false_next(unroller.solver(), & check_offset), event,
-          "could not retrieve falsified properties"
+        let falsified = log_try!(
+          event, props.get_false_next(unroller.solver(), & check_offset)
+          => "could not retrieve falsified properties"
         ) ;
-        try_error!(
-          unroller.deactivate(actlit), event,
-          "while deactivating negative actlit"
+        log_try!(
+          event, unroller.deactivate(actlit)
+          => "while deactivating negative actlit"
         ) ;
-        try_error!(
-          props.inhibit(& falsified), event,
-          "while inhibiting {} falsified properties", falsified.len()
+        log_try!(
+          event, props.inhibit(& falsified)
+          => "while inhibiting {} falsified properties", falsified.len()
         )
       } else {
         // event.log("unsat") ;
-        try_error!(
-          unroller.deactivate(actlit), event,
-          "while deactivating negative actlit"
+        log_try!(
+          event, unroller.deactivate(actlit)
+          => "while deactivating negative actlit"
         ) ;
         let mut unfalsifiable = props.not_inhibited_set() ;
 
@@ -227,12 +228,12 @@ fn kind<
           } ;
 
           if invariant {
-            try_error!(
-              props.forget(
+            log_try!(
+              event, props.forget(
                 unroller.solver(), unfalsifiable.iter()
-              ), event,
-              "while forgetting some properties\n\
-              because I just proved them invariant"
+              )
+              => "while forgetting some properties\n\
+                because I just proved them invariant"
             ) ;
             event.proved_at(unfalsifiable.into_iter().collect(), k.curr()) ;
             break 'split
@@ -245,10 +246,10 @@ fn kind<
                 for msg in msgs {
                   match msg {
                     MsgDown::Forget(ps, Status::Proved) => {
-                      try_error!(
-                        props.forget(unroller.solver(), ps.iter()), event,
-                        "while forgetting some properties\n\
-                        because of a `Forget` message (2, proved)"
+                      log_try!(
+                        event, props.forget(unroller.solver(), ps.iter())
+                        => "while forgetting some properties\n\
+                          because of a `Forget` message (2, proved)"
                       ) ;
                       for p in ps.iter() {
                         let _ = unfalsifiable.remove(p) ;
@@ -256,10 +257,10 @@ fn kind<
                       }
                     },
                     MsgDown::Forget(ps, Status::Disproved) => {
-                      try_error!(
-                        props.forget(unroller.solver(), ps.iter()), event,
-                        "while forgetting some properties\n\
-                        because of a `Forget` message (2, disproved)"
+                      log_try!(
+                        event, props.forget(unroller.solver(), ps.iter())
+                        => "while forgetting some properties\n\
+                          because of a `Forget` message (2, disproved)"
                       ) ;
                       for p in ps.iter() {
                         disproved = disproved || unfalsifiable.remove(p)
@@ -272,12 +273,14 @@ fn kind<
                       // event.log(
                       //   & format!("add_invs [{}, {}]", check_offset, k)
                       // ) ;
-                      try_error!(
-                        unroller.add_invs(invs, & check_offset, & k), event,
-                        "while adding invariants from supervisor"
+                      log_try!(
+                        event, unroller.add_invs(invs, & check_offset, & k)
+                        => "while adding invariants from supervisor"
                       )
                     },
-                    _ => event.error("unknown message")
+                    msg => event.error(
+                      format!("unexpected message `{:?}`", msg).into()
+                    ),
                   }
                 }
 
@@ -301,22 +304,24 @@ fn kind<
         None => return (),
         Some(msgs) => for msg in msgs {
           match msg {
-            MsgDown::Forget(ps, _) => try_error!(
-              props.forget(unroller.solver(), ps.iter()), event,
-              "while forgetting some properties\n\
-              because of a `Forget` message (1)"
+            MsgDown::Forget(ps, _) => log_try!(
+              event, props.forget(unroller.solver(), ps.iter())
+              => "while forgetting some properties \
+                because of a `Forget` message (1)"
             ),
             MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
               // event.log(
               //   & format!("received {} invariants", invs.len())
               // ) ;
               // event.log( & format!("add_invs [{}, {}]", check_offset, k) ) ;
-              try_error!(
-                unroller.add_invs(invs, & check_offset, & k), event,
-                "while adding invariants from supervisor"
+              log_try!(
+                event, unroller.add_invs(invs, & check_offset, & k)
+                => "while adding invariants from supervisor"
               )
             },
-            _ => event.error("unknown message")
+            msg => event.error(
+              format!("unexpected message `{:?}`", msg).into()
+            ),
           }
         },
       }
@@ -332,19 +337,19 @@ fn kind<
     k = k.nxt() ;
 
     // event.log( & format!("unroll {}", k) ) ;
-    try_error!(
-      unroller.unroll_bak(& k), event,
-      "while unrolling system"
+    log_try!(
+      event, unroller.unroll_bak(& k)
+      => "while unrolling system"
     ) ;
 
     // event.log( & format!("activate next at {}", k) ) ;
-    try_error!(
-      props.activate_next(unroller.solver(), & k), event,
-      "while activating two state properties"
+    log_try!(
+      event, props.activate_next(unroller.solver(), & k)
+      => "while activating two state properties"
     ) ;
-    try_error!(
-      props.activate_state(unroller.solver(), & k), event,
-      "while activating one state properties"
+    log_try!(
+      event, props.activate_state(unroller.solver(), & k)
+      => "while activating one state properties"
     ) ;
 
     ()

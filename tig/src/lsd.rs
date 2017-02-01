@@ -10,7 +10,7 @@
 /*! Lock Step Driver (LSD): a wrapper around some SMT solvers providing
 invariant-generation-oriented operations. */
 
-use common::Res ;
+use common::errors::* ;
 
 use term::STermSet ;
 use term::tmp::{ TmpTerm, TmpTermMap } ;
@@ -66,7 +66,8 @@ pub trait Lsd<
 /// - restarts solver when base/step switching
 pub mod top_only {
 
-  use common::{ SolverTrait, Res } ;
+  use common::SolverTrait ;
+  use common::errors::* ;
   use term::{ Offset2, Bool, STermSet } ;
   use term::tmp::TmpTerm as Term ;
   use term::tmp::{ TmpTermMker, TmpTermMap } ;
@@ -96,26 +97,26 @@ pub mod top_only {
       unroller: & mut Unroller<Solver>, unroll: usize
     ) -> Res<Offset2> {
       let mut k = Offset2::init() ;
-      try_str!(
-        unroller.solver().reset(),
-        "while `reset`ing the solver {}", k
+      try_chain!(
+        unroller.solver().reset()
+        => "[Base] while `reset`ing the solver {}", k
       ) ;
-      try_str!(
-        unroller.defclare_funs(& []),
-        "while declaring UFs, init and trans"
+      try_chain!(
+        unroller.defclare_funs(& [])
+        => "[Base] while declaring UFs, init and trans"
       ) ;
-      try_str!(
-        unroller.assert_init(& k),
-        "while asserting init"
+      try_chain!(
+        unroller.assert_init(& k)
+        => "[Base] while asserting init"
       ) ;
       // Init is asserted, we need to decrease `k` so that it accounts
       // for the fact that there is `0` unrolling.
       k = k.pre() ;
       for _ in 0..unroll {
         k = k.nxt() ;
-        try_str!(
-          unroller.unroll(& k),
-          "while unrolling system at {}", k.next()
+        try_chain!(
+          unroller.unroll(& k)
+          => "[Base] while unrolling system at {}", k.next()
         )
       }
       Ok(k)
@@ -134,8 +135,8 @@ pub mod top_only {
     /// Creates a base checker, unrolls the transition relation `unroll` times.
     pub fn mk(sys: & Sys, solver: Solver, unroll: usize) -> Res<Self> {
       let factory = solver.parser().clone() ;
-      let unroller = try_str!(
-        Unroller::mk(sys, & [], solver), "while creating unroller"
+      let unroller = try_chain!(
+        Unroller::mk(sys, & [], solver) => "[Base] while creating unroller"
       ) ;
       Base::of(
         unroller, unroll, Eval::mk(
@@ -160,28 +161,29 @@ pub mod top_only {
       // Creating the term to check.
       let one_term_false = Term::and(terms).tmp_neg() ;
       // Creating actlit for this check.
-      let actlit = try_str!(
-        self.unroller.fresh_actlit(),
-        "while declaring activation literal at {}", self.k
+      let actlit = try_chain!(
+        self.unroller.fresh_actlit()
+        => "while declaring activation literal at {}", self.k
       ) ;
       let implication = actlit.activate_term(one_term_false) ;
 
-      try_str!(
-        self.unroller.assert(& implication, & self.k),
-        "[Base::k_falsify] while asserting implication at {}", self.k
+      try_chain!(
+        self.unroller.assert(& implication, & self.k)
+        => "[Base::k_falsify] while asserting implication at {}", self.k
       ) ;
 
       // Check sat.
-      let is_sat = try_str!(
-        self.unroller.check_sat_assuming( & [ actlit.name() ] ),
-        "[Base::k_falsify] during a `check_sat_assuming` query at {}", self.k
+      let is_sat = try_chain!(
+        self.unroller.check_sat_assuming( & [ actlit.name() ] )
+        => "[Base::k_falsify] during a `check_sat_assuming` query at {}",
+          self.k
       ) ;
 
       let res = if is_sat {
         // Sat, getting model.
-        let model = try_str!(
-          self.unroller.solver().get_model(),
-          "[Base::k_falsify] could not retrieve model"
+        let model = try_chain!(
+          self.unroller.solver().get_model()
+          => "[Base::k_falsify] could not retrieve model"
         ) ;
         self.eval.recycle( model, self.k.clone() ) ;
         Some(& mut self.eval)
@@ -190,9 +192,9 @@ pub mod top_only {
         None
       } ;
       
-      try_str!(
-        self.unroller.deactivate(actlit),
-        "[Base::k_falsify] could not deactivate negative actlit"
+      try_chain!(
+        self.unroller.deactivate(actlit)
+        => "[Base::k_falsify] could not deactivate negative actlit"
       ) ;
 
       Ok(res)
@@ -224,9 +226,9 @@ pub mod top_only {
     }
     fn unroll(& mut self) -> Res<usize> {
       self.k = self.k.nxt() ;
-      try_str!(
-        self.unroller.unroll(& self.k),
-        "while unrolling system at {}", self.k.next()
+      try_chain!(
+        self.unroller.unroll(& self.k)
+        => "while unrolling system at {}", self.k.next()
       ) ;
       Ok( self.unroll_len() )
     }
@@ -267,37 +269,36 @@ pub mod top_only {
       unroller: & mut Unroller<Solver>, unroll: usize
     ) -> Res<(Offset2, Offset2)> {
       if unroll < 1 {
-        return Err(
-          "illegal number of unrolling: 0\nmust be > 0".to_string()
+        bail!(
+          "[Step] illegal number of unrolling: 0\nmust be > 0"
         )
       }
       let check_offset = Step::<Val, Solver>::check_offset() ;
       let mut k = check_offset.clone() ;
-      try_str!(
-        unroller.solver().reset(),
-        "while `reset`ing the solver"
+      try_chain!(
+        unroller.solver().reset() => "[Step] while `reset`ing the solver"
       ) ;
-      try_str!(
-        unroller.defclare_funs(& []),
-        "while declaring UFs, init and trans"
+      try_chain!(
+        unroller.defclare_funs(& [])
+        => "[Step] while declaring UFs, init and trans"
       ) ;
-      try_str!(
-        unroller.declare_svars(check_offset.next()),
-        // Unrolling backwards ~~~~~~~~~~~~~~~~~~~~~~^^^^
-        "while declaring state variables"
+      try_chain!(
+        unroller.declare_svars(check_offset.next())
+        // Unrolling backwards ~~~~~~~~~~~~~^^^^
+        => "[Step] while declaring state variables"
       ) ;
       // First unrolling, to be consistent with the value of `k`.
-      try_str!(
-        unroller.unroll(& k),
-        "while unrolling system at {}", k.next()
+      try_chain!(
+        unroller.unroll(& k)
+        => "[Step] while unrolling system at {}", k.next()
       ) ;
       // Unrolling loop, `unroll - 1` iterations because of the previous
       // unrolling. Hence `1..unroll` and not `0..unroll`.
       for _ in 1..unroll {
         k = k.nxt() ;
-        try_str!(
-          unroller.unroll(& k),
-          "while unrolling system at {}", k.next()
+        try_chain!(
+          unroller.unroll(& k)
+          => "[Step] while unrolling system at {}", k.next()
         )
       }
       Ok( (check_offset, k) )
@@ -338,9 +339,9 @@ pub mod top_only {
       let mut map = TmpTermMap::with_capacity(len) ;
       let mut positive = Vec::with_capacity(len) ;
       for (term, info) in in_map.iter() {
-        let actlit = try_str!(
-          self.unroller.fresh_actlit(),
-          "[Step::k_split] while declaring activation literal at {}", self.k
+        let actlit = try_chain!(
+          self.unroller.fresh_actlit()
+          => "[Step::k_split] while declaring activation literal at {}", self.k
         ) ;
         positive.push( actlit.activate_term( term.clone() ) ) ;
         let prev = map.insert(term.clone(), (info.clone(), actlit.name())) ;
@@ -353,9 +354,10 @@ pub mod top_only {
 
       while unroll <= self.k {
         unroll = unroll.nxt() ;
-        try_str!(
-          self.unroller.assert(& positive, & unroll),
-          "[Step::k_split] while asserting positive implications at {}", unroll
+        try_chain!(
+          self.unroller.assert(& positive, & unroll)
+          => "[Step::k_split] while asserting positive implications at {}",
+            unroll
         )
       }
 
@@ -376,30 +378,32 @@ pub mod top_only {
         let one_term_false = Term::and( to_check.clone() ).tmp_neg() ;
 
         // Creating actlit for this check.
-        let actlit = try_str!(
-          self.unroller.fresh_actlit(),
-          "[Step::k_split] while declaring activation literal at {}", self.k
+        let actlit = try_chain!(
+          self.unroller.fresh_actlit()
+          => "[Step::k_split] while declaring activation literal at {}", self.k
         ) ;
         actlits.push( actlit.name() ) ;
         let implication = actlit.activate_term(one_term_false) ;
 
-        try_str!(
-          self.unroller.assert(& implication, & self.check),
-          "[Step::k_split] while asserting implication for {} terms at {}",
-          to_check.len(), self.k
+        try_chain!(
+          self.unroller.assert(& implication, & self.check)
+          => "[Step::k_split] while asserting implication for {} terms at {}",
+            to_check.len(), self.k
         ) ;
 
         // Check sat.
-        let is_sat = try_str!(
-          self.unroller.check_sat_assuming( & actlits ),
-          "[Step::k_split] during a `check_sat_assuming` query at {}", self.k
+        let is_sat = try_chain!(
+          self.unroller.check_sat_assuming( & actlits )
+          => "[Step::k_split] during a `check_sat_assuming` query at {}",
+            self.k
         ) ;
 
         if is_sat {
           // Evaluate terms and update `rest`.
-          let model = try_str!(
-            self.unroller.get_model(& self.check),
-            "[Step::k_split] while retrieving the values of the candidate terms"
+          let model = try_chain!(
+            self.unroller.get_model(& self.check)
+            => "[Step::k_split] \
+              while retrieving the values of the candidate terms"
           ) ;
           
           let mut eval = Eval::<Bool>::mk(
@@ -409,27 +413,26 @@ pub mod top_only {
           ) ;
 
           for term in to_check.into_iter() {
-            let term_is_true = try_str!(
-              eval.eval(& term),
-              "[Step::k_split] could not evaluate term {:?} in current model", term
+            let term_is_true = try_chain!(
+              eval.eval(& term)
+              => "[Step::k_split] \
+                could not evaluate term {:?} in current model", term
             ) ;
             if ! term_is_true {
               // Falsified, remove from `map` and put in `rest`.
               match map.remove(& term) {
                 Some( _ ) => (),
-                None => return Err(
-                  format!(
-                    "[Step::k_split] unknown term {:?} in `to_check`", term
-                  )
+                None => bail!(
+                  "[Step::k_split] unknown term {:?} in `to_check`", term
                 ),
               }
             }
           }
         }
 
-        try_str!(
-          self.unroller.deactivate(actlit),
-          "[Step::k_split] could not deactivate negative actlit"
+        try_chain!(
+          self.unroller.deactivate(actlit)
+          => "[Step::k_split] could not deactivate negative actlit"
         ) ;
 
         // If we got unsat then we're done.
@@ -476,9 +479,9 @@ pub mod top_only {
     }
     fn unroll(& mut self) -> Res<usize> {
       self.k = self.k.nxt() ;
-      try_str!(
-        self.unroller.unroll(& self.k),
-        "while unrolling system at {}", self.k.next()
+      try_chain!(
+        self.unroller.unroll(& self.k)
+        => "while unrolling system at {}", self.k.next()
       ) ;
       Ok( self.unroll_len() )
     }

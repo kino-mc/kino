@@ -11,6 +11,8 @@
 
 //! Template-based invariant generation.
 
+#[macro_use]
+extern crate error_chain ;
 extern crate term ;
 extern crate system ;
 #[macro_use]
@@ -32,9 +34,10 @@ use term::tmp::{
 
 use system::{ Sys, Prop } ;
 
-use common::{ Res, SolverTrait, CanRun } ;
+use common::{ SolverTrait, CanRun } ;
 use common::msg::Event ;
 use common::conf ;
+use common::errors::* ;
 
 pub mod eval ;
 pub mod mine ;
@@ -67,9 +70,9 @@ impl CanRun<conf::Tig> for Tig {
           use std::fs::DirBuilder ;
           let mut db = DirBuilder::new() ;
           db.recursive(true) ;
-          try_error!(
-            db.create(dir), event,
-            "while creating directory `{}` for graph logging", dir
+          log_try!(
+            event, db.create(dir)
+            => "while creating directory `{}` for graph logging", dir
           ) ;
           invgen(
             conf.clone(), solver_1, solver_2, sys, & mut event,
@@ -84,7 +87,7 @@ impl CanRun<conf::Tig> for Tig {
           )
         }
       },
-      msg => event.error(msg)
+      err => event.error(err)
     )
   }
 }
@@ -129,24 +132,23 @@ fn invgen<
   ) ;
 
   // event.log("creating base checker") ;
-  let mut base = try_error!(
-    Base::mk(& sys, solver_1, 0), event,
-    "while creating base checker"
+  let mut base = log_try!(
+    event, Base::mk(& sys, solver_1, 0) => "while creating base checker"
   ) ;
 
   // event.log("creating step checker") ;
   let mut step = {
-    let mut base = try_error!(
-      Base::mk(& sys, solver_2, 0), event,
-      "while creating base checker to create step checker"
+    let mut base = log_try!(
+      event, Base::mk(& sys, solver_2, 0)
+      => "while creating base checker to create step checker"
     ) ;
-    try_error!(
-      base.unroll(), event,
-      "while unrolling base checker to create step checker"
+    log_try!(
+      event, base.unroll()
+      => "while unrolling base checker to create step checker"
     ) ;
-    try_error!(
-      base.to_step(), event,
-      "while turning base checker into step checker"
+    log_try!(
+      event, base.to_step()
+      => "while turning base checker into step checker"
     )
   } ;
 
@@ -162,12 +164,11 @@ fn invgen<
     event.log( & format!("stabilizing at {}...", cnt) ) ;
 
     'stabilize: while ! is_done {
-      is_done = try_error!(
-        graph.stabilize_next_class_and_edges(
+      is_done = log_try!(
+        event, graph.stabilize_next_class_and_edges(
           & mut base, & mut step, event,
           & graph_log, & format!("{}_{}", cnt, inner_cnt)
-        ), event,
-        "while stabilizing at {}", cnt
+        ) => "while stabilizing at {}", cnt
       ) ;
 
       // try_error!(
@@ -191,27 +192,27 @@ fn invgen<
 
     graph.clear() ;
 
-    try_error!(
-      graph.k_split_all(& mut base, & mut step, event),
-      event, "while splitting all at {}", cnt
+    log_try!(
+      event, graph.k_split_all(& mut base, & mut step, event)
+      => "while splitting all at {}", cnt
     ) ;
 
-    try_error!(
-      base.restart(), event, "while restarting base at {}", cnt - 1
+    log_try!(
+      event, base.restart() => "while restarting base at {}", cnt - 1
     ) ;
-    let base_len = try_error!(
-      base.unroll(), event, "while unrolling base to {}", cnt
+    let base_len = log_try!(
+      event, base.unroll() => "while unrolling base to {}", cnt
     ) ;
     debug_assert!( base_len == cnt ) ;
 
     cnt += 1 ;
 
-    try_error!(
-      step.restart(), event, "while restarting step at {}", cnt - 1
+    log_try!(
+      event, step.restart() => "while restarting step at {}", cnt - 1
     ) ;
     if unroll_step {
-      let step_len = try_error!(
-        step.unroll(), event, "while unrolling step to {}", cnt
+      let step_len = log_try!(
+        event, step.unroll() => "while unrolling step to {}", cnt
       ) ;
       debug_assert!( step_len == cnt )
     }
@@ -234,7 +235,7 @@ Domains define the type of the values the candidate terms evaluate to and a
 total order relation used for the edges in the graph. */
 pub trait Domain : PartialEq + Eq + PartialOrd + Ord + Clone + Display {
   /// A value from a constant.
-  fn of_cst(& Cst) -> Result<Self, String> ;
+  fn of_cst(& Cst) -> Res<Self> ;
   /// Creates a term encoding a relation between terms.
   fn mk_cmp(& Term, & Term) -> Option<TmpTerm> ;
   /// Creates a term encoding an equality between terms.
@@ -259,12 +260,10 @@ pub trait Domain : PartialEq + Eq + PartialOrd + Ord + Clone + Display {
   fn choose_rep(& Factory, TermSet) -> Res<(Term, TermSet)> ;
 }
 impl Domain for Bool {
-  fn of_cst(cst: & Cst) -> Result<Self, String> {
+  fn of_cst(cst: & Cst) -> Res<Self> {
     match * cst.get() {
       ::term::real_term::Cst::Bool(b) => Ok(b),
-      ref cst => Err(
-        format!("[Bool::of_cst] unexpected constant {}", cst)
-      ),
+      ref cst => bail!("[Bool::of_cst] unexpected constant {}", cst),
     }
   }
   fn mk_cmp(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
@@ -288,10 +287,8 @@ impl Domain for Bool {
     } else {
       let rep = match set.iter().next() {
         Some(rep) => rep.clone(),
-        None => return Err(
-          format!(
-            "[Bool::choose_rep] cannot choose representative of empty set"
-          )
+        None => bail!(
+          "[Bool::choose_rep] cannot choose representative of empty set"
         ),
       } ;
       let was_there = set.remove(& rep) ;
@@ -301,12 +298,10 @@ impl Domain for Bool {
   }
 }
 impl Domain for Int  {
-  fn of_cst(cst: & Cst) -> Result<Self, String> {
+  fn of_cst(cst: & Cst) -> Res<Self> {
     match * cst.get() {
       ::term::real_term::Cst::Int(ref i) => Ok(i.clone()),
-      ref cst => Err(
-        format!("[Int::of_cst] unexpected constant {}", cst)
-      ),
+      ref cst => bail!("[Int::of_cst] unexpected constant {}", cst),
     }
   }
   fn mk_cmp(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
@@ -318,10 +313,8 @@ impl Domain for Int  {
   fn choose_rep(_: & Factory, mut set: TermSet) -> Res<(Term, TermSet)> {
     let rep = match set.iter().next() {
       Some(rep) => rep.clone(),
-      None => return Err(
-        format!(
-          "[Int::choose_rep] cannot choose representative of empty set"
-        )
+      None => bail!(
+        "[Int::choose_rep] cannot choose representative of empty set"
       ),
     } ;
     let was_there = set.remove(& rep) ;
@@ -330,12 +323,10 @@ impl Domain for Int  {
   }
 }
 impl Domain for Rat  {
-  fn of_cst(cst: & Cst) -> Result<Self, String> {
+  fn of_cst(cst: & Cst) -> Res<Self> {
     match * cst.get() {
       ::term::real_term::Cst::Rat(ref r) => Ok(r.clone()),
-      ref cst => Err(
-        format!("[Rat::of_cst] unexpected constant {}", cst)
-      ),
+      ref cst => bail!("[Rat::of_cst] unexpected constant {}", cst),
     }
   }
   fn mk_cmp(lhs: & Term, rhs: & Term) -> Option<TmpTerm> {
@@ -347,10 +338,8 @@ impl Domain for Rat  {
   fn choose_rep(_: & Factory, mut set: TermSet) -> Res<(Term, TermSet)> {
     let rep = match set.iter().next() {
       Some(rep) => rep.clone(),
-      None => return Err(
-        format!(
-          "[Rat::choose_rep] cannot choose representative of empty set"
-        )
+      None => bail!(
+        "[Rat::choose_rep] cannot choose representative of empty set"
       ),
     } ;
     let was_there = set.remove(& rep) ;

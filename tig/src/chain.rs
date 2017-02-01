@@ -12,6 +12,7 @@
 use std::fmt ;
 
 use term::{ Term, TermSet } ;
+use common::errors::* ;
 
 use Domain ;
 
@@ -165,7 +166,7 @@ impl<Val: Domain> Chain<Val, TermSet> {
   }
 
   /** Inserts a term in a chain given its value. */
-  pub fn insert(mut self, v: Val, t: Term) -> Result<Self, String> {
+  pub fn insert(mut self, v: Val, t: Term) -> Res<Self> {
     use self::Chain::* ;
     use std::cmp::Ordering::* ;
     let mut prefix = Nil ;

@@ -36,9 +36,7 @@ use term::tmp::* ;
 use sys::{ Prop, Sys, Callable } ;
 
 use common::SolverTrait ;
-
-pub use common::errors ;
-use errors::* ;
+use common::errors::* ;
 
 /// Manages some properties.
 pub type PropManager = TermManager<Sym> ;
@@ -655,7 +653,9 @@ impl<
     use term::Smt2Offset ;
     let vars = self.get_model_vars() ;
     let values = try!(
-      self.solver.get_values( & vars, off )
+      self.solver.get_values( & vars, off ).chain_err(
+        || "[Unroller] while getting model"
+      )
     ) ;
     let mut model = Vec::with_capacity( values.len() ) ;
     for ( (term, off), val ) in values.into_iter() {

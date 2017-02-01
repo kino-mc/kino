@@ -94,7 +94,13 @@ impl Master {
           bmc::Bmc, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
         ) {
           Ok(()) => (),
-          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+          Err(errors) => {
+            log.bad(& Kino, "Error launching BMC:") ;
+            for err in errors.iter() {
+              log.bad(& Kino, & format!("> {}", err))
+            }
+            return Err(())
+          },
         }
       },
     } ;
@@ -107,7 +113,13 @@ impl Master {
           kind::KInd, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
         ) {
           Ok(()) => (),
-          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+          Err(errors) => {
+            log.bad(& Kino, "Error launching K-induction:") ;
+            for err in errors.iter() {
+              log.bad(& Kino, & format!("> {}", err))
+            }
+            return Err(())
+          },
         }
       },
     } ;
@@ -120,7 +132,13 @@ impl Master {
           twind::Twind, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
         ) {
           Ok(()) => (),
-          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+          Err(errors) => {
+            log.bad(& Kino, "Error launching 2-induction:") ;
+            for err in errors.iter() {
+              log.bad(& Kino, & format!("> {}", err))
+            }
+            return Err(())
+          },
         }
       },
     } ;
@@ -133,7 +151,13 @@ impl Master {
           tig::Tig, sys.clone(), props.clone(), c.factory(), Arc::new(conf)
         ) {
           Ok(()) => (),
-          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+          Err(errors) => {
+            log.bad(& Kino, "Error launching invariant generation:") ;
+            for err in errors.iter() {
+              log.bad(& Kino, & format!("> {}", err))
+            }
+            return Err(())
+          },
         }
       },
     } ;
@@ -147,7 +171,13 @@ impl Master {
           c.factory(), Arc::new(conf)
         ) {
           Ok(()) => (),
-          Err(s) => { log.bad(& Kino, & s) ; return Err(()) },
+          Err(errors) => {
+            log.bad(& Kino, "Error launching invariant pruner:") ;
+            for err in errors.iter() {
+              log.bad(& Kino, & format!("> {}", err))
+            }
+            return Err(())
+          },
         }
       },
     } ;
@@ -177,7 +207,12 @@ impl Master {
 
         Ok( Bla(from, bla) ) => log.log(& from, & bla),
 
-        Ok( Error(from, bla) ) => log.bad(& from, & bla),
+        Ok( Error(from, errors) ) => {
+          log.bad(& from, "Error:") ;
+          for err in errors.iter() {
+            log.bad(& from, & format!("> {}", err))
+          }
+        },
 
         Ok( Warning(from, bla) ) => log.sad(& from, & bla),
 

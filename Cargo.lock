@@ -15,7 +15,7 @@ dependencies = [
 
 [[package]]
 name = "ansi_term"
-version = "0.7.5"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -60,9 +60,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "common"
 version = "0.1.0"
 dependencies = [
- "ansi_term 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "system 0.1.0",
  "term 0.2.0",
 ]
@@ -116,11 +116,6 @@ dependencies = [
 [[package]]
 name = "libc"
 version = "0.2.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "nom"
-version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -216,7 +211,7 @@ dependencies = [
 [[package]]
 name = "rsmt2"
 version = "0.4.3"
-source = "git+https://github.com/kino-mc/rsmt2#146142bb6d0b50a434d4cbfd841cf256715c68f7"
+source = "git+https://github.com/kino-mc/rsmt2#1926b7c9175b3d0592ef8d5d9b410872af57d31e"
 dependencies = [
  "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -244,6 +239,7 @@ dependencies = [
 name = "term"
 version = "0.2.0"
 dependencies = [
+ "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashconsing 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -256,6 +252,7 @@ name = "tig"
 version = "0.1.0"
 dependencies = [
  "common 0.1.0",
+ "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "system 0.1.0",
  "term 0.2.0",
  "unroll 0.1.0",
@@ -292,7 +289,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
-"checksum ansi_term 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)" = "30275ad0ad84ec1c06dde3b3f7d23c6006b7d76d61a85e7060b426b747eff70d"
+"checksum ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "23ac7c30002a5accbf7e8987d0632fa6de155b7c3d39d0067317a391e00a2ef6"
 "checksum backtrace 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f551bc2ddd53aea015d453ef0b635af89444afa5ed2405dd0b2062ad5d600d80"
 "checksum backtrace-sys 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "3602e8d8c43336088a8505fa55cae2b3884a9be29440863a11528a42f46f6bb7"
 "checksum cfg-if 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de1e760d7b6535af4241fca8bd8adf68e2e7edacc6b29f5d399050c5e48cf88c"
@@ -302,7 +299,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum hashconsing 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "29aaea4c9536a48b21fab143aa19038ef0aa728162be4e4b76e6b0d6212db76b"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)" = "684f330624d8c3784fb9558ca46c4ce488073a8d22450415c5eb4f4cfb0d11b5"
-"checksum nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "a5b8c256fd9471521bcb84c3cdba98921497f1a331cbc15b8030fc63b82050ce"
 "checksum nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e5d4598834859fedb9a0a69d5b862a970e77982a92f544d547257a4d49469067"
 "checksum num 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "bde7c03b09e7c6a301ee81f6ddf66d7a28ec305699e3d3b056d2fc56470e3120"
 "checksum num-bigint 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)" = "88b14378471f7c2adc5262f05b4701ef53e8da376453a8d8fee48e51db745e49"

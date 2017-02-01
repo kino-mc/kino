@@ -12,6 +12,8 @@
 use std::io ;
 use std::fmt ;
 
+use errors::* ;
+
 use base::{
   StateWritable, Writable, SVarWriter, PrintSmt2, PrintVmt, SymWritable,
   Offset2, HConsed, HConsign, HConser, State, SymPrintStyle
@@ -275,7 +277,7 @@ impl Operator {
   /** Evaluates itself given some arguments. */
   pub fn eval(
     & self, factory: & ::Factory, mut args: Vec<Cst>
-  ) -> Result<Cst, String> {
+  ) -> Res<Cst> {
     use Operator::* ;
     use ::real_term::Cst as RCst ;
     match * self {
@@ -292,7 +294,7 @@ impl Operator {
 
       Ite => if args.len() != 3 {
         Err(
-          format!("operator ite expects 3 arguments, got {}", args.len())
+          ErrorKind::OpArityError(Ite, args.len(), "3").into()
         )
       } else {
         args.reverse() ;
@@ -302,25 +304,25 @@ impl Operator {
             args.pop() ;
             Ok( args.pop().unwrap() )
           },
-          _ => Err(
-            format!(
-              "first argument of ite should have sort Bool, got {}", args[0]
-            )
+          ref arg => Err(
+            ErrorKind::OpTypeError(
+              Ite, arg.typ(), Type::Bool, Some("for first argument".into())
+            ).into()
           )
         }
       },
 
       Not => if args.len() != 1 {
         Err(
-          format!("operator not expects 1 argument, got {}", args.len())
+          ErrorKind::OpArityError(Not, args.len(), "1").into()
         )
       } else {
         match * args[0].get() {
           RCst::Bool(b) => Ok( factory.cst(! b) ),
-          _ => Err(
-            format!(
-              "first argument of not should have sort Bool, got {} ", args[0]
-            )
+          ref arg => Err(
+            ErrorKind::OpTypeError(
+              Not, arg.typ(), Type::Bool, None
+            ).into()
           )
         }
       },
@@ -331,12 +333,12 @@ impl Operator {
         for arg in args.iter() {
           match * arg.get() {
             RCst::Bool(b) => res = res && b,
-            _ => return Err(
-              format!(
-                "parameter {} of operator And:\n  \
-                  expected Bool, got {}",
-                cpt + 1, arg
-              )
+            ref arg => return Err(
+              ErrorKind::OpTypeError(
+                And, arg.typ(), Type::Bool, Some(
+                  format!("(found {} for argument {})", arg, cpt + 1)
+                )
+              ).into()
             )
           } ;
           cpt = cpt + 1 ;
@@ -350,12 +352,12 @@ impl Operator {
         for arg in args.iter() {
           match * arg.get() {
             RCst::Bool(b) => res = res || b,
-            _ => return Err(
-              format!(
-                "parameter {} of operator Or:\n  \
-                  expected Bool, got {}",
-                cpt + 1, arg
-              )
+            ref arg => return Err(
+              ErrorKind::OpTypeError(
+                Or, arg.typ(), Type::Bool, Some(
+                  format!("(found {} for argument {})", arg, cpt + 1)
+                )
+              ).into()
             )
           } ;
           cpt = cpt + 1 ;
@@ -375,12 +377,12 @@ impl Operator {
             } else {
               if b { so_far = true }
             },
-            _ => return Err(
-              format!(
-                "parameter {} of operator Impl:\n  \
-                  expected Bool, got {}",
-                cpt + 1, arg
-              )
+            ref arg => return Err(
+              ErrorKind::OpTypeError(
+                Impl, arg.typ(), Type::Bool, Some(
+                  format!("(found `{}` for argument {})", arg, cpt + 1)
+                )
+              ).into()
             )
           } ;
           cpt = cpt + 1 ;
@@ -394,12 +396,12 @@ impl Operator {
         for arg in args.iter() {
           match * arg.get() {
             RCst::Bool(b) => if b { trues = trues + 1 },
-            _ => return Err(
-              format!(
-                "parameter {} of operator Xor:\n  \
-                  expected Bool, got {}",
-                cpt + 1, arg
-              )
+            ref arg => return Err(
+              ErrorKind::OpTypeError(
+                Xor, arg.typ(), Type::Bool, Some(
+                  format!("(found `{}` for argument {})", arg, cpt + 1)
+                )
+              ).into()
             )
           } ;
           cpt = cpt + 1 ;
@@ -408,15 +410,16 @@ impl Operator {
       },
 
       Distinct => {
-        match Eq.eval(factory, args) {
-          Ok(cst) => match * cst.get() {
-            RCst::Bool(b) => Ok( factory.cst(! b) ),
-            _ => unreachable!(),
-          },
-          Err(s) => Err(
-            format!("in evaluation of Distinct as (not (= ...))\n{}", s)
-          ),
-        }
+        Eq.eval(factory, args).and_then(
+          |cst| match * cst.get() {
+            RCst::Bool(b) => Ok(factory.cst(! b)),
+            _ => Err(
+              "evaluation of equality returned a non-boolean value".into()
+            ),
+          }
+        ).chain_err(
+          || format!("in evaluation of Distinct as `(not (= ...))`")
+        )
       },
 
       Add => {
@@ -427,13 +430,15 @@ impl Operator {
             match res.add(& arg) {
               Ok(cst) => res = cst,
               Err(cst) => return Err(
-                format!("unexpected argument in operator Add: {}", cst)
+                ErrorKind::OpTypeError(
+                  Add, res.typ(), cst.typ(), None
+                ).into()
               ),
             }
           } ;
           Ok( factory.mk_rcst(res) )
         } else {
-          Err("operator Add applied to nothing".to_string())
+          Err( ErrorKind::OpArityError(Add, 0, "> 0").into() )
         }
       },
 
@@ -447,7 +452,9 @@ impl Operator {
             match res.sub(& arg) {
               Ok(cst) => res = cst,
               Err(cst) => return Err(
-                format!("unexpected argument in operator Sub: {}", cst)
+                ErrorKind::OpTypeError(
+                  Sub, res.typ(), cst.typ(), None
+                ).into()
               ),
             }
           } ;
@@ -458,7 +465,7 @@ impl Operator {
             factory.mk_rcst(res)
           )
         } else {
-          Err("operator Sub applied to nothing".to_string())
+          Err( ErrorKind::OpArityError(Sub, 0, "> 0").into() )
         }
       },
 
@@ -470,13 +477,15 @@ impl Operator {
             match res.mul(& arg) {
               Ok(cst) => res = cst,
               Err(cst) => return Err(
-                format!("unexpected argument in operator Mul: {}", cst)
+                ErrorKind::OpTypeError(
+                  Mul, res.typ(), cst.typ(), None
+                ).into()
               ),
             }
           } ;
           Ok( factory.mk_rcst(res) )
         } else {
-          Err("operator Mul applied to nothing".to_string())
+          Err( ErrorKind::OpArityError(Mul, 0, "> 0").into() )
         }
       },
 
@@ -488,13 +497,15 @@ impl Operator {
             match res.div(& arg) {
               Ok(cst) => res = cst,
               Err(cst) => return Err(
-                format!("unexpected argument in operator Div: {}", cst)
+                ErrorKind::OpTypeError(
+                  Sub, res.typ(), cst.typ(), None
+                ).into()
               ),
             }
           } ;
           Ok( factory.mk_rcst(res) )
         } else {
-          Err("operator Div applied to nothing".to_string())
+          Err( ErrorKind::OpArityError(Mul, 0, "> 0").into() )
         }
       },
 
@@ -502,96 +513,136 @@ impl Operator {
         match * args[0].get() {
           RCst::Int(ref lhs) => match * args[1].get() {
             RCst::Int(ref rhs) => Ok( factory.cst( lhs <= rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator <=: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Le, Type::Int, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
           RCst::Rat(ref lhs) => match * args[1].get() {
             RCst::Rat(ref rhs) => Ok( factory.cst( lhs <= rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator <=: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Le, Type::Rat, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
-          _ => Err(
-            format!("unexpected argument in operator <=: {}", args[1])
+          ref lhs => Err(
+            ErrorKind::OpTypeError(
+              Le, lhs.typ(), Type::Int, Some(
+                format!("or {} (found `{}`)", Type::Rat, lhs)
+              )
+            ).into()
           ),
         }
       } else {
-        Err(
-          format!("operator <= expects 2 arguments, got {:?}", args)
-        )
+          Err( ErrorKind::OpArityError(Le, args.len(), "2").into() )
       },
 
       Ge => if args.len() == 2 {
         match * args[0].get() {
           RCst::Int(ref lhs) => match * args[1].get() {
             RCst::Int(ref rhs) => Ok( factory.cst( lhs >= rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator >=: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Ge, Type::Int, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
           RCst::Rat(ref lhs) => match * args[1].get() {
             RCst::Rat(ref rhs) => Ok( factory.cst( lhs >= rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator >=: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Ge, Type::Rat, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
-          _ => Err(
-            format!("unexpected argument in operator >=: {}", args[1])
+          ref lhs => Err(
+            ErrorKind::OpTypeError(
+              Ge, lhs.typ(), Type::Int, Some(
+                format!("or {} (found `{}`)", Type::Rat, lhs)
+              )
+            ).into()
           ),
         }
       } else {
-        Err(
-          format!("operator >= expects 2 arguments, got {:?}", args)
-        )
+          Err( ErrorKind::OpArityError(Ge, args.len(), "2").into() )
       },
 
       Lt => if args.len() == 2 {
         match * args[0].get() {
           RCst::Int(ref lhs) => match * args[1].get() {
             RCst::Int(ref rhs) => Ok( factory.cst( lhs < rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator <: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Lt, Type::Int, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
           RCst::Rat(ref lhs) => match * args[1].get() {
             RCst::Rat(ref rhs) => Ok( factory.cst( lhs < rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator <: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Lt, Type::Rat, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
-          _ => Err(
-            format!("unexpected argument in operator <: {}", args[1])
+          ref lhs => Err(
+            ErrorKind::OpTypeError(
+              Lt, lhs.typ(), Type::Int, Some(
+                format!("or {} (found `{}`)", Type::Rat, lhs)
+              )
+            ).into()
           ),
         }
       } else {
-        Err(
-          format!("operator < expects 2 arguments, got {:?}", args)
-        )
+          Err( ErrorKind::OpArityError(Lt, args.len(), "2").into() )
       },
 
       Gt => if args.len() == 2 {
         match * args[0].get() {
           RCst::Int(ref lhs) => match * args[1].get() {
             RCst::Int(ref rhs) => Ok( factory.cst( lhs > rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator >: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Gt, Type::Int, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
           RCst::Rat(ref lhs) => match * args[1].get() {
             RCst::Rat(ref rhs) => Ok( factory.cst( lhs > rhs) ),
-            _ => Err(
-              format!("unexpected argument in operator >: {}", args[1])
+            ref rhs => Err(
+              ErrorKind::OpTypeError(
+                Gt, Type::Rat, args[1].typ(), Some(
+                  format!("(found `{}`)", rhs)
+                )
+              ).into()
             ),
           },
-          _ => Err(
-            format!("unexpected argument in operator >: {}", args[1])
+          ref lhs => Err(
+            ErrorKind::OpTypeError(
+              Gt, lhs.typ(), Type::Int, Some(
+                format!("or {} (found `{}`)", Type::Rat, lhs)
+              )
+            ).into()
           ),
         }
       } else {
-        Err(
-          format!("operator > expects 2 arguments, got {:?}", args)
-        )
+          Err( ErrorKind::OpArityError(Gt, args.len(), "2").into() )
       },
 
     }
@@ -976,7 +1027,7 @@ pub trait Factory :
   BindMaker<Term> {
 }
 
-pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
+pub fn bump<F: Factory>(f: & F, term: Term) -> Res<Term> {
   use var::RealVar::* ;
   zip::var_map(
     f,
@@ -987,7 +1038,7 @@ pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
           Ok( Some(nu) )
         },
         SVar(_,_) => Err(
-          format!("[bump] illegal svar {}", var)
+          format!("[bump] illegal svar {}", var).into()
         ),
         _ => Ok(None),
       },
@@ -997,7 +1048,7 @@ pub fn bump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
   )
 }
 
-pub fn debump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
+pub fn debump<F: Factory>(f: & F, term: Term) -> Res<Term> {
   use var::RealVar::* ;
   zip::var_map(
     f,
@@ -1008,7 +1059,7 @@ pub fn debump<F: Factory>(f: & F, term: Term) -> Result<Term,String> {
           Ok( Some(nu) )
         },
         SVar(_,_) => Err(
-          format!("[debump] illegal svar {}", var)
+          format!("[debump] illegal svar {}", var).into()
         ),
         _ => Ok(None),
       },
@@ -1535,6 +1586,7 @@ pub mod eval {
   use ::{
     Type, Cst, Sym, Term, Offset2, Factory, UnTermOps
   } ;
+  use ::errors::* ;
   use std::collections::HashMap ;
   use ::zip::{ Step, fold_info, extract } ;
   use ::zip::Step::* ;
@@ -1547,11 +1599,11 @@ pub mod eval {
     bindings: & [ HashMap<Sym, Cst> ],
     quantified: & [ HashMap<Sym, Type> ],
     scope: & Sym
-  ) -> Result<Cst, String> {
+  ) -> Res<Cst> {
     match step {
 
       App(_, _) => Err(
-        "evaluation of applications is not implemented".to_string()
+        "evaluation of applications is not implemented".into()
       ),
 
       Op(op, args) => op.eval(factory, args),
@@ -1569,7 +1621,7 @@ pub mod eval {
             Some(cst) => Ok( cst.clone() ),
             None => match extract(& sym, quantified) {
               Some(_) => Err(
-                format!("cannot evaluate quantified variable {}", var)
+                format!("cannot evaluate quantified variable {}", var).into()
               ),
               None => match factory.type_of(& var, Some(scope.clone())) {
                 Ok(typ) => Ok(
@@ -1579,7 +1631,7 @@ pub mod eval {
                   format!(
                     "variable {} not found in model\n\
                     or in type cache\n{}", var, e
-                  )
+                  ).into()
                 ),
               },
             },
@@ -1587,7 +1639,7 @@ pub mod eval {
         }
       },
 
-      _ => Err("evaluation of quantifiers is not implemented".to_string()),
+      _ => Err("evaluation of quantifiers is not implemented".into()),
     }
   }
 
@@ -1595,7 +1647,7 @@ pub mod eval {
   pub fn eval(
     factory: & Factory, term: & Term, offset: & Offset2,
     model: & ::Model, scope: Sym
-  ) -> Result<Cst, String> {
+  ) -> Res<Cst> {
     let mut map = HashMap::new() ;
     for & ( (ref v, ref o), ref cst ) in model.iter() {
       if let Some(ref o) = * o {

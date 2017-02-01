@@ -14,6 +14,8 @@ use std::fmt::Debug ;
 
 use nom::{ multispace, IResult } ;
 
+use errors::* ;
+
 use base::{ State, Offset, Offset2, Smt2Offset } ;
 use typ::Type ;
 use sym::Sym ;
@@ -29,18 +31,18 @@ use super::{
 
 trait TermApply: Sized {
   fn apply<
-    F: Fn(Term) -> Result<Term,String>
-  >(& self, F) -> Result<Self, String> ;
+    F: Fn(Term) -> Res<Term>
+  >(& self, F) -> Res<Self> ;
 }
 impl TermApply for Term {
   fn apply<
-    F: Fn(Term) -> Result<Term,String>
-  >(& self, f: F) -> Result<Self, String> { f(self.clone()) }
+    F: Fn(Term) -> Res<Term>
+  >(& self, f: F) -> Res<Self> { f(self.clone()) }
 }
 impl TermApply for (Sym, Term) {
   fn apply<
-    F: Fn(Term) -> Result<Term,String>
-  >(& self, f: F) -> Result<Self, String> {
+    F: Fn(Term) -> Res<Term>
+  >(& self, f: F) -> Res<Self> {
     match f(self.1.clone()) {
       Ok(t) => Ok( (self.0.clone(), t) ),
       Err(s) => Err(s),
