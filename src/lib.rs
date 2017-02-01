@@ -25,7 +25,7 @@ extern crate pruner ;
 
 mod master ;
 
-// pub use term::* ;
+pub use term::{ Sym, SymMaker } ;
 pub use system::* ;
 // pub use unroll::* ;
 // pub use common::* ;
