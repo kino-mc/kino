@@ -16,7 +16,6 @@ script:
   
 os:
   - linux
-  - osx
   
 branchs:
   only:
