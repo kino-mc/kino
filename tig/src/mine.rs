@@ -17,7 +17,7 @@ use term::{
 
 use system::Sys ;
 
-use common::Res ;
+use common::errors::* ;
 
 /// A set of symbols.
 pub type SymSet = HashSet<Sym> ;

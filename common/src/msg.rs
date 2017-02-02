@@ -23,7 +23,9 @@ use term::{
 
 use sys::{ Prop, Sys } ;
 
-use ::{ Tek, CanRun, Res } ;
+use ::{ Tek, CanRun } ;
+
+use errors::* ;
 
 /// Wrapper around master and kids receive and send channels.
 pub struct KidManager {
@@ -45,25 +47,29 @@ impl KidManager {
     Conf: 'static + Sync + Send, T: CanRun<Conf> + Send + 'static
   >(
     & mut self, t: T, sys: Sys, props: Vec<Prop>, f: & Factory, conf: Arc<Conf>
-  ) -> Result<(), String> {
+  ) -> Res<()> {
     let (s,r) = mpsc::channel() ;
-    let id = t.id().clone() ;
+    let id = t.id() ;
     let event = Event::mk(
       self.s.clone(), r, t.id().clone(), f.clone(), & props
     ) ;
-    match thread::Builder::new().name(id.thread_name()).spawn(
+    match self.senders.get( & id ) {
+      None => (),
+      Some(_) => bail!(
+        ErrorKind::TekDuplicateError(id)
+      ),
+    }
+    match thread::Builder::new().name( id.thread_name() ).spawn(
       move || t.run(conf, sys, props, event)
     ) {
       Ok(_) => (),
-      Err(e) => return Err(
-        format!("could not spawn process {}:\n{}", id.desc(), e)
+      Err(e) => bail!(
+        ErrorKind::TekSpawnError(e, id)
       ),
     } ;
     match self.senders.insert(id, s) {
       None => Ok(()),
-      Some(_) => Err(
-        format!("technique {} is already running", id.to_str())
-      ),
+      Some(_) => unreachable!(),
     }
   }
 
@@ -82,17 +88,18 @@ impl KidManager {
 
   /// Receive a message from the kids.
   #[inline(always)]
-  pub fn recv(& self) -> Result<MsgUp, mpsc::RecvError> {
-    self.r.recv()
+  pub fn recv(& self) -> Res<MsgUp> {
+    self.r.recv().chain_err(
+      || ErrorKind::MsgRcvError(Tek::Kino)
+    )
   }
   /// Forget a kid.
   #[inline(always)]
   pub fn forget(& mut self, t: & Tek) -> Res<()> {
-    try_str_opt!(
-      self.senders.remove(t),
-      "[KidManager::forget] No instance of {} running", t.to_str()
-    ) ;
-    Ok(())
+    match self.senders.remove(t) {
+      Some(_) => Ok(()),
+      None => bail!( ErrorKind::TekUnknownError(* t) ),
+    }
   }
   /// True iff there's no more kids known by the manager.
   #[inline(always)]
@@ -203,7 +210,7 @@ pub enum MsgUp {
   /// Warning message.
   Warning(Tek, String),
   /// Error message.
-  Error(Tek, String),
+  Error(Tek, ::errors::Error),
   /// Tek is done.
   Done(Tek, Info),
   /// KTrue.
@@ -302,6 +309,12 @@ impl Event {
     Event { s: s, r: r, t: t, f: f, k_true: k_true }
   }
 
+  /// The technique this event manager belongs to.
+  #[inline]
+  pub fn tek(& self) -> Tek {
+    self.t
+  }
+
   /// Sends a pruned invariant message upwards.
   pub fn pruned_invariants(
     & self, tek: Tek, sys: & Sym, invs: STermSet, old_card: usize,
@@ -368,9 +381,9 @@ impl Event {
     ).unwrap_or_else( exit )
   }
   /// Sends an error upwards.
-  pub fn error(& self, s: & str) {
+  pub fn error(& self, e: ::errors::Error) {
     self.s.send(
-      MsgUp::Error(self.t, s.to_string())
+      MsgUp::Error(self.t, e)
     ).unwrap_or_else( exit )
   }
   /// Sends a warning upwards.

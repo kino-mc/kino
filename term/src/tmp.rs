@@ -6,6 +6,7 @@ use std::collections::{ HashSet, HashMap } ;
 use std::fmt ;
 
 use rsmt2::Expr2Smt ;
+use errors::* ;
 use super::{
   Term, Type, Operator, Offset2
 } ;
@@ -59,7 +60,7 @@ impl TmpTerm {
   /// Returns an error if the temp term contains a `Sym`. That's because
   /// a symbol in a temp term is a temporary symbol. There is currently no
   /// situation where a temporary symbol needs to be converted to a term.
-  pub fn to_term_safe(mut self, factory: & Factory) -> Result<Term, String> {
+  pub fn to_term_safe(mut self, factory: & Factory) -> Res<Term> {
     use term::OpMaker ;
     use self::TmpTerm::* ;
 
@@ -120,11 +121,13 @@ impl TmpTerm {
           // Reverse kids so that it's in the right order in the stack.
           kids.reverse() ;
           // Retrieving first kid.
-          self = match kids.pop() {
-            Some(kid) => kid,
-            None => return Err(
-              format!("illegal application of op {} with no kids", op)
-            ),
+          self = if let Some(kid) = kids.pop() { kid } else {
+            let e: Res<Term> = Err(
+              ErrorKind::OpArityError(op, 0, "> 1").into()
+            ) ;
+            return e.chain_err(
+              || ErrorKind::TmpTransError
+            )
           } ;
           // Updating stack.
           stack.push(
@@ -133,13 +136,19 @@ impl TmpTerm {
         },
 
         // Symbols are illegal.
-        Sym(s, t) => return Err(
-          format!(
-            "temporary term contains a symbol {}: {}\n\
-            conversion to actual term is unsafe",
-            s, t
+        Sym(s, t) => {
+          let e: Res<Term> = Err(
+            format!(
+              "temporary term contains a symbol {} ({})", s, t
+            ).into()
+          ) ;
+          return e.chain_err(
+            || "conversion to actual term is unsafe and \
+              should not be needed anyway"
+          ).chain_err(
+            || ErrorKind::TmpTransError
           )
-        ),
+        },
       }
     }
   }
@@ -180,22 +189,27 @@ impl TmpTerm {
     )
   }
 
-  /** Inspects a term to write it. Pushes to the input stack if the term
-  is a node. */
+  /// Inspects a term to write it. Pushes to the input stack if the term
+  /// is a node.
   fn inspect_write_stack(
     & self, writer: & mut ::std::io::Write, offset: & Offset2,
     stack: & mut Vec< Vec<TmpTerm> >
-  ) -> ::std::io::Result<()> {
+  ) -> ::rsmt2::errors::Res<()> {
     use self::TmpTerm::* ;
     match * self {
-      Sym(ref id, _) => write!(writer, "{}", id),
+      Sym(ref id, _) => smt_cast_io!(
+        format!("writing id `{}`", id) => write!(writer, "{}", id)
+      ),
       Trm(ref term) => term.expr_to_smt2(writer, offset),
       Nod(ref op, ref kids) => {
         use write::Writable ;
         let mut kids = kids.clone() ;
         kids.reverse() ;
-        try!( write!(writer, "(") ) ;
-        try!( op.write(writer) ) ;
+        smtry_io!(
+          format!("writing opening for operator `{}`", op) =>
+            write!(writer, "(") ;
+            op.write(writer) ;
+        ) ;
         stack.push( kids ) ;
         Ok(())
       },
@@ -233,7 +247,7 @@ impl fmt::Display for TmpTerm {
 impl Expr2Smt<Offset2> for TmpTerm {
   fn expr_to_smt2(
     & self, writer: & mut ::std::io::Write, offset: & Offset2
-  ) -> ::std::io::Result<()> {
+  ) -> ::rsmt2::errors::Res<()> {
     let mut stack = Vec::with_capacity(5) ;
     try!(
       self.inspect_write_stack(writer, offset, & mut stack)
@@ -242,10 +256,17 @@ impl Expr2Smt<Offset2> for TmpTerm {
     while let Some(mut kids) = stack.pop() {
       if let Some(term) = kids.pop() {
         stack.push(kids) ;
-        try!( write!(writer, " ") ) ;
-        try!( term.inspect_write_stack(writer, offset, & mut stack) ) ;
+        smtry_io!(
+          format!("writing expressions `{}` with offset `{}`", self, offset) =>
+            write!(writer, " ") ;
+            term.inspect_write_stack(writer, offset, & mut stack) ;
+        )
       } else {
-        try!( write!(writer, ")") )
+        smtry_io!(
+          format!(
+            "writing closing paren for expressions `{}`", self
+          ) => write!(writer, ")")
+        )
       }
     }
 

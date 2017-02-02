@@ -10,7 +10,7 @@
 /*! Term factory stuff. */
 
 use std::collections::HashMap ;
-use std::sync::{ Mutex, Arc } ;
+use std::sync::{ RwLock, Arc } ;
 
 use nom::IResult ;
 
@@ -28,6 +28,8 @@ use term::{
 } ;
 use parser ;
 use parser::vmt::TermAndDep ;
+
+use errors::* ;
 
 macro_rules! try_parse {
   ($fun:expr, $arg: expr, $res:pat => $b:block) => (
@@ -56,13 +58,13 @@ pub struct Factory {
   /// Maps terms to types, scoped. Lazy, computes types on demand.
   ///
   /// To use, make sure you manually insert the type of variables.
-  scoped_types: Arc< Mutex< HashMap<(Sym, Term), Type> > >,
+  scoped_types: Arc< RwLock< HashMap<(Sym, Term), Type> > >,
   /// Maps terms to types, global. Lazy, computes types on demand.
   ///
   /// To use, make sure you manually insert the type of variables.
-  unscoped_types: Arc< Mutex< HashMap<Term, Type> > >,
+  unscoped_types: Arc< RwLock< HashMap<Term, Type> > >,
   /// Maps function symbols to their type.
-  fun_types: Arc< Mutex< HashMap<Sym, Type> > >,
+  fun_types: Arc< RwLock< HashMap<Sym, Type> > >,
 }
 
 // /** Helper macro to create operators. */
@@ -103,13 +105,13 @@ impl Factory {
       cst: CstConsign::mk(),
       term: TermConsign::mk(),
       scoped_types: Arc::new(
-        Mutex::new( HashMap::with_capacity(107) )
+        RwLock::new( HashMap::with_capacity(107) )
       ),
       unscoped_types: Arc::new(
-        Mutex::new( HashMap::with_capacity(107) )
+        RwLock::new( HashMap::with_capacity(107) )
       ),
       fun_types: Arc::new(
-        Mutex::new( HashMap::with_capacity(107) )
+        RwLock::new( HashMap::with_capacity(107) )
       ),
     }
   }
@@ -117,24 +119,22 @@ impl Factory {
   /// An iterator over the constants in the factory.
   #[inline]
   pub fn cst_fold<
-    T, F: Fn(T, & Cst) -> T
+    T, F: Fn(T, Cst) -> T
   >(& self, init: T, f: F) -> T {
-    self.cst.lock().unwrap().iter().fold(
-      init, | data, (_, snd) | f(data, snd)
-    )
+    self.cst.read().unwrap().fold(f, init)
   }
 
   /// Inserts a type for a variable without doing anything else.
   pub fn set_fun_type(
     & self, sym: Sym, typ: Type
-  ) -> Result<(), String> {
+  ) -> Res<()> {
     let sym_bak = sym.clone() ;
-    match self.fun_types.lock().unwrap().insert( sym, typ ) {
+    match self.fun_types.write().unwrap().insert( sym, typ ) {
       Some(t) if t != typ => Err(
         format!(
           "trying to redefine type of function {} from {} to {}",
           sym_bak, t, typ
-        )
+        ).into()
       ),
       _ => Ok(())
     }
@@ -143,27 +143,27 @@ impl Factory {
   /// Inserts a type for a variable without doing anything else.
   fn set_type_unsafe(
     & self, sym: Option<Sym>, term: Term, typ: Type
-  ) -> Result<(), String> {
+  ) -> Res<()> {
     let t_bak = term.clone() ;
     match sym {
       Some(sym) => {
         let sym_bak = sym.clone() ;
-        match self.scoped_types.lock().unwrap().insert( (sym, term), typ ) {
+        match self.scoped_types.write().unwrap().insert( (sym, term), typ ) {
           Some(t) if t != typ => Err(
             format!(
               "trying to redefine type of {}::{} from {} to {}",
               sym_bak, t_bak, t, typ
-            )
+            ).into()
           ),
           _ => Ok(())
         }
       },
-      None => match self.unscoped_types.lock().unwrap().insert( term, typ ) {
+      None => match self.unscoped_types.write().unwrap().insert( term, typ ) {
         Some(t) if t != typ => Err(
           format!(
             "trying to redefine type of {} from {} to {}",
             t_bak, t, typ
-          )
+          ).into()
         ),
         _ => Ok(())
       },
@@ -178,7 +178,7 @@ impl Factory {
   /// Setting a different type for an already typed variable is an error.
   pub fn set_var_type(
     & self, sym: Option<Sym>, v: Var, typ: Type
-  ) -> Result<(), String> {
+  ) -> Res<()> {
     match v.state() {
       None => {
         let var = self.mk_var(v) ;
@@ -211,23 +211,25 @@ impl Factory {
   /// the term is unknown.
   pub fn type_of(
     & self, term: & Term, scope: Option<Sym>
-  ) -> Result<Type, String> {
+  ) -> Res<Type> {
     match scope {
       Some(scope) => {
-        match self.scoped_types.lock().unwrap().get(
+        match self.scoped_types.read().unwrap().get(
           & (scope.clone(), term.clone())
         ) {
           Some(typ) => Ok(* typ),
           None => Err(
-            format!("can't type unknown term {} under scope {}", term, scope)
+            format!(
+              "can't type unknown term {} under scope {}", term, scope
+            ).into()
           ),
         }
       },
       None => {
-        match self.unscoped_types.lock().unwrap().get( term ) {
+        match self.unscoped_types.read().unwrap().get( term ) {
           Some(typ) => Ok(* typ),
           None => Err(
-            format!("can't type unknown term {}", term)
+            format!("can't type unknown term {}", term).into()
           ),
         }
       },
@@ -415,23 +417,23 @@ impl Factory {
   /// Evaluates a term.
   pub fn eval(
     & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
-  ) -> Result<Cst, String> {
+  ) -> Res<Cst> {
     ::term::eval::eval(& self, term, off, model, scope)
   }
 
   /// Evaluates a term to a bool value.
   pub fn eval_bool(
     & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
-  ) -> Result<Bool, String> {
+  ) -> Res<Bool> {
     use ::real_term::Cst::* ;
     match ::term::eval::eval(& self, term, off, model, scope) {
       Ok(val) => match * val.get() {
         Bool(ref b) => Ok(* b),
         Int(ref i) => Err(
-          format!("[eval_bool] got integer value {}", i)
+          format!("[eval_bool] got integer value `{}`", i).into()
         ),
         Rat(ref r) => Err(
-          format!("[eval_bool] got rational value {}", r)
+          format!("[eval_bool] got rational value `{}`", r).into()
         ),
       },
       Err(e) => Err(e),
@@ -441,16 +443,16 @@ impl Factory {
   /// Evaluates a term to an integer value.
   pub fn eval_int(
     & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
-  ) -> Result<Int, String> {
+  ) -> Res<Int> {
     use ::real_term::Cst::* ;
     match ::term::eval::eval(& self, term, off, model, scope) {
       Ok(val) => match * val.get() {
         Int(ref i) => Ok(i.clone()),
         Bool(ref b) => Err(
-          format!("[eval_int] got bool value {}", b)
+          format!("[eval_int] got bool value `{}`", b).into()
         ),
         Rat(ref r) => Err(
-          format!("[eval_int] got rational value {}", r)
+          format!("[eval_int] got rational value `{}`", r).into()
         ),
       },
       Err(e) => Err(e),
@@ -460,16 +462,16 @@ impl Factory {
   /// Evaluates a term to an integer value.
   pub fn eval_rat(
     & self, term: & Term, off: & Offset2, model: & ::Model, scope: Sym
-  ) -> Result<Rat, String> {
+  ) -> Res<Rat> {
     use ::real_term::Cst::* ;
     match ::term::eval::eval(& self, term, off, model, scope) {
       Ok(val) => match * val.get() {
         Rat(ref r) => Ok(r.clone()),
         Bool(ref b) => Err(
-          format!("[eval_int] got bool value {}", b)
+          format!("[eval_int] got bool value `{}`", b).into()
         ),
         Int(ref i) => Err(
-          format!("[eval_int] got integer value {}", i)
+          format!("[eval_int] got integer value `{}`", i).into()
         ),
       },
       Err(e) => Err(e),
@@ -635,12 +637,12 @@ pub trait UnTermOps<Trm> {
 
   * changes all `SVar(sym, State::curr)` to `SVar(sym, State::next)`,
   * returns `Err(())` if input term contains a `SVar(_, State::next)`. */
-  fn bump(& self, Trm) -> Result<Term,String> ;
+  fn bump(& self, Trm) -> Res<Term> ;
   /** Bumps a term.
 
   * changes all `SVar(sym, State::next)` to `SVar(sym, State::curr)`,
   * returns `Err(())` if input term contains a `SVar(_, State::curr)`. */
-  fn debump(& self, Trm) -> Result<Term,String> ;
+  fn debump(& self, Trm) -> Res<Term> ;
 }
 // impl<
 //   'a, Trm: Clone, T: UnTermOps<Trm> + Sized
@@ -656,19 +658,19 @@ pub trait UnTermOps<Trm> {
 // }
 
 impl UnTermOps<Term> for Factory {
-  fn bump(& self, term: Term) -> Result<Term,String> {
+  fn bump(& self, term: Term) -> Res<Term> {
     bump(self, term)
   }
-  fn debump(& self, term: Term) -> Result<Term,String> {
+  fn debump(& self, term: Term) -> Res<Term> {
     debump(self, term)
   }
 }
 
 impl<'a> UnTermOps<& 'a Term> for Factory {
-  fn bump(& self, term: & 'a Term) -> Result<Term,String> {
+  fn bump(& self, term: & 'a Term) -> Res<Term> {
     self.bump( term.clone() )
   }
-  fn debump(& self, term: & 'a Term) -> Result<Term,String> {
+  fn debump(& self, term: & 'a Term) -> Res<Term> {
     self.debump( term.clone() )
   }
 }

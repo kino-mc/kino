@@ -54,7 +54,7 @@ impl CanRun<conf::Bmc> for Bmc {
     mk_solver_run!(
       solver_conf, conf.smt_log(), "bmc", event.factory(),
       solver => bmc(solver, sys, props, & mut event),
-      msg => event.error(msg)
+      err => event.error(err)
     )
   }
 }
@@ -68,16 +68,15 @@ fn bmc<
   let init_off = Offset2::init() ;
   let mut k = Offset2::init() ;
 
-  let mut unroller = try_error!(
-    Unroller::mk(& sys, & props, solver), event,
-    "while creating unroller"
+  let mut unroller = log_try!(
+    event, Unroller::mk(& sys, & props, solver)
+    => "while creating unroller"
   ) ;
 
   // event.log("creating manager, declaring actlits") ;
-  let mut props = try_error!(
-    PropManager::mk(props, unroller.solver()),
-    event,
-    "while creating property manager"
+  let mut props = log_try!(
+    event, PropManager::mk(props, unroller.solver())
+    => "while creating property manager"
   ) ;
 
   if props.none_left() {
@@ -87,15 +86,15 @@ fn bmc<
   }
 
   // event.log("declare svar@0 and assert init@0") ;
-  try_error!(
-    unroller.assert_init(& k), event,
-    "while asserting init"
+  log_try!(
+    event, unroller.assert_init(& k)
+    => "while asserting init"
   ) ;
 
   // event.log("asserting one-state invariants") ;
-  try_error!(
-    unroller.assert_os_invs(& k), event,
-    "while asserting one state invariants"
+  log_try!(
+    event, unroller.assert_os_invs(& k)
+    => "while asserting one state invariants"
   ) ;
 
   props.reset_inhibited() ;
@@ -107,9 +106,9 @@ fn bmc<
   'unroll: loop {
 
     if ! doing_init {
-      try_error!(
-        unroller.unroll(& k), event,
-        "while unrolling system at {}", k
+      log_try!(
+        event, unroller.unroll(& k)
+        => "while unrolling system at {}", k
       ) ;
     }
 
@@ -119,21 +118,22 @@ fn bmc<
       None => break,
       Some(msgs) => for msg in msgs {
         match msg {
-          MsgDown::Forget(ps, _) => try_error!(
-            props.forget(unroller.solver(), ps.iter()),
-            event,
-            "while forgetting property in manager"
+          MsgDown::Forget(ps, _) => log_try!(
+            event, props.forget(unroller.solver(), ps.iter())
+            => "while forgetting property in manager"
           ),
           MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
             // event.log(
             //   & format!("received {} invariants", invs.len())
             // ) ;
-            try_error!(
-              unroller.add_invs(invs, & init_off, & k), event,
-              "while adding invariants from supervisor"
+            log_try!(
+              event, unroller.add_invs(invs, & init_off, & k)
+              => "while adding invariants from supervisor"
             )
           },
-          _ => event.error("unknown message")
+          msg => event.error(
+            format!("unexpected message `{:?}`", msg).into()
+          )
         }
       },
     } ;
@@ -144,9 +144,9 @@ fn bmc<
     }
 
     // Check that the unrolling is satisfiable by itself.
-    if ! try_error!(
-      unroller.check_sat(), event,
-      "could not perform `check-sat`"
+    if ! log_try!(
+      event, unroller.check_sat()
+      => "could not perform `check-sat`"
     ) {
       // No more transitions can be taken, all remaining properties
       // hold.
@@ -168,15 +168,15 @@ fn bmc<
       } else { props.one_false_next() } {
 
         // Setting up the negative actlit.
-        let actlit = try_error!(
-          unroller.fresh_actlit(), event,
-          "while declaring activation literal at {}", k
+        let actlit = log_try!(
+          event, unroller.fresh_actlit()
+          => "while declaring activation literal at {}", k
         ) ;
         let implication = actlit.activate_term(one_prop_false) ;
 
-        try_error!(
-          unroller.assert(& implication, & k), event,
-          "while asserting implication at {} (2)", k
+        log_try!(
+          event, unroller.assert(& implication, & k)
+          => "while asserting implication at {} (2)", k
         ) ;
 
         // Building list of actlits for this check.
@@ -184,40 +184,39 @@ fn bmc<
         actlits.push(actlit.name()) ;
 
         // Check sat.
-        let is_sat = try_error!(
-          unroller.check_sat_assuming( & actlits ), event,
-          "during a `check_sat_assuming` query at {}", k
+        let is_sat = log_try!(
+          event, unroller.check_sat_assuming( & actlits )
+          => "during a `check_sat_assuming` query at {}", k
         ) ;
 
         if is_sat {
           // event.log("sat, getting falsified properties") ;
-          let falsified = try_error!(
-            if doing_init {
+          let falsified = log_try!(
+            event, if doing_init {
               props.get_false_state(unroller.solver(), & k)
             } else {
               props.get_false_next(unroller.solver(), & k)
-            }, event,
-            "could not retrieve falsified properties"
+            } => "could not retrieve falsified properties"
           ) ;
-          let model = try_error!(
-            unroller.solver().get_model(), event,
-            "could not retrieve model"
+          let model = log_try!(
+            event, unroller.solver().get_model()
+            => "could not retrieve model"
           ) ;
-          try_error!(
-            props.forget(unroller.solver(), falsified.iter()), event,
-            "while forgetting property in manager"
+          log_try!(
+            event, props.forget(unroller.solver(), falsified.iter())
+            => "while forgetting property in manager"
           ) ;
-          try_error!(
-            unroller.deactivate(actlit), event,
-            "could not deactivate negative actlit"
+          log_try!(
+            event, unroller.deactivate(actlit)
+            => "could not deactivate negative actlit"
           ) ;
           event.disproved_at(model, falsified, k.curr())
         } else {
           // event.log("unsat") ;
           event.k_true(props.not_inhibited(), k.curr()) ;
-          try_error!(
-            unroller.deactivate(actlit), event,
-            "could not deactivate negative actlit"
+          log_try!(
+            event, unroller.deactivate(actlit)
+            => "could not deactivate negative actlit"
           ) ;
           break 'this_k
         }

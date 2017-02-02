@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
-nom = "1.2.0"
+nom = "*"
 term = { path = "../term" }

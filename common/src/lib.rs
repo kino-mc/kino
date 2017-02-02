@@ -17,6 +17,8 @@
 extern crate ansi_term as ansi ;
 #[macro_use]
 extern crate nom ;
+#[macro_use]
+extern crate error_chain ;
 extern crate term ;
 extern crate system as sys ;
 
@@ -31,63 +33,103 @@ use term::smt::{
 
 use sys::{ Prop, Sys } ;
 
-/// Try for `Result<T, String>`, appends something to error messages.
+/// Kino errors using [`error-chain`](https://crates.io/crates/error-chain).
+pub mod errors {
+  error_chain!{
+    types {
+      Error, ErrorKind, ResExt, Res ;
+    }
+
+    links {
+      RSmt2(::term::errors::Error, ::term::errors::ErrorKind) #[doc = "
+        An error from the [`rsmt2`](https://crates.io/crates/rsmt2) library.
+      "] ;
+    }
+
+    errors {
+      #[doc = "Error while spawning solver process."]
+      SolverSpawnError(e: ::std::io::Error) {
+        description("error while spawning solver process")
+        display("could not spawn solver process: {:?}", e)
+      }
+
+      #[doc = "Error while interacting with a file."]
+      FileIoError(file: String, e: ::std::io::Error) {
+        description("error on file IO")
+        display("error on file `{}`: {:?}", file, e)
+      }
+
+      #[doc = "Trying to spawn a technique that's already running."]
+      TekDuplicateError(tek: ::Tek) {
+        description("trying to spawn a technique that's already running")
+        display("cannot spawn `{}`: already running", tek)
+      }
+
+      #[doc = "Trying to contact a technique that's not running."]
+      TekUnknownError(tek: ::Tek) {
+        description("unknown technique")
+        display("technique `{}` is not running", tek)
+      }
+
+      #[doc = "Error while spawning a technique."]
+      TekSpawnError(e: ::std::io::Error, tek: ::Tek) {
+        description("error while trying to spawn a technique")
+        display("error while spawning `{}`", tek)
+      }
+
+      #[doc = "Error while trying to receive a message."]
+      MsgRcvError(tek: ::Tek) {
+        description("error while trying to receive a message")
+        display("error during message reception in `{}`", tek)
+      }
+
+      #[doc = "Error while sending a message."]
+      MsgSndError(src: ::Tek, tgt: ::Tek) {
+        description("error while sending a message")
+        display("could not send message from `{}` to `{}`", src, tgt)
+      }
+    }
+  }
+}
+
+/// Communicates an error and returns `()` if computation is an `Err`, yields
+/// the result (inside the `Ok`) otherwise.
 #[macro_export]
-macro_rules! try_str {
-  ($e:expr, $($blah:expr),+) => (
+macro_rules! log_try {
+  ($event:expr, $e:expr) => (
     match $e {
       Ok(res) => res,
-      Err(msg) => return Err(
-        format!(
-          "{}\n{}", format!( $($blah),+ ), msg
-        )
-      ),
+      Err(e) => {
+        $event.error(e) ;
+        return ()
+      },
     }
+  ) ;
+  ($event:expr, $e:expr => $s:expr) => (
+    log_try!($event, $crate::errors::ResExt::chain_err($e, || $s))
+  ) ;
+  ($event:expr, $e:expr => $($fmt:expr),+ $(,)*) => (
+    log_try!($event, $crate::errors::ResExt::chain_err(
+      $e, || format!($($fmt),+)
+    ))
   ) ;
 }
 
-/// Try for `Option<T>`.
+/// Combines `try` and `chain_err` for strings.
 #[macro_export]
-macro_rules! try_str_opt {
-  ($e:expr, $($blah:expr),+) => (
-    match $e {
-      Some(res) => res,
-      None => return Err(
-        format!( $($blah),+ )
-      ),
-    }
+macro_rules! try_chain {
+  ($e:expr) => ( try!($e) ) ;
+  ($e:expr => $s:expr) => (
+    try_chain!($crate::errors::ResExt::chain_err($e, || $s))
+  ) ;
+  ($e:expr => $($fmt:expr),+ $(,)*) => (
+    try_chain!($crate::errors::ResExt::chain_err($e, || format!($($fmt),+)))
   ) ;
 }
 
 pub mod msg ;
 pub mod log ;
 pub mod conf ;
-
-/// Tries to run something. If `Err`, communicate error and return unit.
-#[macro_export]
-macro_rules! try_error {
-  ($e:expr, $event:expr, $($blah:expr),+) => (
-    match $e {
-      Ok(v) => v,
-      Err(e) => {
-        let blah = format!( $( $blah ),+ ) ;
-        $event.error( & format!("{}\n{}", blah, e) ) ;
-        $event.done($crate::msg::Info::Error) ;
-        return ()
-      },
-    }
-  ) ;
-  ($e:expr, $event:expr) => (
-    match $e {
-      Ok(v) => v,
-      Err(e) => {
-        $event.error( & e ) ;
-        $event.done($crate::msg::Info::Error) ;
-        return ()
-      },
-    }
-  )
-}
 
 
 /// Solver trait that bmc and kind will use.
@@ -110,7 +152,7 @@ impl<'a> SolverTrait<'a> for TeeSolver<'a, Factory> {}
 ///   "smt_log_file_name_without_smt2_extension",
 ///   factory, // Cloned in the macro, should be a ref.
 ///   solver => blah(conf, event, solver),
-///   error_msg => event.error(error_msg)
+///   error => event.error(error)
 /// }
 /// ```
 /// 
@@ -134,9 +176,14 @@ macro_rules! mk_solver_run {
     $solver:ident => $run:expr,
     $err:ident => $errun:expr
   ) => (
-    match term::smt::Kid::mk($conf) {
-      Ok(mut kid) => match term::smt::solver(
-        & mut kid, $factory.clone()
+    match $crate::errors::ResExt::chain_err(
+      term::smt::Kid::mk($conf),
+      || "while spawning solver kid"
+    ) {
+      Ok(mut kid) => match $crate::errors::ResExt::chain_err(
+        term::smt::solver(
+          & mut kid, $factory.clone()
+        ), || "while creating solver from kid"
       ) {
         Ok($solver) => match * $smt_log {
           None => $run,
@@ -148,27 +195,21 @@ macro_rules! mk_solver_run {
                 $run
               },
               Err(e) => {
-                let $err = & format!(
-                  "could not open smt log file \"{}\":\n{:?}", path, e
+                use $crate::errors::Res ;
+                let e: Res<()> = Err(
+                  $crate::errors::ErrorKind::FileIoError(path, e).into()
                 ) ;
+                let $err = $crate::errors::ResExt::chain_err(
+                  e, || "while creating SMT solver tee file"
+                ).unwrap_err() ;
                 $errun
               },
             }
           },
         },
-        Err(e) => {
-          let $err = & format!(
-            "could not create solver from kid:\n{}", e
-          ) ;
-          $errun
-        },
+        Err($err) => $errun,
       },
-      Err(e) => {
-        let $err = & format!(
-          "could not spawn solver kid:\n{}", e
-        ) ;
-        $errun
-      },
+      Err($err) => $errun,
     }
   ) ;
 }
@@ -185,14 +226,29 @@ macro_rules! mk_two_solver_run {
     ) => $run:expr,
     $err:ident => $errun:expr
   ) => (
-    match ( term::smt::Kid::mk($conf.clone()), term::smt::Kid::mk($conf) ) {
+    match (
+      $crate::errors::ResExt::chain_err(
+        term::smt::Kid::mk($conf.clone()),
+        || format!("while creating {} solver kid", $log_suff1)
+      ), $crate::errors::ResExt::chain_err(
+        term::smt::Kid::mk($conf),
+        || format!("while creating {} solver kid", $log_suff2)
+      )
+    ) {
       ( Ok(mut kid_1), Ok(mut kid_2) ) => match (
-        term::smt::solver( & mut kid_1, $factory.clone() ),
-        term::smt::solver( & mut kid_2, $factory.clone() ),
+        $crate::errors::ResExt::chain_err(
+          term::smt::solver( & mut kid_1, $factory.clone() ),
+          || format!("while creating {} solver of kid", $log_suff1)
+        ),
+        $crate::errors::ResExt::chain_err(
+          term::smt::solver( & mut kid_2, $factory.clone() ),
+          || format!("while creating {} solver of kid", $log_suff2)
+        ),
       ) {
         ( Ok($solver1), Ok($solver2) ) => match * $smt_log {
           None => $run,
           Some(ref path) => {
+            use $crate::errors::Res ;
             let (path_1, path_2) = (
               format!("{}/{}_{}.smt2", path, $log_file, $log_suff1),
               format!("{}/{}_{}.smt2", path, $log_file, $log_suff2)
@@ -207,45 +263,31 @@ macro_rules! mk_two_solver_run {
                 $run
               },
               (Err(e), _) => {
-                let $err = & format!(
-                  "could not open smt log file \"{}\":\n{:?}", path_1, e
-                ) ;
+                let e: $crate::errors::Error =
+                  $crate::errors::ErrorKind::FileIoError(path_1, e).into() ;
+                let e: Res<()> = Err(e) ;
+                let $err = $crate::errors::ResExt::chain_err(
+                  e, || "while creating SMT solver tee file"
+                ).unwrap_err() ;
                 $errun
               },
               (_, Err(e)) => {
-                let $err = & format!(
-                  "could not open smt log file \"{}\":\n{:?}", path_2, e
-                ) ;
+                let e: $crate::errors::Error =
+                  $crate::errors::ErrorKind::FileIoError(path_2, e).into() ;
+                let e: Res<()> = Err(e) ;
+                let $err = $crate::errors::ResExt::chain_err(
+                  e, || "while creating SMT solver tee file"
+                ).unwrap_err() ;
                 $errun
               },
             }
           },
         },
-        (Err(e), _) => {
-          let $err = & format!(
-            "could not create solver from kid:\n{}", e
-          ) ;
-          $errun
-        },
-        (_, Err(e)) => {
-          let $err = & format!(
-            "could not create solver from kid:\n{}", e
-          ) ;
-          $errun
-        },
+        (Err($err), _) => $errun,
+        (_, Err($err)) => $errun,
       },
-      (Err(e), _) => {
-        let $err = & format!(
-          "could not spawn solver kid:\n{}", e
-        ) ;
-        $errun
-      },
-      (_, Err(e)) => {
-        let $err = & format!(
-          "could not spawn solver kid:\n{}", e
-        ) ;
-        $errun
-      },
+      (Err($err), _) => $errun,
+      (_, Err($err)) => $errun,
     }
   ) ;
 }
@@ -270,9 +312,6 @@ macro_rules! mk_two_solver_run {
 //   ) ;
 //   Ok( run(solver) )
 // }
-
-/// Result yielding a list of strings.
-pub type Res<T> = Result<T, String> ;
 
 /// Trait the techniques should implement so that kino can call them in a
 /// generic way.

@@ -89,9 +89,12 @@ only non-zero denominator will push the problem to function symbol application. 
 
 extern crate num ;
 #[macro_use]
+extern crate error_chain ;
+#[macro_use]
 extern crate nom ;
 extern crate rand ;
 extern crate hashconsing as hcons ;
+#[macro_use]
 extern crate rsmt2 ;
 
 use std::collections::{ HashSet, HashMap } ;
@@ -100,7 +103,64 @@ macro_rules! unimpl {
   () => ( panic!("not implemented") ) ;
 }
 
-pub use nom::{ IResult,  } ;
+pub use nom::{ IResult } ;
+
+/// Re-export of `rsmt2`'s errors.
+pub mod errors {
+  error_chain!{
+    types {
+      Error, ErrorKind, ResExt, Res ;
+    }
+    links {
+      RSmt2(::rsmt2::errors::Error, ::rsmt2::errors::ErrorKind)
+      #[doc = "[`rsmt2`](https://crates.io/crates/rsmt2) errors"] ;
+    }
+    errors {
+      #[doc = "Returned when a term evaluation fails."]
+      EvalError(s: String) {
+        description("evaluation error")
+        display("evaluation error: {}", s)
+      }
+
+      #[doc = "
+        Returned when a temp term transformation fails.
+      "]
+      TmpTransError {
+        description("temp term transformation error")
+        display("temp term transformation error")
+      }
+
+      #[doc = "Operator arity mismatch."]
+      OpArityError(op: ::Operator, found: usize, expected: & 'static str) {
+        description("operator arity mismatch")
+        display(
+          "arity mismatch, operator `{}` applied to {} operands (expected {})",
+          op, found, expected
+        )
+      }
+
+      #[doc = "Type mismatch on operator."]
+      OpTypeError(
+        op: ::Operator, found: ::Type, expected: ::Type, blah: Option<String>
+      ) {
+        description("operator type mismatch")
+        display(
+          "type mismatch on operator `{}`, expected {} but found {}{}",
+          op, expected, found, match * blah {
+            Some(ref blah) => format!(" {}", blah),
+            None => "".into(),
+          }
+        )
+      }
+
+      #[doc = "IO error"]
+      IoError(e: ::std::io::Error) {
+        description("IO error")
+        display("IO error {:?}", e)
+      }
+    }
+  }
+}
 
 mod base ;
 pub use base::{
@@ -169,6 +229,7 @@ pub mod smt {
   use ::std::process::Command ;
 
   pub use ::rsmt2::* ;
+  use ::rsmt2::errors::* ;
 
   /** The default z3 command. */
   #[inline(always)]
@@ -180,62 +241,86 @@ pub mod smt {
   impl Sym2Smt<::Offset> for ::Sym {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, _: & ::Offset
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::SymWritable ;
       use base::SymPrintStyle ;
-      try!( write!(writer, "|") ) ;
-      try!( self.write(writer, SymPrintStyle::Internal) ) ;
-      write!(writer, "|")
+      smt_cast_io!(
+        format!("writing symbol `{}`", self) =>
+          write!(writer, "|") ;
+          self.write(writer, SymPrintStyle::Internal) ;
+          write!(writer, "|")
+      )
     }
   }
 
   impl Sym2Smt<::Offset2> for ::Sym {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, _: & ::Offset2
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::SymWritable ;
       use base::SymPrintStyle ;
-      try!( write!(writer, "|") ) ;
-      try!( self.write(writer, SymPrintStyle::Internal) ) ;
-      write!(writer, "|")
+      smt_cast_io!(
+        format!("writing symbol `{}`", self) =>
+          write!(writer, "|") ;
+          self.write(writer, SymPrintStyle::Internal) ;
+          write!(writer, "|")
+      )
     }
   }
 
   impl Sym2Smt<::Offset> for ::Var {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, info: & ::Offset
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::StateWritable ;
       use base::SymPrintStyle ;
-      self.write(writer, info, SymPrintStyle::Internal)
+      smt_cast_io!(
+        format!(
+          "writing symbol `{}` with offset `{}`", self, info
+        ) => self.write(
+          writer, info, SymPrintStyle::Internal
+        )
+      )
     }
   }
 
   impl Sym2Smt<::Offset2> for ::Var {
     fn sym_to_smt2(
       & self, writer: & mut ::std::io::Write, info: & ::Offset2
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::StateWritable ;
       use base::SymPrintStyle ;
-      self.write(writer, info, SymPrintStyle::Internal)
+      smt_cast_io!(
+        format!(
+          "writing symbol `{}` with offset `{}`", self, info
+        ) => self.write(
+          writer, info, SymPrintStyle::Internal
+        )
+      )
     }
   }
 
   impl Expr2Smt<::Offset2> for ::Term {
     fn expr_to_smt2(
       & self, writer: & mut ::std::io::Write, offset: & ::Offset2
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::PrintSmt2 ;
-      self.to_smt2(writer, offset)
+      smt_cast_io!(
+        format!("writing `{}` with offset `{}`", self, offset) => self.to_smt2(
+          writer, offset
+        )
+      )
     }
   }
 
   impl Sort2Smt for ::Type {
     fn sort_to_smt2(
       & self, writer: & mut ::std::io::Write
-    ) -> ::std::io::Result<()> {
+    ) -> Res<()> {
       use base::Writable ;
-      self.write(writer)
+      smt_cast_io!(
+        format!("writing sort `{}`", self) => self.write(writer)
+      )
     }
   }
 }

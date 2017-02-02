@@ -12,78 +12,78 @@
 use std::io ;
 use std::fmt ;
 use std::hash::Hash ;
-use std::sync::{ Arc, Mutex } ;
+use std::sync::{ Arc, RwLock } ;
 
 pub use hcons::* ;
 
 #[derive(Clone,Copy)]
-/** Decides how symbols are printed. */
+/// Decides how symbols are printed.
 pub enum SymPrintStyle {
-  /** Internal print style adds a ' ' before the symbol is printed. */
+  /// Internal print style adds a ' ' before the symbol is printed.
   Internal,
-  /** External is printing the symbol as it is. */
+  /// External is printing the symbol as it is.
   External,
 }
 
-/** A state is either current or next. */
+/// A state is either current or next.
 #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum State {
-  /** Current state. */
+  /// Current state.
   Curr,
-  /** Next state. */
+  /// Next state.
   Next,
 }
 
-/** Printable in the VMT-LIB standard. */
+/// Printable in the VMT-LIB standard.
 pub trait PrintVmt {
-  /** Prints something in VMT-LIB in a `Write`. */
+  /// Prints something in VMT-LIB in a `Write`.
   fn to_vmt(& self, & mut io::Write) -> io::Result<()> ;
 }
 
-/** Printable in the SMT Lib 2 standard, given an offset. */
+/// Printable in the SMT Lib 2 standard, given an offset.
 pub trait PrintSmt2 {
-  /** Prints something in SMT Lib 2 in a `Write`, given an offset. */
+  /// Prints something in SMT Lib 2 in a `Write`, given an offset.
   fn to_smt2(& self, & mut io::Write, & Offset2) -> io::Result<()> ;
 }
 
-/** Can write itself. */
+/// Can write itself.
 pub trait Writable {
-  /** Writes itself. */
+  /// Writes itself.
   fn write(& self, & mut io::Write) -> io::Result<()> ;
 }
 
-/** Can write itself as a symbol. */
+/// Can write itself as a symbol.
 pub trait SymWritable {
-  /** Writes itself given a print style. */
+  /// Writes itself given a print style.
   fn write(& self, & mut io::Write, SymPrintStyle) -> io::Result<()> ;
 }
 
-/** Can write a state variable given a state. */
+/// Can write a state variable given a state.
 pub trait SVarWriter<Sym: SymWritable> {
-  /** Writes a state variable given a state. */
+  /// Writes a state variable given a state.
   #[inline(always)]
   fn sv_write(
     & self, & mut io::Write, & Sym, & State, SymPrintStyle
   ) -> io::Result<()> ;
 }
 
-/** Can write itself given a state writer and a print style. */
+/// Can write itself given a state writer and a print style.
 pub trait StateWritable<S: SymWritable, Svw: SVarWriter<S>> {
-  /** Writes itself given a state writer and a print style. */
+  /// Writes itself given a state writer and a print style.
   fn write(& self, & mut io::Write, & Svw, SymPrintStyle) -> io::Result<()> ;
 }
 
-/** An offset. */
+/// An offset.
 #[derive(
   Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy
 )]
 pub struct Offset { offset: i16 }
 
 impl Offset {
-  /** The zero offset. */
+  /// The zero offset.
   pub fn zero() -> Self { Offset { offset: 0i16 } }
 
-  /** Bytes to Offset conversion. */
+  /// Bytes to Offset conversion.
   pub fn of_bytes(bytes: & [u8]) -> Self {
     // -> Result<Offset, std::num::ParseIntError> {
     use std::str ;
@@ -94,7 +94,7 @@ impl Offset {
     }
   }
 
-  /** `usize` to Offset conversion. */
+  /// `usize` to Offset conversion.
   pub fn of_int(int: usize) -> Self {
     Offset {
       offset: i16::from_str_radix(
@@ -103,21 +103,21 @@ impl Offset {
     }
   }
 
-  /** Returns the offset following this one. */
+  /// Returns the offset following this one.
   pub fn nxt(& self) -> Self {
     Offset {
       offset: self.offset + 1i16
     }
   }
 
-  /** Returns the offset preceeding this one. */
+  /// Returns the offset preceeding this one.
   pub fn pre(& self) -> Self {
     Offset {
       offset: self.offset - 1i16
     }
   }
 
-  /** `usize` version of anoffset. */
+  /// `usize` version of anoffset.
   pub fn to_usize(& self) -> usize { self.offset as usize }
 }
 
@@ -133,12 +133,12 @@ impl Writable for Offset {
   }
 }
 
-/** Two-state offset. */
+/// Two-state offset.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Offset2 {
-  /** Current offset. */
+  /// Current offset.
   curr: Offset,
-  /** Next offset. */
+  /// Next offset.
   next: Offset,
 }
 
@@ -148,7 +148,7 @@ impl Offset2 {
   //   Offset2 { curr: curr, next: next }
   // }
 
-  /** Initial two-state offset. */
+  /// Initial two-state offset.
   pub fn init() -> Self {
     Offset2{
       curr: Offset::of_int(0),
@@ -156,25 +156,25 @@ impl Offset2 {
     }
   }
 
-  /** Reverses current and next. For backward unrolling. */
+  /// Reverses current and next. For backward unrolling.
   pub fn rev(& self) -> Self {
     Offset2 { curr: self.next, next: self.curr }
   }
 
-  /** Returns true iff the offset is reversed. */
+  /// Returns true iff the offset is reversed.
   #[inline(always)]
   pub fn is_rev(& self) -> bool { self.next < self.curr }
 
-  /** Compares two offsets. Used for parsing so that terms unrolled backwards
-  are parsed the right way. For instance, `(and |@1 x| |@2 y|)` is parsed as
-  `(and (next x) (curr y))` with Smt2Offset `Two(2,1)`. */
+  /// Compares two offsets. Used for parsing so that terms unrolled backwards
+  /// are parsed the right way. For instance, `(and |@1 x| |@2 y|)` is parsed
+  /// as `(and (next x) (curr y))` with Smt2Offset `Two(2,1)`.
   #[inline]
   pub fn cmp(& self, lhs: & Offset, rhs: & Offset) -> ::std::cmp::Ordering {
     let cmp = lhs.cmp(rhs) ;
     if self.curr < self.next { cmp } else { cmp.reverse() }
   }
 
-  /** Returns the two state offset following `self`. */
+  /// Returns the two state offset following `self`.
   #[inline(always)]
   pub fn nxt(& self) -> Self {
     Offset2 {
@@ -183,7 +183,7 @@ impl Offset2 {
     }
   }
 
-  /** Returns the two state offset preceeding `self`. */
+  /// Returns the two state offset preceeding `self`.
   #[inline(always)]
   pub fn pre(& self) -> Self {
     Offset2 {
@@ -192,13 +192,13 @@ impl Offset2 {
     }
   }
 
-  /** The offset of the current state. */
+  /// The offset of the current state.
   #[inline(always)]
   pub fn curr(& self) -> & Offset {
     & self.curr
   }
 
-  /** The offset of the next state. */
+  /// The offset of the next state.
   #[inline(always)]
   pub fn next(& self) -> & Offset {
     & self.next
@@ -289,14 +289,14 @@ impl<'a> OffRange<'a> {
 
 
 
-/** Indicates the offset of a term when parsing SMT Lib 2 expressions. */
+/// Indicates the offset of a term when parsing SMT Lib 2 expressions.
 #[derive(Debug,Clone,PartialEq,Eq)]
 pub enum Smt2Offset {
-  /** Term has no offset. */
+  /// Term has no offset.
   No,
-  /** Term has only one offset: all state variables are current. */
+  /// Term has only one offset: all state variables are current.
   One(Offset),
-  /** Term has two offsets: state variables are current and next. */
+  /// Term has two offsets: state variables are current and next.
   Two(Offset, Offset),
 }
 impl fmt::Display for Smt2Offset {
@@ -309,8 +309,8 @@ impl fmt::Display for Smt2Offset {
   }
 }
 impl Smt2Offset {
-  /** Returns `No` offset if parameter is `None`, and `One` offset
-  otherwise. */
+  /// Returns `No` offset if parameter is `None`, and `One` off
+  /// otherwise.
   pub fn of_opt(opt: Option<Offset>) -> Self {
     use base::Smt2Offset::* ;
     match opt {
@@ -319,7 +319,7 @@ impl Smt2Offset {
     }
   }
 
-  /** Returns true iff `self` is `One(o)` and `rhs` is `Two(_, o)`. */
+  /// Returns true iff `self` is `One(o)` and `rhs` is `Two(_, o)`.
   pub fn is_next_of(& self, rhs: & Smt2Offset) -> bool {
     use base::Smt2Offset::* ;
     match (self, rhs) {
@@ -328,14 +328,14 @@ impl Smt2Offset {
     }
   }
 
-  /** Merges two offsets if possible.
-
-  Two offsets are mergeable if
-
-  * one is `No`,
-  * both are equal,
-  * both are `One`s (they will be ordered using `off.cmp(_,_)`),
-  * one is `Two(lo,hi)` and the other is either `One(lo)` or `One(hi)`. */
+  /// Merges two offsets if possible.
+  ///
+  /// Two offsets are mergeable if
+  ///
+  /// * one is `No`,
+  /// * both are equal,
+  /// * both are `One`s (they will be ordered using `off.cmp(_,_)`),
+  /// * one is `Two(lo,hi)` and the other is either `One(lo)` or `One(hi)`. */
   pub fn merge(
     & self, rhs: & Smt2Offset, off: & Offset2
   ) -> Option<Smt2Offset> {
@@ -360,10 +360,10 @@ impl Smt2Offset {
           }
         },
 
-        /* This is only fine if both are equal which is handled above. */
+        // This is only fine if both are equal which is handled above.
         (& Two(_, _), & Two(_, _)) => return None,
 
-        /* Only one recursive call is possible. */
+        // Only one recursive call is possible.
         (& One(_), & Two(_,_)) => return rhs.merge(self, off),
       } ;
       Some(res)
@@ -372,19 +372,19 @@ impl Smt2Offset {
 }
 
 
-/** Redefinition of the thread-safe hash consign type. */
-pub type HConsign<T> = Arc<Mutex<HashConsign<T>>> ;
+/// Redefinition of the thread-safe hash consign type.
+pub type HConsign<T> = Arc<RwLock<HashConsign<T>>> ;
 
-/** Can create itself from nothing. */
+/// Can create itself from nothing.
 pub trait Mkable {
-  /** Creates a new `Self` from unit. */
+  /// Creates a new `Self` from unit.
   fn mk() -> Self ;
 }
 
-impl<T: Hash> Mkable for Arc<Mutex<HashConsign<T>>>{
+impl<T: Hash + Eq + Clone> Mkable for Arc<RwLock<HashConsign<T>>>{
   fn mk() -> Self {
     Arc::new(
-      Mutex::new( HashConsign::empty() )
+      RwLock::new( HashConsign::empty() )
     )
   }
 }

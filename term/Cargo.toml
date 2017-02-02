@@ -1,11 +1,12 @@
 [package]
 name = "term"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
+error-chain = "*"
 num = "*"
 nom = "*"
 rand = "*"
-hashconsing = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/hashconsing.git" }
-rsmt2 = { git = "https://AdrienChampion@bitbucket.org/AdrienChampion/rsmt2.git" }
+hashconsing = "*"
+rsmt2 = "*"
