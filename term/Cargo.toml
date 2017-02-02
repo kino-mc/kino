@@ -9,4 +9,4 @@ num = "*"
 nom = "*"
 rand = "*"
 hashconsing = "*"
-rsmt2 = { git = "https://github.com/kino-mc/rsmt2" }
+rsmt2 = "*"
