@@ -354,14 +354,14 @@ pub fn op_parser<'a>(
     bytes,
     char!('(') >>
     opt!(space_comment) >>
-    op: operator_parser >>
+    op: apply!(operator_parser, 0) >>
     space_comment >>
     args: separated_list!(
       space_comment, apply!(term_parser, f)
     ) >>
     opt!(space_comment) >>
     char!(')') >>(
-      TermAndDep::op(f, op, args, Spn::dummy())
+      TermAndDep::op(f, op.destroy().0, args, Spn::dummy())
     )
   )
 }
@@ -375,7 +375,7 @@ pub fn quantified_parser<'a>(
     bytes,
     char!('(') >>
     opt!(space_comment) >>
-    quantifier: quantifier_parser >>
+    quantifier: apply!(quantifier_parser, 0) >>
     opt!(space_comment) >>
     char!('(') >>
     bindings: separated_list!(
@@ -401,7 +401,7 @@ pub fn quantified_parser<'a>(
     term: apply!(term_parser, f) >>
     opt!(space_comment) >>
     char!(')') >> (
-      match quantifier {
+      match quantifier.destroy().0 {
         Quantifier::Forall => TermAndDep::forall(
           f, bindings, term, Spn::dummy()
         ),

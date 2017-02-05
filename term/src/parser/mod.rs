@@ -518,42 +518,102 @@ named_attr!{
 }
 
 
-
-named_attr!{
-  #[doc = "Parses an operator."],
-  pub operator_parser<Operator>,
-  alt!(
-    map!( tag!("=>"), |_| Operator::Impl ) |
-    map!( tag!("="), |_| Operator::Eq ) |
-    map!( tag!("ite"), |_| Operator::Ite ) |
-    map!( tag!("not"), |_| Operator::Not ) |
-    map!( tag!("and"), |_| Operator::And ) |
-    map!( tag!("or"), |_| Operator::Or ) |
-    map!( tag!("xor"), |_| Operator::Xor ) |
-    map!( tag!("distinct"), |_| Operator::Distinct ) |
-    map!( tag!("+"), |_| Operator::Add ) |
-    map!( tag!("-"), |_| Operator::Sub ) |
-    map!( tag!("*"), |_| Operator::Mul ) |
-    map!( tag!("/"), |_| Operator::Div ) |
-    map!( tag!("<="), |_| Operator::Le ) |
-    map!( tag!(">="), |_| Operator::Ge ) |
-    map!( tag!("<"), |_| Operator::Lt ) |
-    map!( tag!(">"), |_| Operator::Gt )
-  )
+mk_parser!{
+  #[doc = "Parses an operator."]
+  pub fn operator_parser(bytes, offset: usize) -> Spnd<Operator> {
+    alt!(
+      bytes,
+      map!(
+        tag!("=>"),
+        |b: Bytes| Spnd::len_mk(Operator::Impl, offset, b.len())
+      ) |
+      map!(
+        tag!("="),
+        |b: Bytes| Spnd::len_mk(Operator::Eq, offset, b.len())
+      ) |
+      map!(
+        tag!("ite"),
+        |b: Bytes| Spnd::len_mk(Operator::Ite, offset, b.len())
+      ) |
+      map!(
+        tag!("not"),
+        |b: Bytes| Spnd::len_mk(Operator::Not, offset, b.len())
+      ) |
+      map!(
+        tag!("and"),
+        |b: Bytes| Spnd::len_mk(Operator::And, offset, b.len())
+      ) |
+      map!(
+        tag!("or"),
+        |b: Bytes| Spnd::len_mk(Operator::Or, offset, b.len())
+      ) |
+      map!(
+        tag!("xor"),
+        |b: Bytes| Spnd::len_mk(Operator::Xor, offset, b.len())
+      ) |
+      map!(
+        tag!("distinct"),
+        |b: Bytes| Spnd::len_mk(Operator::Distinct, offset, b.len())
+      ) |
+      map!(
+        tag!("+"),
+        |b: Bytes| Spnd::len_mk(Operator::Add, offset, b.len())
+      ) |
+      map!(
+        tag!("-"),
+        |b: Bytes| Spnd::len_mk(Operator::Sub, offset, b.len())
+      ) |
+      map!(
+        tag!("*"),
+        |b: Bytes| Spnd::len_mk(Operator::Mul, offset, b.len())
+      ) |
+      map!(
+        tag!("/"),
+        |b: Bytes| Spnd::len_mk(Operator::Div, offset, b.len())
+      ) |
+      map!(
+        tag!("<="),
+        |b: Bytes| Spnd::len_mk(Operator::Le, offset, b.len())
+      ) |
+      map!(
+        tag!(">="),
+        |b: Bytes| Spnd::len_mk(Operator::Ge, offset, b.len())
+      ) |
+      map!(
+        tag!("<"),
+        |b: Bytes| Spnd::len_mk(Operator::Lt, offset, b.len())
+      ) |
+      map!(
+        tag!(">"),
+        |b: Bytes| Spnd::len_mk(Operator::Gt, offset, b.len())
+      )
+    )
+  }
 }
 
-
-enum Quantifier {
-  Forall, Exists
+/// A quantifier at parsing time.
+pub enum Quantifier {
+  /// Universal.
+  Forall,
+  /// Existential.
+  Exists
 }
 
-named_attr!{
-  #[doc = "Parses a quantifier."],
-  quantifier_parser<Quantifier>,
-  alt!(
-    map!( tag!("forall"), |_| Quantifier::Forall ) |
-    map!( tag!("exists"), |_| Quantifier::Exists )
-  )
+mk_parser!{
+  #[doc = "Parses a quantifier."]
+  pub fn quantifier_parser(bytes, offset: usize) -> Spnd<Quantifier> {
+    alt!(
+      bytes,
+      map!(
+        tag!("forall"),
+        |b: Bytes| Spnd::len_mk(Quantifier::Forall, offset, b.len())
+      ) |
+      map!(
+        tag!("exists"),
+        |b: Bytes| Spnd::len_mk(Quantifier::Exists, offset, b.len())
+      )
+    )
+  }
 }
 
 

@@ -290,7 +290,7 @@ fn op_parser<'a>(
     bytes,
     char!('(') >>
     opt!(multispace) >>
-    op: operator_parser >>
+    op: apply!(operator_parser, 0) >>
     multispace >>
     args: map!(
       separated_list!(
@@ -300,7 +300,7 @@ fn op_parser<'a>(
     ) >>
     opt!(multispace) >>
     char!(')') >> (
-      mk_op(& f, op, args)
+      mk_op(& f, op.destroy().0, args)
     )
   )
 }
@@ -315,7 +315,7 @@ fn quantified_parser<'a>(
     bytes,
     char!('(') >>
     opt!(multispace) >>
-    quantifier: quantifier_parser >>
+    quantifier: apply!(quantifier_parser, 0) >>
     opt!(multispace) >>
     char!('(') >>
     bindings: separated_list!(
@@ -344,7 +344,7 @@ fn quantified_parser<'a>(
     term: apply!(term_parser, f, off) >>
     opt!(multispace) >>
     char!(')') >> (
-      match quantifier {
+      match quantifier.destroy().0 {
         Quantifier::Forall => mk_forall(f, bindings, term),
         Quantifier::Exists => mk_exists(f, bindings, term),
       }
