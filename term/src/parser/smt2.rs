@@ -19,11 +19,12 @@ use errors::* ;
 use base::{ State, Offset, Offset2, Smt2Offset } ;
 use typ::Type ;
 use sym::Sym ;
+use cst::Cst ;
 use term::{ Term, Operator } ;
 use factory::{ Factory, UnTermOps } ;
 
 use super::{
-  type_parser,
+  Spnd, type_parser,
   simple_symbol_head, simple_symbol_tail,
   operator_parser,
   quantifier_parser, Quantifier
@@ -210,10 +211,11 @@ fn mk_let(
 }
 
 named!{ offset<Offset>,
-  chain!(
-    char!('@') ~
-    offset: is_a!("0123456789"),
-    || Offset::of_bytes(offset)
+  do_parse!(
+    char!('@') >>
+    offset: is_a!("0123456789") >> (
+      Offset::of_bytes(offset)
+    )
   )
 }
 
@@ -222,16 +224,15 @@ named!{ pub id_parser< (String, Smt2Offset) >,
     opt!(multispace),
     alt!(
       // Simple symbol.
-      chain!(
-        opt!(offset) ~
-        head: simple_symbol_head ~
+      do_parse!(
+        opt!(offset) >>
+        head: simple_symbol_head >>
         tail: opt!(
           map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
-        ),
-        || {
+        ) >> ({
           let sym = format!("{}{}", head, tail.unwrap_or("")) ;
           panic!("simple symbol {}", sym)
-        }
+        })
         // (
         //   format!("{}{}", head, str::from_utf8(tail).unwrap()),
         //   Smt2Offset::of_opt(offset)
@@ -240,13 +241,12 @@ named!{ pub id_parser< (String, Smt2Offset) >,
       // Quoted symbol.
       delimited!(
         char!('|'),
-        chain!(
-          offset: opt!(offset) ~
-          char!(' ') ~
+        do_parse!(
+          offset: opt!(offset) >>
+          char!(' ') >>
           sym: map!(
             is_not!("|\\"), str::from_utf8
-          ),
-          || (
+          ) >> (
             sym.unwrap().to_string(), Smt2Offset::of_opt(offset)
           )
         ),
@@ -262,8 +262,8 @@ fn cst_parser<'a>(
   use term::CstMaker ;
   map!(
     bytes,
-    apply!( super::cst_parser, f ),
-    |cst| ( f.cst(cst), Smt2Offset::No )
+    apply!( super::cst_parser, 0, f ),
+    |cst: Spnd<Cst>| ( f.cst(cst.destroy().0), Smt2Offset::No )
   )
 }
 
@@ -286,21 +286,22 @@ fn var_parser<'a>(
 fn op_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(multispace) ~
-    op: operator_parser ~
-    multispace ~
+    char!('(') >>
+    opt!(multispace) >>
+    op: operator_parser >>
+    multispace >>
     args: map!(
       separated_list!(
         multispace, apply!(term_parser, f, off)
       ),
       |args| check_offsets(f, args, off)
-    ) ~
-    opt!(multispace) ~
-    char!(')'),
-    || mk_op(& f, op, args)
+    ) >>
+    opt!(multispace) >>
+    char!(')') >> (
+      mk_op(& f, op, args)
+    )
   )
 }
 
@@ -310,44 +311,44 @@ fn quantified_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   use sym::SymMaker ;
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(multispace) ~
-    quantifier: quantifier_parser ~
-    opt!(multispace) ~
-    char!('(') ~
+    char!('(') >>
+    opt!(multispace) >>
+    quantifier: quantifier_parser >>
+    opt!(multispace) >>
+    char!('(') >>
     bindings: separated_list!(
       multispace,
       delimited!(
         char!('('),
-        chain!(
-          opt!(multispace) ~
+        do_parse!(
+          opt!(multispace) >>
           sym: map!(
             id_parser,
             |(s,off)| match off {
               Smt2Offset::No => f.sym(s),
               _ => panic!("offset in bound variable"),
             }
-          ) ~
-          multispace ~
-          ty: apply!(type_parser, 0) ~
-          opt!(multispace),
-          || (sym, * ty)
+          ) >>
+          multispace >>
+          ty: apply!(type_parser, 0) >>
+          opt!(multispace) >> (sym, * ty)
         ),
         char!(')')
       )
-    ) ~
-    opt!(multispace) ~
-    char!(')') ~
-    opt!(multispace) ~
-    term: apply!(term_parser, f, off) ~
-    opt!(multispace) ~
-    char!(')'),
-    || match quantifier {
-      Quantifier::Forall => mk_forall(f, bindings, term),
-      Quantifier::Exists => mk_exists(f, bindings, term),
-    }
+    ) >>
+    opt!(multispace) >>
+    char!(')') >>
+    opt!(multispace) >>
+    term: apply!(term_parser, f, off) >>
+    opt!(multispace) >>
+    char!(')') >> (
+      match quantifier {
+        Quantifier::Forall => mk_forall(f, bindings, term),
+        Quantifier::Exists => mk_exists(f, bindings, term),
+      }
+    )
   )
 }
 
@@ -357,20 +358,20 @@ fn let_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
   use sym::SymMaker ;
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(multispace) ~
-    tag!("let") ~
-    opt!(multispace) ~
-    char!('(') ~
-    opt!(multispace) ~
+    char!('(') >>
+    opt!(multispace) >>
+    tag!("let") >>
+    opt!(multispace) >>
+    char!('(') >>
+    opt!(multispace) >>
     bindings: separated_list!(
       multispace,
       delimited!(
         char!('('),
-        chain!(
-          opt!(multispace) ~
+        do_parse!(
+          opt!(multispace) >>
           sym: map!(
             id_parser,
             |(s,off)| match off {
@@ -379,21 +380,21 @@ fn let_parser<'a>(
                 "offset in bound variable"
               ),
             }
-          ) ~
-          multispace ~
-          term: apply!(term_parser, f, off),
-          || (sym, term)
+          ) >>
+          multispace >>
+          term: apply!(term_parser, f, off) >> (sym, term)
         ),
         char!(')')
       )
-    ) ~
-    opt!(multispace) ~
-    char!(')') ~
-    opt!(multispace) ~
-    term: apply!(term_parser, f, off) ~
-    opt!(multispace) ~
-    char!(')'),
-    || mk_let(f, bindings, term, off)
+    ) >>
+    opt!(multispace) >>
+    char!(')') >>
+    opt!(multispace) >>
+    term: apply!(term_parser, f, off) >>
+    opt!(multispace) >>
+    char!(')') >> (
+      mk_let(f, bindings, term, off)
+    )
   )
 }
 
@@ -401,21 +402,22 @@ fn let_parser<'a>(
 fn app_parser<'a>(
   bytes: & 'a [u8], f: & Factory, off: & Offset2
 ) -> IResult<& 'a [u8], ( Term, Smt2Offset )> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(multispace) ~
-    id: id_parser ~
-    multispace ~
+    char!('(') >>
+    opt!(multispace) >>
+    id: id_parser >>
+    multispace >>
     args: map!(
       separated_nonempty_list!(
         multispace, apply!(term_parser, f, off)
       ),
       |args| check_offsets(f, args, off)
-    ) ~
-    opt!(multispace) ~
-    char!(')'),
-    || mk_app(f, id, args)
+    ) >>
+    opt!(multispace) >>
+    char!(')') >> (
+      mk_app(f, id, args)
+    )
   )
 }
 
@@ -430,13 +432,12 @@ pub fn term_parser<'a>(
     apply!(quantified_parser, f, off) |
     apply!(let_parser, f, off) |
     apply!(app_parser, f, off) |
-    chain!(
-      char!('(') ~
-      opt!(multispace) ~
-      t: apply!(term_parser, f, off) ~
-      opt!(multispace) ~
-      char!(')'),
-      || t
+    do_parse!(
+      char!('(') >>
+      opt!(multispace) >>
+      t: apply!(term_parser, f, off) >>
+      opt!(multispace) >>
+      char!(')') >> (t)
     )
   )
 }

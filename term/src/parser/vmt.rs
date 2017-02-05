@@ -266,36 +266,37 @@ impl TermAndDep {
 }
 
 named!{ state<State>,
-  chain!(
-    char!('_') ~
-    space_comment ~
+  do_parse!(
+    char!('_') >>
+    space_comment >>
     state: alt!(
       map!( tag!("curr"), |_| State::Curr ) |
       map!( tag!("next"), |_| State::Next  )
-    ),
-    || state
+    ) >> (state)
   )
 }
 
 named!{ pub id_parser<String>,
   alt!(
     // Simple symbol.
-    chain!(
-      head: simple_symbol_head ~
+    do_parse!(
+      head: simple_symbol_head >>
       tail: opt!(
         map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
-      ),
-      || format!("{}{}", head, tail.unwrap_or(""))
+      ) >> (
+        format!("{}{}", head, tail.unwrap_or(""))
+      )
     ) |
     // Quoted symbol.
     delimited!(
       char!('|'),
-      chain!(
-        head: none_of!("|\\@") ~
+      do_parse!(
+        head: none_of!("|\\@") >>
         sym: map!(
           is_not!("|\\"), str::from_utf8
-        ),
-        || format!("{}{}", head, sym.unwrap())
+        ) >> (
+          format!("{}{}", head, sym.unwrap())
+        )
       ),
       char!('|')
     )
@@ -310,20 +311,19 @@ pub fn var_parser<'a>(
   use var::VarMaker ;
   alt!(
     bytes,
-    chain!(
-      char!('(') ~
-      opt!(space_comment) ~
-      state: state ~
-      space_comment ~
+    do_parse!(
+      char!('(') >>
+      opt!(space_comment) >>
+      state: state >>
+      space_comment >>
       sym: map!(
         id_parser, |s| f.sym(s)
-      ) ~
-      opt!(space_comment) ~
-      char!(')'),
-      || {
+      ) >>
+      opt!(space_comment) >>
+      char!(')') >> ({
         let var = f.svar(sym, state) ;
         TermAndDep::var(f, var, Spn::dummy())
-      }
+      })
     ) |
     map!(
       id_parser, |s| {
@@ -339,26 +339,30 @@ pub fn cst_parser<'a>(
 ) -> IResult<& 'a [u8], TermAndDep> {
   map!(
     bytes,
-    apply!( super::cst_parser, f ),
-    |cst| TermAndDep::cst(f, cst, Spn::dummy())
+    apply!( super::cst_parser, 0, f ),
+    |cst: Spnd<Cst>| {
+      let (cst, span) = cst.destroy() ;
+      TermAndDep::cst(f, cst, span)
+    }
   )
 }
 
 pub fn op_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    op: operator_parser ~
-    space_comment ~
+    char!('(') >>
+    opt!(space_comment) >>
+    op: operator_parser >>
+    space_comment >>
     args: separated_list!(
       space_comment, apply!(term_parser, f)
-    ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || TermAndDep::op(f, op, args, Spn::dummy())
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >>(
+      TermAndDep::op(f, op, args, Spn::dummy())
+    )
   )
 }
 
@@ -367,45 +371,45 @@ pub fn quantified_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    quantifier: quantifier_parser ~
-    opt!(space_comment) ~
-    char!('(') ~
+    char!('(') >>
+    opt!(space_comment) >>
+    quantifier: quantifier_parser >>
+    opt!(space_comment) >>
+    char!('(') >>
     bindings: separated_list!(
       space_comment,
       delimited!(
         char!('('),
-        chain!(
-          opt!(space_comment) ~
+        do_parse!(
+          opt!(space_comment) >>
           sym: map!(
             id_parser,
             |sym| f.sym(sym)
-          ) ~
-          space_comment ~
-          ty: apply!(type_parser, 0) ~
-          opt!(space_comment),
-          || (sym, ty)
+          ) >>
+          space_comment >>
+          ty: apply!(type_parser, 0) >>
+          opt!(space_comment) >> (sym, ty)
         ),
         char!(')')
       )
-    ) ~
-    opt!(space_comment) ~
-    char!(')') ~
-    opt!(space_comment) ~
-    term: apply!(term_parser, f) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || match quantifier {
-      Quantifier::Forall => TermAndDep::forall(
-        f, bindings, term, Spn::dummy()
-      ),
-      Quantifier::Exists => TermAndDep::exists(
-        f, bindings, term, Spn::dummy()
-      ),
-    }
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >>
+    opt!(space_comment) >>
+    term: apply!(term_parser, f) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      match quantifier {
+        Quantifier::Forall => TermAndDep::forall(
+          f, bindings, term, Spn::dummy()
+        ),
+        Quantifier::Exists => TermAndDep::exists(
+          f, bindings, term, Spn::dummy()
+        ),
+      }
+    )
   )
 }
 
@@ -413,38 +417,38 @@ pub fn let_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("let") ~
-    opt!(space_comment) ~
-    char!('(') ~
-    opt!(space_comment) ~
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("let") >>
+    opt!(space_comment) >>
+    char!('(') >>
+    opt!(space_comment) >>
     bindings: separated_list!(
       space_comment,
       delimited!(
         char!('('),
-        chain!(
-          opt!(space_comment) ~
+        do_parse!(
+          opt!(space_comment) >>
           sym: map!(
             id_parser,
             |sym| f.sym(sym)
-          ) ~
-          space_comment ~
-          term: apply!(term_parser, f),
-          || (sym, term)
+          ) >>
+          space_comment >>
+          term: apply!(term_parser, f) >> (sym, term)
         ),
         char!(')')
       )
-    ) ~
-    opt!(space_comment) ~
-    char!(')') ~
-    opt!(space_comment) ~
-    term: apply!(term_parser, f) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || TermAndDep::let_b(f, bindings, term, Spn::dummy())
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >>
+    opt!(space_comment) >>
+    term: apply!(term_parser, f) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      TermAndDep::let_b(f, bindings, term, Spn::dummy())
+    )
   )
 }
 
@@ -452,21 +456,20 @@ fn app_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    space_comment ~
-    sym: id_parser ~
-    space_comment ~
+    char!('(') >>
+    space_comment >>
+    sym: id_parser >>
+    space_comment >>
     args: separated_nonempty_list!(
       space_comment, apply!(term_parser, f)
-    ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || {
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >> ({
       let sym = f.sym(sym) ;
       TermAndDep::app(f, sym, args, Spn::dummy())
-    }
+    })
   )
 }
 
@@ -482,13 +485,12 @@ pub fn term_parser<'a>(
     apply!(quantified_parser, f) |
     apply!(let_parser, f) |
     apply!(app_parser, f) |
-    chain!(
-      char!('(') ~
-      opt!(space_comment) ~
-      t: apply!(term_parser, f) ~
-      opt!(space_comment) ~
-      char!(')'),
-      || t
+    do_parse!(
+      char!('(') >>
+      opt!(space_comment) >>
+      t: apply!(term_parser, f) >>
+      opt!(space_comment) >>
+      char!(')') >> (t)
     )
   )
 }

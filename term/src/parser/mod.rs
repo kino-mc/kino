@@ -27,7 +27,7 @@ macro_rules! try_parse {
   ) => (
     {
       let $s = ::std::str::from_utf8($arg).unwrap() ;
-      println!("| parsing \"{}\"", $s) ;
+      println!("| parsing `{}`", $s) ;
       match $fun(& $arg[..], $factory) {
         ::nom::IResult::Done(_,$res) => {
           println!("| done: {}", $res) ;
@@ -42,7 +42,7 @@ macro_rules! try_parse {
   ($fun:expr, $arg:expr, ($s:ident, $res:ident) -> $b:block) => (
     {
       let $s = ::std::str::from_utf8($arg).unwrap() ;
-      println!("| parsing \"{}\"", $s) ;
+      println!("| parsing `{}`", $s) ;
       match $fun(& $arg[..]) {
         ::nom::IResult::Done(_,$res) => {
           println!("| done: {:?}", $res) ;
@@ -84,7 +84,7 @@ impl Spn {
   /// Length of a span.
   #[inline]
   pub fn len(& self) -> usize {
-    self.end - self.bgn
+    self.end - self.bgn + 1
   }
 }
 
@@ -112,6 +112,19 @@ impl<T> Spnd<T> {
   pub fn bytes_mk(val: T, bgn: usize, bytes: Bytes) -> Self {
     Self::len_mk(val, bgn, bytes.len())
   }
+  /// Length of a span.
+  #[inline]
+  pub fn len(& self) -> usize {
+    self.span.len()
+  }
+  /// Map over a spanned thing.
+  #[inline]
+  pub fn map<U, F: Fn(T) -> U>(self, f: F) -> Spnd<U> {
+    Spnd { val: f(self.val), span: self.span }
+  }
+  /// Destroys a `Spnd`.
+  #[inline]
+  pub fn destroy(self) -> (T, Spn) { (self.val, self.span) }
 }
 impl<T> Deref for Spnd<T> {
   type Target = T ;
@@ -154,6 +167,120 @@ macro_rules! mk_parser {
   ) ;
 }
 
+/// Adds the span of a sub-parser.
+#[macro_export]
+macro_rules! len_add {
+  ($bytes:expr, $len:ident < char $c:expr) => (
+    map!($bytes, char!($c), |_| $len += 1)
+  ) ;
+  ($bytes:expr, $len:ident < bytes $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |stuff: & [u8]| $len += stuff.len()
+    )
+  ) ;
+  ($bytes:expr, $len:ident < int $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |int| $len += int
+    )
+  ) ;
+  ($bytes:expr, $len:ident < spn $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |stuff| {
+        let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
+        $len += span.len() ;
+        stuff
+      }
+    )
+  ) ;
+  ($bytes:expr, $len:ident < bytes $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |stuff: & [u8]| $len += stuff.len()
+    )
+  ) ;
+  ($bytes:expr, $len:ident < int $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |int| $len += int
+    )
+  ) ;
+  ($bytes:expr, $len:ident < spn $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |stuff| {
+        let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
+        $len += span.len() ;
+        stuff
+      }
+    )
+  ) ;
+}
+
+/// Adds the span of a sub-parser.
+#[macro_export]
+macro_rules! len_set {
+  ($bytes:expr, $len:ident < char $c:expr) => (
+    map!($bytes, char!($c), |_| $len = 1)
+  ) ;
+  ($bytes:expr, len $len:ident < $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |stuff| { $len = stuff.len() ; stuff }
+    )
+  ) ;
+  ($bytes:expr, int $len:ident < $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |int| { $len = int ; int }
+    )
+  ) ;
+  ($bytes:expr, spn $len:ident < $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $($rest)+, |stuff| {
+        let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
+        $len = span.len() ;
+        stuff
+      }
+    )
+  ) ;
+  ($bytes:expr, len $len:ident < $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |stuff| { $len = stuff.len() ; stuff }
+    )
+  ) ;
+  ($bytes:expr, int $len:ident < $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |int| { $len = int ; int }
+    )
+  ) ;
+  ($bytes:expr, spn $len:ident < $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |stuff| {
+        let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
+        $len = span.len() ;
+        stuff
+      }
+    )
+  ) ;
+}
+
 pub mod vmt ;
 pub mod smt2 ;
 
@@ -174,7 +301,7 @@ mk_parser!{
 }
 
 named_attr!{
-  #[doc = "Parses a line comment."],
+  #[doc = "Parses a line comment, returns the number of bytes parsed."],
   comment<usize>,
   do_parse!(
     char!(';') >>
@@ -184,130 +311,185 @@ named_attr!{
 }
 
 mk_parser!{
-  #[doc = "Parses spaces and comments. Returns the number of bytes parsed."]
+  #[doc = "Parses spaces and comments, returns the number of bytes parsed."]
   pub fn space_comment(bytes) -> usize {
-    let mut cnt = 0 ;
+    let mut len = 0 ;
     map!(
       bytes,
       many0!(
         alt!(
-          map!( comment, |n| cnt += n ) |
-          map!( multispace, |bytes: & [u8]| cnt += bytes.len() )
+          len_add!(len < int comment) |
+          len_add!(len < bytes multispace)
         )
-      ), |_| cnt
+      ), |_| len
     )
   }
 }
 
 
-named!{ pub bool_parser<Bool>,
-  alt!(
-    map!( tag!("true"), |_| true ) |
-    map!( tag!("false"), |_| false )
-  )
+mk_parser!{
+  #[doc = "Parses a spanned bool constant."]
+  pub fn bool_parser(bytes, offset: usize) -> Spnd<Bool> {
+    alt!(
+      bytes,
+      map!(
+        tag!("true"),
+        |bytes| Spnd::bytes_mk(true, offset, bytes)
+      ) |
+      map!(
+        tag!("false"),
+        |bytes| Spnd::bytes_mk(false, offset, bytes)
+      )
+    )
+  }
 }
 
-named!{ pub int_parser<Int>,
-  alt!(
-    map_opt!(
+mk_parser!{
+  #[doc = "Parses a spanned int constant."]
+  pub fn int_parser(bytes, offset: usize) -> Spnd<Int> {
+    let mut len = 0 ;
+    alt!(
+      bytes,
+      map!(
+        map_opt!(
+          do_parse!(
+            peek!( one_of!("0123456789") ) >>
+            bytes: digit >>
+            (bytes)
+          ), |bytes: Bytes| {
+            len = bytes.len() ;
+            Int::parse_bytes(bytes, 10)
+          }
+        ), |int| Spnd::len_mk(int, offset, len)
+      ) |
+      do_parse!(
+        len_set!(len < char '(') >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char '-' ) >>
+        len_add!(len < int space_comment) >>
+        int: len_add!(
+          len < spn apply!(int_parser, offset + len)
+        ) >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char ')') >> ({
+          Spnd::len_mk(- int, offset, len)
+        })
+      )
+    )
+  }
+}
+
+mk_parser!{
+  #[doc = "Parses a spanned rational constant."]
+  pub fn rat_parser(bytes, offset: usize) -> Spnd<Rat> {
+    let mut len = 0 ;
+    alt!(
+      bytes,
       do_parse!(
         peek!( one_of!("0123456789") ) >>
-        bytes: digit >>
-        (bytes)
-      ), |bytes| Int::parse_bytes(bytes, 10)
-    ) |
-    do_parse!(
-      char!('(') >>
-      opt!(space_comment) >>
-      char!('-') >>
-      space_comment >>
-      int: int_parser >>
-      opt!(space_comment) >>
-      char!(')') >>
-      (- int)
-    )
-  )
-}
-
-named!{ pub rat_parser<Rat>,
-  alt!(
-    do_parse!(
-      peek!( one_of!("0123456789") ) >>
-      lft: digit >>
-      char!('.') >>
-      peek!( one_of!("0123456789") ) >>
-      rgt: digit >> ({
-        use std::char ;
-        let mut num = String::with_capacity(lft.len() + rgt.len()) ;
-        let mut den = String::with_capacity(rgt.len() + 1) ;
-        den.push('1') ;
-        for digit in lft {
-          let digit = char::from_u32(* digit as u32).unwrap() ;
-          num.push(digit)
-        } ;
-        for digit in rgt {
-          let digit = char::from_u32(* digit as u32).unwrap() ;
-          num.push(digit) ;
-          den.push('0')
-        } ;
-        Rat::new(
-          Int::parse_bytes(num.as_bytes(), 10).unwrap(),
-          Int::parse_bytes(den.as_bytes(), 10).unwrap(),
+        lft: digit >>
+        len_add!(len < char '.') >>
+        peek!( one_of!("0123456789") ) >>
+        rgt: digit >> ({
+          use std::char ;
+          len += lft.len() ;
+          len += rgt.len() ;
+          let mut num = String::with_capacity(lft.len() + rgt.len()) ;
+          let mut den = String::with_capacity(rgt.len() + 1) ;
+          den.push('1') ;
+          for digit in lft {
+            let digit = char::from_u32(* digit as u32).unwrap() ;
+            num.push(digit)
+          } ;
+          for digit in rgt {
+            let digit = char::from_u32(* digit as u32).unwrap() ;
+            num.push(digit) ;
+            den.push('0')
+          } ;
+          Spnd::len_mk(
+            Rat::new(
+              Int::parse_bytes(num.as_bytes(), 10).unwrap(),
+              Int::parse_bytes(den.as_bytes(), 10).unwrap(),
+            ), offset, len
+          )
+        })
+      ) |
+      do_parse!(
+        len_set!(len < char '(') >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char '/') >>
+        len_add!(len < int space_comment) >>
+        num: len_add!(
+          len < spn apply!(int_parser, offset + len)
+        ) >>
+        len_add!(len < int space_comment) >>
+        den: len_add!(
+          len < spn apply!(int_parser, offset + len)
+        ) >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char ')') >> (
+          // Unchecked division by 0.
+          Spnd::len_mk(
+            Rat::new(num, den), offset, len
+          )
         )
-      })
-    ) |
-    do_parse!(
-      char!('(') >>
-      opt!(space_comment) >>
-      char!('/') >>
-      space_comment >>
-      num: int_parser >>
-      space_comment >>
-      den: int_parser >>
-      opt!(space_comment) >>
-      char!(')') >> (
-        // Unchecked division by 0.
-        Rat::new(num, den)
-      )
-    ) |
-    do_parse!(
-      char!('(') >>
-      opt!(space_comment) >>
-      char!('/') >>
-      space_comment >>
-      num: rat_parser >>
-      space_comment >>
-      den: rat_parser >>
-      opt!(space_comment) >>
-      char!(')') >> (
-        num / den
-      )
-    ) |
-    do_parse!(
-      char!('(') >>
-      opt!(space_comment) >>
-      char!('-') >>
-      space_comment >>
-      rat: rat_parser >>
-      opt!(space_comment) >>
-      char!(')') >> (
-        - rat
+      ) |
+      do_parse!(
+        len_set!(len < char '(') >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char '/') >>
+        len_add!(len < int space_comment) >>
+        num: len_add!(
+          len < spn apply!(rat_parser, offset + len)
+        ) >>
+        len_add!(len < int space_comment) >>
+        den: len_add!(
+          len < spn apply!(rat_parser, offset + len)
+        ) >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char ')') >> (
+          Spnd::len_mk(
+            num / den, offset, len
+          )
+        )
+      ) |
+      do_parse!(
+        len_set!(len < char '(') >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char '-') >>
+        len_add!(len < int space_comment) >>
+        rat: len_add!(
+          len < spn apply!(rat_parser, offset + len)
+        ) >>
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char ')') >> (
+          Spnd::len_mk(
+            - rat, offset, len
+          )
+        )
       )
     )
-  )
+  }
 }
 
 pub fn cst_parser<'a, F>(
-  bytes: & 'a [u8], f: & F
-) -> IResult<& 'a [u8], Cst>
+  bytes: & 'a [u8], offset: usize, f: & F
+) -> IResult<& 'a [u8], Spnd<Cst>>
 where F: CstMaker<Bool, Cst> + CstMaker<Int, Cst> + CstMaker<Rat, Cst> {
+  let mut len = 0 ;
   preceded!(
     bytes,
-    opt!(space_comment),
+    opt!( len_add!(len < int space_comment) ),
     alt!(
-      map!( int_parser, |i| f.cst(i) ) |
-      map!( rat_parser, |r| f.cst(r) ) |
-      map!( bool_parser, |b| f.cst(b) )
+      map!(
+        apply!(int_parser, offset),  |i:Spnd<Int>| i.map(|i| f.cst(i))
+      ) |
+      map!(
+        apply!(rat_parser, offset),  |r:Spnd<Rat>| r.map(|r| f.cst(r))
+      ) |
+      map!(
+        apply!(bool_parser, offset), |b:Spnd<Bool>| b.map(|b| f.cst(b))
+      )
     )
   )
 }
@@ -384,7 +566,10 @@ named_attr!{
 macro_rules! try_parse_val {
   ($fun:expr, $arg:expr, $val:expr) => (
     try_parse!($fun, $arg,
-      (s, val) -> { assert_eq!(val, $val) }
+      (s, val) -> {
+        println!("| expected: `{:?}`", $val) ;
+        assert_eq!(val, $val)
+      }
     )
   ) ;
 }
@@ -424,14 +609,16 @@ mod boo1 {
   fn tru3() {
     use super::* ;
     try_parse_val!(
-      bool_parser, b"true", true
+      |bytes| bool_parser(bytes, 0), b"true",
+      Spnd::len_mk(true, 0, 4)
     )
   }
   #[test]
   fn fals3() {
     use super::* ;
     try_parse_val!(
-      bool_parser, b"false", false
+      |bytes| bool_parser(bytes, 0), b"false",
+      Spnd::len_mk(false, 0, 5)
     )
   }
 }
@@ -444,17 +631,22 @@ mod int {
     use std::str::FromStr ;
     use typ::Int ;
     try_parse_val!(
-      int_parser, b"42", Int::from_str("42").unwrap()
+      |bytes| int_parser(bytes, 0), b"42",
+      Spnd::len_mk(
+        Int::from_str("42").unwrap(), 0, 2
+      )
     ) ;
     try_parse_val!(
-      int_parser, b"74205432075342042",
-      Int::from_str("74205432075342042").unwrap()
+      |bytes| int_parser(bytes, 0), b"74205432075342042",
+      Spnd::len_mk(
+        Int::from_str("74205432075342042").unwrap(), 0, 17
+      )
     )
   }
   #[test]
   fn empty() {
     use super::* ;
-    match int_parser(& b""[..]) {
+    match int_parser(& b""[..], 0) {
       ::nom::IResult::Incomplete(_) => (),
       other => panic!("unexpected result on parsing empty string: {:?}", other)
     } ;
@@ -470,45 +662,57 @@ mod rat {
     use std::str::FromStr ;
     use typ::{ Int, Rat } ;
     try_parse_val!(
-      rat_parser, b"(/ 0 1)",
-      Rat::new(
-        Int::from_str("0").unwrap(),
-        Int::from_str("1").unwrap()
+      |bytes| rat_parser(bytes, 0), b"(/ 0 1)",
+      Spnd::len_mk(
+        Rat::new(
+          Int::from_str("0").unwrap(),
+          Int::from_str("1").unwrap()
+        ), 0, 7
       )
     ) ;
     try_parse_val!(
-      rat_parser, b"( / 74205432075342042 76453   )",
-      Rat::new(
-        Int::from_str("74205432075342042").unwrap(),
-        Int::from_str("76453").unwrap()
+      |bytes| rat_parser(bytes, 0), b"( / 74205432075342042 76453   )",
+      Spnd::len_mk(
+        Rat::new(
+          Int::from_str("74205432075342042").unwrap(),
+          Int::from_str("76453").unwrap()
+        ), 0, 31
       )
     ) ;
     try_parse_val!(
-      rat_parser, b"42.76453",
-      Rat::new(
-        Int::from_str("4276453").unwrap(),
-        Int::from_str("100000").unwrap()
+      |bytes| rat_parser(bytes, 0), b"42.76453",
+      Spnd::len_mk(
+        Rat::new(
+          Int::from_str("4276453").unwrap(),
+          Int::from_str("100000").unwrap()
+        ), 0, 8
       )
     ) ;
     try_parse_val!(
-      rat_parser, b"0.0",
-      Rat::new(
-        Int::from_str("0").unwrap(),
-        Int::from_str("1").unwrap()
+      |bytes| rat_parser(bytes, 0), b"0.0",
+      Spnd::len_mk(
+        Rat::new(
+          Int::from_str("0").unwrap(),
+          Int::from_str("1").unwrap()
+        ), 0, 3
       )
     ) ;
     try_parse_val!(
-      rat_parser, b"(/ 42.76453 1.0)",
-      Rat::new(
-        Int::from_str("4276453").unwrap(),
-        Int::from_str("100000").unwrap()
+      |bytes| rat_parser(bytes, 0), b"(/ 42.76453 1.0)",
+      Spnd::len_mk(
+        Rat::new(
+          Int::from_str("4276453").unwrap(),
+          Int::from_str("100000").unwrap()
+        ), 0, 16
       )
     ) ;
     try_parse_val!(
-      rat_parser, b"(- (/ 42.76453 1.0))",
-      Rat::new(
-        Int::from_str("-4276453").unwrap(),
-        Int::from_str("100000").unwrap()
+      |bytes| rat_parser(bytes, 0), b"(- (/ 42.76453 1.0))",
+      Spnd::len_mk(
+        Rat::new(
+          Int::from_str("-4276453").unwrap(),
+          Int::from_str("100000").unwrap()
+        ), 0, 20
       )
     ) ;
     ()

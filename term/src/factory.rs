@@ -710,7 +710,9 @@ impl ParseSmt2 for Factory {
   fn parse_value<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], Cst> {
-    parser::cst_parser(bytes, self)
+    parser::cst_parser(bytes, 0, self).map(
+      |spnd| spnd.destroy().0
+    )
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8], off: & Offset2
