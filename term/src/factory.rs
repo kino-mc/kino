@@ -27,6 +27,7 @@ use term::{
   bump, debump
 } ;
 use parser ;
+use parser::Spnd ;
 use parser::vmt::TermAndDep ;
 
 use errors::* ;
@@ -238,7 +239,7 @@ impl Factory {
 
   mk_parser!{
     #[doc = "Parses a type."]
-    pub fn parse_type(bytes, offset: usize) -> parser::Spanned<Type> {
+    pub fn parse_type(bytes, offset: usize) -> Spnd<Type> {
       parser::type_parser(bytes, offset)
     }
   }
@@ -743,7 +744,7 @@ pub trait ParseVmt2 {
   /// Parses a Type in VMT format.
   fn parse_type<'a>(
     & self, bytes: & 'a [u8], offset: usize
-  ) -> IResult<& 'a [u8], parser::Spanned<Self::Type>> ;
+  ) -> IResult<& 'a [u8], Spnd<Self::Type>> ;
 }
 
 impl ParseVmt2 for Factory {
@@ -766,7 +767,7 @@ impl ParseVmt2 for Factory {
   }
   fn parse_type<'a>(
     & self, bytes: & 'a [u8], offset: usize
-  ) -> IResult<& 'a [u8], parser::Spanned<Type>> {
+  ) -> IResult<& 'a [u8], Spnd<Type>> {
     parser::type_parser(bytes, offset)
   }
 }

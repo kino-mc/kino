@@ -24,7 +24,7 @@ use term::{ Term, Operator } ;
 use factory::Factory ;
 
 use super::{
-  Span, Spanned,
+  Spn, Spnd,
   type_parser,
   space_comment,
   simple_symbol_head, simple_symbol_tail,
@@ -49,7 +49,7 @@ pub struct TermAndDep {
   /// Whether the term is quantifier-free.
   pub qf: bool,
   /// The span of the term.
-  pub span: Span,
+  pub span: Spn,
 }
 impl fmt::Display for TermAndDep {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -58,7 +58,7 @@ impl fmt::Display for TermAndDep {
 }
 impl TermAndDep {
   /// Creates a term with dependencies from a variable.
-  pub fn var(factory: & Factory, var: Var, span: Span) -> Self {
+  pub fn var(factory: & Factory, var: Var, span: Spn) -> Self {
     let term: Term = factory.mk_var(var.clone()) ;
     let mut vars = HashSet::new() ;
     vars.insert(var) ;
@@ -73,7 +73,7 @@ impl TermAndDep {
     }
   }
   /// Creates a term with dependencies from a constant.
-  pub fn cst(factory: & Factory, cst: Cst, span: Span) -> Self {
+  pub fn cst(factory: & Factory, cst: Cst, span: Spn) -> Self {
     use term::CstMaker ;
     let mut types = HashSet::new() ;
     types.insert( cst.get().typ() ) ;
@@ -124,7 +124,7 @@ impl TermAndDep {
 
   /// Parses an operator.
   pub fn op(
-    factory: & Factory, op: Operator, kids: Vec<TermAndDep>, span: Span
+    factory: & Factory, op: Operator, kids: Vec<TermAndDep>, span: Spn
   ) -> Self {
     use term::Operator::* ;
     use term::OpMaker ;
@@ -149,7 +149,7 @@ impl TermAndDep {
 
   /// Parses an application.
   pub fn app(
-    factory: & Factory, sym: Sym, kids: Vec<TermAndDep>, span: Span
+    factory: & Factory, sym: Sym, kids: Vec<TermAndDep>, span: Spn
   ) -> Self {
     use term::AppMaker ;
     let (
@@ -171,8 +171,8 @@ impl TermAndDep {
 
   /// Parses a quantifier.
   fn quantifier(
-    factory: & Factory, bindings: Vec<(Sym, Spanned<Type>)>, kid: TermAndDep,
-    univ: bool, span: Span
+    factory: & Factory, bindings: Vec<(Sym, Spnd<Type>)>, kid: TermAndDep,
+    univ: bool, span: Spn
   ) -> Self {
     use term::BindMaker ;
     let term = kid.term ;
@@ -208,16 +208,16 @@ impl TermAndDep {
 
   /// Parses a universal quantifier.
   pub fn forall(
-    factory: & Factory, bindings: Vec<(Sym, Spanned<Type>)>, kid: TermAndDep,
-    span: Span
+    factory: & Factory, bindings: Vec<(Sym, Spnd<Type>)>, kid: TermAndDep,
+    span: Spn
   ) -> Self {
     Self::quantifier(factory, bindings, kid, true, span)
   }
 
   /// Parses an existential quantifier.
   pub fn exists(
-    factory: & Factory, bindings: Vec<(Sym, Spanned<Type>)>, kid: TermAndDep,
-    span: Span
+    factory: & Factory, bindings: Vec<(Sym, Spnd<Type>)>, kid: TermAndDep,
+    span: Spn
   ) -> Self {
     Self::quantifier(factory, bindings, kid, true, span)
   }
@@ -225,7 +225,7 @@ impl TermAndDep {
   /// Parses a let binding.
   pub fn let_b(
     factory: & Factory, bindings: Vec<(Sym, TermAndDep)>, kid: TermAndDep,
-    span: Span
+    span: Spn
   ) -> Self {
     use term::BindMaker ;
     use std::iter::Extend ;
@@ -322,13 +322,13 @@ pub fn var_parser<'a>(
       char!(')'),
       || {
         let var = f.svar(sym, state) ;
-        TermAndDep::var(f, var, Span::dummy())
+        TermAndDep::var(f, var, Spn::dummy())
       }
     ) |
     map!(
       id_parser, |s| {
         let var = f.var( f.sym(s) ) ;
-        TermAndDep::var(f, var, Span::dummy())
+        TermAndDep::var(f, var, Spn::dummy())
       }
     )
   )
@@ -340,7 +340,7 @@ pub fn cst_parser<'a>(
   map!(
     bytes,
     apply!( super::cst_parser, f ),
-    |cst| TermAndDep::cst(f, cst, Span::dummy())
+    |cst| TermAndDep::cst(f, cst, Spn::dummy())
   )
 }
 
@@ -358,7 +358,7 @@ pub fn op_parser<'a>(
     ) ~
     opt!(space_comment) ~
     char!(')'),
-    || TermAndDep::op(f, op, args, Span::dummy())
+    || TermAndDep::op(f, op, args, Spn::dummy())
   )
 }
 
@@ -400,10 +400,10 @@ pub fn quantified_parser<'a>(
     char!(')'),
     || match quantifier {
       Quantifier::Forall => TermAndDep::forall(
-        f, bindings, term, Span::dummy()
+        f, bindings, term, Spn::dummy()
       ),
       Quantifier::Exists => TermAndDep::exists(
-        f, bindings, term, Span::dummy()
+        f, bindings, term, Spn::dummy()
       ),
     }
   )
@@ -444,7 +444,7 @@ pub fn let_parser<'a>(
     term: apply!(term_parser, f) ~
     opt!(space_comment) ~
     char!(')'),
-    || TermAndDep::let_b(f, bindings, term, Span::dummy())
+    || TermAndDep::let_b(f, bindings, term, Spn::dummy())
   )
 }
 
@@ -465,7 +465,7 @@ fn app_parser<'a>(
     char!(')'),
     || {
       let sym = f.sym(sym) ;
-      TermAndDep::app(f, sym, args, Span::dummy())
+      TermAndDep::app(f, sym, args, Spn::dummy())
     }
   )
 }
@@ -527,9 +527,7 @@ mod terms {
     let factory = Factory::mk() ;
     let res = factory.cst( Int::from_str("7").unwrap() ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"7",
-      res
+      term_parser, & factory, b"7", res
     ) ;
     let res = factory.cst(
       Rat::new(
@@ -538,21 +536,15 @@ mod terms {
       )
     ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"(/ 5357 2046)",
-      res
+      term_parser, & factory, b"(/ 5357 2046)", res
     ) ;
     let res = factory.cst( true ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"true",
-      res
+      term_parser, & factory, b"true", res
     ) ;
     let res = factory.cst( false ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"false",
-      res
+      term_parser, & factory, b"false", res
     ) ;
   }
 
@@ -562,27 +554,19 @@ mod terms {
     let factory = Factory::mk() ;
     let res = factory.var( factory.sym("bla") ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"|bla|",
-      res
+      term_parser, & factory, b"|bla|", res
     ) ;
     let res = factory.var( factory.sym("bly.bla") ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"|bly.bla|",
-      res
+      term_parser, & factory, b"|bly.bla|", res
     ) ;
     let res = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"(_ curr |bla|)",
-      res
+      term_parser, & factory, b"(_ curr |bla|)", res
     ) ;
     let res = factory.svar( factory.sym("bla"), State::Next ) ;
     try_parse_term!(
-      term_parser, & factory,
-      b"(_ next |bla|)",
-      res
+      term_parser, & factory, b"(_ next |bla|)", res
     ) ;
   }
 
@@ -600,23 +584,18 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      bla_plus_7
+      term_parser, & factory, & s, bla_plus_7
     ) ;
 
     let nested = factory.op(
       Operator::Le, vec![
-        factory.cst( Int::from_str("17").unwrap() ),
-        bla_plus_7
+        factory.cst( Int::from_str("17").unwrap() ), bla_plus_7
       ]
     ) ;
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      term_parser, & factory, & s, nested
     ) ;
 
     let nested = factory.op(
@@ -628,9 +607,7 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      term_parser, & factory, & s, nested
     ) ;
 
     let nested = factory.op(
@@ -642,9 +619,7 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      term_parser, & factory, & s, nested
     ) ;
 
     let nested = factory.op(
@@ -667,9 +642,7 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      term_parser, & factory, & s, nested
     ) ;
   }
 
@@ -687,9 +660,7 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      bla_plus_7
+      term_parser, & factory, & s, bla_plus_7
     ) ;
 
     let nested = factory.app(
@@ -701,9 +672,7 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      term_parser, & factory, & s, nested
     ) ;
 
     let nested = factory.app(
@@ -715,9 +684,7 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      term_parser, & factory, & s, nested
     ) ;
 
     let nested = factory.op(
@@ -737,7 +704,6 @@ mod terms {
 
   #[test]
   fn empty() {
-    use super::* ;
     let factory = Factory::mk() ;
     match super::term_parser(& b""[..], & factory) {
       ::nom::IResult::Incomplete(_) => (),

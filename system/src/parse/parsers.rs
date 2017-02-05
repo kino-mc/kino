@@ -42,7 +42,7 @@ named!{
 
 mk_parser!{
   #[doc = "Type parser."]
-  pub fn type_parser(bytes, offset: usize) -> Spanned<Type> {
+  pub fn type_parser(bytes, offset: usize) -> Spnd<Type> {
     apply!(bytes, Factory::parse_type, offset)
   }
 }
@@ -59,7 +59,7 @@ named!{
     opt!(space_comment) ~
     args: separated_list!(
       space_comment,
-      map!( apply!(type_parser, 0), |t: Spanned<Type>| * t )
+      map!( apply!(type_parser, 0), |t: Spnd<Type>| * t )
     ) ~
     opt!(space_comment) ~
     char!(')'),
@@ -90,7 +90,7 @@ fn args_parser<'a>(
           opt!(space_comment) ~
           sym: apply!(sym_parser, f) ~
           space_comment ~
-          typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| *t ) ~
+          typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| *t ) ~
           opt!(space_comment),
           || (sym, typ)
         ),
@@ -117,7 +117,7 @@ fn fun_dec_parser<'a>(
     opt!(space_comment) ~
     sig: sig_parser ~
     opt!(space_comment) ~
-    typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| * t ) ~
+    typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) ~
     opt!(space_comment) ~
     char!(')'),
     || c.add_fun_dec(sym, sig, typ)
@@ -145,7 +145,7 @@ fn fun_def_parser<'a>(
     opt!(space_comment) ~
     args: dbg_dmp!(apply!(args_parser, c.factory())) ~
     opt!(space_comment) ~
-    typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| * t ) ~
+    typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) ~
     opt!(space_comment) ~
     body: dbg_dmp!(apply!(term_parser, c.factory())) ~
     opt!(space_comment) ~
@@ -239,7 +239,7 @@ fn _locals_parser<'a>(
             opt!(space_comment) ~
             sym: apply!(sym_parser, f) ~
             space_comment ~
-            typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| * t ) ~
+            typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) ~
             space_comment ~
             term: apply!(term_parser, f) ~
             opt!(space_comment),

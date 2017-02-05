@@ -17,62 +17,6 @@ use typ::{ Type, Bool, Int, Rat } ;
 use cst::Cst ;
 use term::{ CstMaker, Operator } ;
 
-/// A span indicates a position (new lines count as regular characters).
-#[derive(Clone, Debug)]
-pub struct Span {
-  /// Start of the span.
-  pub bgn: usize,
-  /// End of the span.
-  pub end: usize,
-}
-impl Span {
-  /// Creates a new span.
-  #[inline]
-  pub fn mk(bgn: usize, end: usize) -> Self {
-    debug_assert!( bgn <= end ) ;
-    Span { bgn: bgn, end: end }
-  }
-  /// Creates a dummy span.
-  #[inline]
-  pub fn dummy() -> Self {
-    Self::mk(0, 0)
-  }
-  /// Length of a span.
-  #[inline]
-  pub fn len(& self) -> usize {
-    self.end - self.bgn
-  }
-}
-
-/// Wraps a span around something.
-pub struct Spanned<T> {
-  /// Something.
-  pub val: T,
-  /// Span.
-  pub span: Span,
-}
-/// Wraps a span around something.
-#[inline]
-pub fn spnd<T>(val: T, span: Span) -> Spanned<T> {
-  Spanned { val: val, span: span }
-}
-/// Wraps a span around something from an offset and a length.
-#[inline]
-pub fn spnd_len<T>(val: T, bgn: usize, len: usize) -> Spanned<T> {
-  spnd(val, Span::mk(bgn, bgn + len))
-}
-/// Wraps a span around something from an offset and a length.
-#[inline]
-pub fn spnd_bytes<T>(val: T, bgn: usize, bytes: Bytes) -> Spanned<T> {
-  spnd_len(val, bgn, bytes.len())
-}
-impl<T> Deref for Spanned<T> {
-  type Target = T ;
-  fn deref(& self) -> & T { & self.val }
-}
-impl<T> DerefMut for Spanned<T> {
-  fn deref_mut(& mut self) -> & mut T { & mut self.val }
-}
 
 /// Used in tests for parsers.
 #[cfg(test)]
@@ -89,12 +33,6 @@ macro_rules! try_parse {
           println!("| done: {}", $res) ;
           $b
         },
-        ::nom::IResult::Error(
-          ::nom::Err::Position(pos,txt)
-        ) => panic!(
-          "position error at {:?}: {}",
-          pos, ::std::str::from_utf8(txt).unwrap()
-        ),
         ::nom::IResult::Error(e) => panic!("error: {:?}", e),
         ::nom::IResult::Incomplete(n) => panic!("incomplete: {:?}", n),
       } ;
@@ -121,10 +59,75 @@ macro_rules! try_parse {
   ) ;
 }
 
+
+
+/// A span indicates a position (new lines count as regular characters).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Spn {
+  /// Start of the span.
+  pub bgn: usize,
+  /// End of the span.
+  pub end: usize,
+}
+impl Spn {
+  /// Creates a new span.
+  #[inline]
+  pub fn mk(bgn: usize, end: usize) -> Self {
+    debug_assert!( bgn <= end ) ;
+    Spn { bgn: bgn, end: end }
+  }
+  /// Creates a dummy span.
+  #[inline]
+  pub fn dummy() -> Self {
+    Self::mk(0, 0)
+  }
+  /// Length of a span.
+  #[inline]
+  pub fn len(& self) -> usize {
+    self.end - self.bgn
+  }
+}
+
+/// Wraps a span around something.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spnd<T> {
+  /// Something.
+  pub val: T,
+  /// Spn.
+  pub span: Spn,
+}
+impl<T> Spnd<T> {
+  /// Wraps a span around something.
+  #[inline]
+  pub fn mk(val: T, span: Spn) -> Self {
+    Spnd { val: val, span: span }
+  }
+  /// Wraps a span around something from an offset and a length.
+  #[inline]
+  pub fn len_mk(val: T, bgn: usize, len: usize) -> Self {
+    Self::mk(val, Spn::mk(bgn, bgn + len - 1))
+  }
+  /// Wraps a span around something from an offset and a length.
+  #[inline]
+  pub fn bytes_mk(val: T, bgn: usize, bytes: Bytes) -> Self {
+    Self::len_mk(val, bgn, bytes.len())
+  }
+}
+impl<T> Deref for Spnd<T> {
+  type Target = T ;
+  fn deref(& self) -> & T { & self.val }
+}
+impl<T> DerefMut for Spnd<T> {
+  fn deref_mut(& mut self) -> & mut T { & mut self.val }
+}
+
 /// Bytes the parser handles.
 pub type Bytes<'a> = & 'a [u8] ;
 
 /// Special macro to create parsers.
+///
+/// Typically used to pass an offset as parameter and returned a `Spnd`
+/// thing.
 #[macro_export]
 macro_rules! mk_parser {
   (
@@ -156,27 +159,23 @@ pub mod smt2 ;
 
 mk_parser!{
   #[doc = "Spanned type parser."]
-  pub fn type_parser(bytes, offset: usize) -> Spanned<Type> {
+  pub fn type_parser(bytes, offset: usize) -> Spnd<Type> {
     alt!(
       bytes,
       map!(
-        tag!("Int"),  |bytes: Bytes| spnd_bytes(Type::Int,  offset, bytes)
+        tag!("Int"),  |bytes: Bytes| Spnd::bytes_mk(Type::Int,  offset, bytes)
       ) | map!(
-        tag!("Bool"), |bytes: Bytes| spnd_bytes(Type::Bool, offset, bytes)
+        tag!("Bool"), |bytes: Bytes| Spnd::bytes_mk(Type::Bool, offset, bytes)
       ) | map!(
-        tag!("Real"), |bytes: Bytes| spnd_bytes(Type::Rat,  offset, bytes)
+        tag!("Real"), |bytes: Bytes| Spnd::bytes_mk(Type::Rat,  offset, bytes)
       )
     )
   }
 }
 
-named!{
+named_attr!{
+  #[doc = "Parses a line comment."],
   comment<usize>,
-  // chain!(
-  //   char!(';') ~
-  //   many0!(not_line_ending),
-  //   || ()
-  // )
   do_parse!(
     char!(';') >>
     line: not_line_ending >>
@@ -210,22 +209,6 @@ named!{ pub bool_parser<Bool>,
 
 named!{ pub int_parser<Int>,
   alt!(
-    // chain!(
-    //   peek!( one_of!("0123456789") ) ~
-    //   bytes: digit,
-    //   // Unwraping cannot fail.
-    //   || Int::parse_bytes(bytes, 10).unwrap()
-    // ) |
-    // chain!(
-    //   char!('(') ~
-    //   opt!(space_comment) ~
-    //   char!('-') ~
-    //   space_comment ~
-    //   int: int_parser ~
-    //   opt!(space_comment) ~
-    //   char!(')'),
-    //   || - int
-    // )
     map_opt!(
       do_parse!(
         peek!( one_of!("0123456789") ) >>
@@ -248,13 +231,12 @@ named!{ pub int_parser<Int>,
 
 named!{ pub rat_parser<Rat>,
   alt!(
-    chain!(
-      peek!( one_of!("0123456789") ) ~
-      lft: digit ~
-      char!('.') ~
-      peek!( one_of!("0123456789") ) ~
-      rgt: digit,
-      || {
+    do_parse!(
+      peek!( one_of!("0123456789") ) >>
+      lft: digit >>
+      char!('.') >>
+      peek!( one_of!("0123456789") ) >>
+      rgt: digit >> ({
         use std::char ;
         let mut num = String::with_capacity(lft.len() + rgt.len()) ;
         let mut den = String::with_capacity(rgt.len() + 1) ;
@@ -272,42 +254,45 @@ named!{ pub rat_parser<Rat>,
           Int::parse_bytes(num.as_bytes(), 10).unwrap(),
           Int::parse_bytes(den.as_bytes(), 10).unwrap(),
         )
-      }
+      })
     ) |
-    chain!(
-      char!('(') ~
-      opt!(space_comment) ~
-      char!('/') ~
-      space_comment ~
-      num: int_parser ~
-      space_comment ~
-      den: int_parser ~
-      opt!(space_comment) ~
-      char!(')'),
-      // Unchecked division by 0.
-      || Rat::new(num, den)
+    do_parse!(
+      char!('(') >>
+      opt!(space_comment) >>
+      char!('/') >>
+      space_comment >>
+      num: int_parser >>
+      space_comment >>
+      den: int_parser >>
+      opt!(space_comment) >>
+      char!(')') >> (
+        // Unchecked division by 0.
+        Rat::new(num, den)
+      )
     ) |
-    chain!(
-      char!('(') ~
-      opt!(space_comment) ~
-      char!('/') ~
-      space_comment ~
-      num: rat_parser ~
-      space_comment ~
-      den: rat_parser ~
-      opt!(space_comment) ~
-      char!(')'),
-      || num / den
+    do_parse!(
+      char!('(') >>
+      opt!(space_comment) >>
+      char!('/') >>
+      space_comment >>
+      num: rat_parser >>
+      space_comment >>
+      den: rat_parser >>
+      opt!(space_comment) >>
+      char!(')') >> (
+        num / den
+      )
     ) |
-    chain!(
-      char!('(') ~
-      opt!(space_comment) ~
-      char!('-') ~
-      space_comment ~
-      rat: rat_parser ~
-      opt!(space_comment) ~
-      char!(')'),
-      || - rat
+    do_parse!(
+      char!('(') >>
+      opt!(space_comment) >>
+      char!('-') >>
+      space_comment >>
+      rat: rat_parser >>
+      opt!(space_comment) >>
+      char!(')') >> (
+        - rat
+      )
     )
   )
 }
@@ -320,15 +305,16 @@ where F: CstMaker<Bool, Cst> + CstMaker<Int, Cst> + CstMaker<Rat, Cst> {
     bytes,
     opt!(space_comment),
     alt!(
-      map!( rat_parser, |r| f.cst(r) ) |
       map!( int_parser, |i| f.cst(i) ) |
+      map!( rat_parser, |r| f.cst(r) ) |
       map!( bool_parser, |b| f.cst(b) )
     )
   )
 }
 
-/** Matches the head of a simple symbol. */
-named!{ pub simple_symbol_head<char>,
+named_attr!{
+  #[doc = "Matches the head of a simple symbol."],
+  pub simple_symbol_head<char>,
   one_of!("\
     _\
     abcdefghijklmnopqrstuvwxyz\
@@ -337,8 +323,9 @@ named!{ pub simple_symbol_head<char>,
   ")
 }
 
-/** Matches the tail of a simple symbol. */
-named!{ pub simple_symbol_tail,
+named_attr!{
+  #[doc = "Matches the tail of a simple symbol."],
+  pub simple_symbol_tail,
   is_a!("\
     _\
     0123456789\
@@ -350,7 +337,9 @@ named!{ pub simple_symbol_tail,
 
 
 
-named!{ pub operator_parser<Operator>,
+named_attr!{
+  #[doc = "Parses an operator."],
+  pub operator_parser<Operator>,
   alt!(
     map!( tag!("=>"), |_| Operator::Impl ) |
     map!( tag!("="), |_| Operator::Eq ) |
@@ -376,88 +365,14 @@ enum Quantifier {
   Forall, Exists
 }
 
-named!{ quantifier_parser<Quantifier>,
+named_attr!{
+  #[doc = "Parses a quantifier."],
+  quantifier_parser<Quantifier>,
   alt!(
     map!( tag!("forall"), |_| Quantifier::Forall ) |
     map!( tag!("exists"), |_| Quantifier::Exists )
   )
 }
-
-
-
-// pub enum TermAst {
-//   App(Sym),
-//   Forall(Vec<(Sym, Type)>),
-//   Exists(Vec<(Sym, Type)>),
-//   Let1,
-//   Let2(Sym, Vec<(Sym, Term)>),
-//   Let3(Vec<(Sym, Term)>),
-// }
-
-// impl TermAst {
-//   pub fn name(& self) -> & 'static str {
-//     match * self {
-//       App(_) => "application"
-
-//     }
-//   }
-// }
-
-// pub struct Ast<'a> {
-//   cons: & 'a TermConsign,
-//   top: Vec<Term>,
-//   ctxt: Vec<(TermAst,Vec<Term>)>,
-// }
-
-
-// impl<'a> Ast<'a> {
-//   pub fn mk(consign: & 'a TermConsign) -> Self {
-//     Ast { cons: consign, top: vec![], ctxt: vec![] }
-//   }
-
-//   pub fn app(& mut self, sym: Sym) {
-//     self.ctxt.push( TermAst::App(sym) )
-//   }
-//   pub fn forall(& mut self, vars: Vec<(Sym, Type)>) {
-//     self.ctxt.push( TermAst::Forall(vars) )
-//   }
-//   pub fn exists(& mut self, vars: Vec<(Sym, Type)>) {
-//     self.ctxt.push( TermAst::Exists(vars) )
-//   }
-//   pub fn let_b(& mut self) {
-//     self.ctxt.push( TermAst::Let1( vec![] ) )
-//   }
-//   pub fn binding_sym(& mut self, sym: Sym) -> Result<(), TermAst> {
-//     match self.ctxt.pop() {
-//       (Let1, terms) => {
-//         assert!( terms.is_empty() ) ;
-//         self.ctxt.push( Let2(Sym, vec![]) ) ;
-//         Ok(())
-//       },
-//       (Let3(bindings), terms) => {
-//         assert!( terms.is_empty() ) ;
-//         self.ctxt.push( Let2(Sym, vec![]) ) ;
-//         Ok(())
-//       },
-//       (illegal, terms) => Err(illegal),
-//     }
-//   }
-
-//   pub fn leaf(& mut self, mut term: Term) {
-//     match self.ctxt.pop() {
-//       Some( (something, terms) ) => {
-//         terms.push(term) ;
-//         self.ctxt.push( (something, terms) )
-//       }
-//       None => self.top.push(term),
-//     }
-//   }
-
-//   // pub fn go_up(& mut self) {
-//   //   match self.ctxt.
-//   // }
-// }
-
 
 
 
@@ -480,21 +395,24 @@ mod typ3 {
   fn boo1() {
     use super::* ;
     try_parse_val!(
-      type_parser, b"Bool", ::typ::Type::Bool
+      |bytes| type_parser(bytes, 0), b"Bool",
+      Spnd::len_mk(::typ::Type::Bool, 0, 4)
     )
   }
   #[test]
   fn int() {
     use super::* ;
     try_parse_val!(
-      type_parser, b"Int", ::typ::Type::Int
+      |bytes| type_parser(bytes, 0), b"Int",
+      Spnd::len_mk(::typ::Type::Int, 0, 3)
     )
   }
   #[test]
   fn rat() {
     use super::* ;
     try_parse_val!(
-      type_parser, b"Real", ::typ::Type::Rat
+      |bytes| type_parser(bytes, 0), b"Real",
+      Spnd::len_mk(::typ::Type::Rat, 0, 4)
     )
   }
 }

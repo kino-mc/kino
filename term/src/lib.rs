@@ -184,7 +184,7 @@ mod parser ;
 /// Parsing stuff.
 pub mod parsing {
   pub use super::parser::vmt::TermAndDep ;
-  pub use super::parser::{ Span, Spanned, Bytes } ;
+  pub use super::parser::{ Spn, Spnd, Bytes } ;
 }
 mod factory ;
 pub use factory::{ Factory, ParseVmt2, UnTermOps } ;

@@ -1581,7 +1581,7 @@ pub mod zip2 {
 
 
 
-/** Term evaluator. */
+/// Term evaluator.
 pub mod eval {
   use ::{
     Type, Cst, Sym, Term, Offset2, Factory, UnTermOps
@@ -1591,7 +1591,7 @@ pub mod eval {
   use ::zip::{ Step, fold_info, extract } ;
   use ::zip::Step::* ;
 
-  /** Function passed to fold to evaluate a term. */
+  /// Function passed to fold to evaluate a term.
   fn eval_term(
     factory: & Factory,
     model: & HashMap<Term, & Cst>,
@@ -1643,7 +1643,7 @@ pub mod eval {
     }
   }
 
-  /** Evaluates a term. */
+  /// Evaluates a term.
   pub fn eval(
     factory: & Factory, term: & Term, offset: & Offset2,
     model: & ::Model, scope: Sym
