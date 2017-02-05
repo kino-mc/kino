@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Basic traits and structures. */
+/// Basic traits and structures.
 
 use std::io ;
 use std::fmt ;

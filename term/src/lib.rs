@@ -219,9 +219,9 @@ pub mod zip {
   pub use term::zip2::{ Step, fold, fold_info, extract } ;
 }
 
-/** Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
-
-Exposed for extensibility. */
+/// Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
+///
+/// Exposed for extensibility.
 pub mod write {
   pub use base::{ Writable, SVarWriter, StateWritable } ;
 }
@@ -229,17 +229,17 @@ pub mod write {
 // Re-export of num.
 pub use ::num::* ;
 
-/** SMT solver. */
+/// SMT solver.
 pub mod smt {
   use ::std::process::Command ;
 
   pub use ::rsmt2::* ;
   use ::rsmt2::errors::* ;
 
-  /** The default z3 command. */
+  /// The default z3 command.
   #[inline(always)]
   pub fn z3_cmd() -> Command { Command::new("z3") }
-  /** The default cvc4 command. */
+  /// The default cvc4 command.
   #[inline(always)]
   pub fn cvc4_cmd() -> Command { Command::new("cvc4") }
 
