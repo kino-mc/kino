@@ -13,7 +13,8 @@ use base::* ;
 use super::Context ;
 use super::{ Atom, Res } ;
 use super::check::* ;
-use term::{ Type, Sym, TermAndDep, Factory, ParseVmt2 } ;
+use term::{ Type, Sym, Factory, ParseVmt2 } ;
+use term::parsing::* ;
 
 /** Parses a multispace and a comment. */
 named!{
@@ -26,7 +27,7 @@ named!{
   )
 }
 
-/** Parses a repetition of multispace/comment. */
+/// Parses a repetition of multispace/comment.
 named!{
   space_comment<()>,
   map!(
@@ -39,10 +40,16 @@ named!{
   )
 }
 
-named!{
-  type_parser<Type>,
-  call!(Factory::parse_type)
+mk_parser!{
+  #[doc = "Type parser."]
+  pub fn type_parser(bytes, offset: usize) -> Spanned<Type> {
+    apply!(bytes, Factory::parse_type, offset)
+  }
 }
+// named!{
+//   type_parser<Type>,
+//   call!(Factory::parse_type)
+// }
 
 /** Parses a signature. */
 named!{
@@ -52,7 +59,7 @@ named!{
     opt!(space_comment) ~
     args: separated_list!(
       space_comment,
-      type_parser
+      map!( apply!(type_parser, 0), |t: Spanned<Type>| * t )
     ) ~
     opt!(space_comment) ~
     char!(')'),
@@ -83,7 +90,7 @@ fn args_parser<'a>(
           opt!(space_comment) ~
           sym: apply!(sym_parser, f) ~
           space_comment ~
-          typ: type_parser ~
+          typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| *t ) ~
           opt!(space_comment),
           || (sym, typ)
         ),
@@ -110,7 +117,7 @@ fn fun_dec_parser<'a>(
     opt!(space_comment) ~
     sig: sig_parser ~
     opt!(space_comment) ~
-    typ: type_parser ~
+    typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| * t ) ~
     opt!(space_comment) ~
     char!(')'),
     || c.add_fun_dec(sym, sig, typ)
@@ -138,7 +145,7 @@ fn fun_def_parser<'a>(
     opt!(space_comment) ~
     args: dbg_dmp!(apply!(args_parser, c.factory())) ~
     opt!(space_comment) ~
-    typ: type_parser ~
+    typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| * t ) ~
     opt!(space_comment) ~
     body: dbg_dmp!(apply!(term_parser, c.factory())) ~
     opt!(space_comment) ~
@@ -232,7 +239,7 @@ fn _locals_parser<'a>(
             opt!(space_comment) ~
             sym: apply!(sym_parser, f) ~
             space_comment ~
-            typ: type_parser ~
+            typ: map!( apply!(type_parser, 0), |t: Spanned<Type>| * t ) ~
             space_comment ~
             term: apply!(term_parser, f) ~
             opt!(space_comment),

@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Term factory stuff. */
+//! Term factory stuff.
 
 use std::collections::HashMap ;
 use std::sync::{ RwLock, Arc } ;
@@ -236,9 +236,11 @@ impl Factory {
     }
   }
 
-  /// Parses a type.
-  pub fn parse_type<'a>(bytes: & 'a [u8]) -> IResult<& 'a [u8], Type> {
-    parser::type_parser(bytes)
+  mk_parser!{
+    #[doc = "Parses a type."]
+    pub fn parse_type(bytes, offset: usize) -> parser::Spanned<Type> {
+      parser::type_parser(bytes, offset)
+    }
   }
 
   /// Creates a variable from a `Var`.
@@ -633,15 +635,15 @@ impl ::term::Factory for Factory {}
 
 /// Unary operations on terms.
 pub trait UnTermOps<Trm> {
-  /** Bumps a term.
-
-  * changes all `SVar(sym, State::curr)` to `SVar(sym, State::next)`,
-  * returns `Err(())` if input term contains a `SVar(_, State::next)`. */
+  /// Bumps a term.
+  ///
+  /// * changes all `SVar(sym, State::curr)` to `SVar(sym, State::next)`,
+  /// * returns `Err(())` if input term contains a `SVar(_, State::next)`.
   fn bump(& self, Trm) -> Res<Term> ;
-  /** Bumps a term.
-
-  * changes all `SVar(sym, State::next)` to `SVar(sym, State::curr)`,
-  * returns `Err(())` if input term contains a `SVar(_, State::curr)`. */
+  /// Bumps a term.
+  /// 
+  /// * changes all `SVar(sym, State::next)` to `SVar(sym, State::curr)`,
+  /// * returns `Err(())` if input term contains a `SVar(_, State::curr)`.
   fn debump(& self, Trm) -> Res<Term> ;
 }
 // impl<
@@ -722,26 +724,26 @@ impl ParseSmt2 for Factory {
 }
 
 
-/** Parsers for VMT Systems */
+/// Parsers for VMT Systems.
 pub trait ParseVmt2 {
-  /** Type of identifiers when parsing an VMT system. */
+  /// Type of identifiers when parsing an VMT system.
   type Ident ;
-  /** Type for the result of expression parsing. */
+  /// Type for the result of expression parsing.
   type ExprRes ;
-  /** Type of types when parsing an VMT system. */
+  /// Type of types when parsing an VMT system.
   type Type ;
-  /** Parses an identifier in VMT format. */
+  /// Parses an identifier in VMT format.
   fn parse_ident<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], Self::Ident> ;
-  /** Parses an expression in VMT format. */
+  /// Parses an expression in VMT format.
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], Self::ExprRes> ;
-  /** Parses a Type in VMT format. */
+  /// Parses a Type in VMT format.
   fn parse_type<'a>(
-    & self, bytes: & 'a [u8]
-  ) -> IResult<& 'a [u8], Self::Type> ;
+    & self, bytes: & 'a [u8], offset: usize
+  ) -> IResult<& 'a [u8], parser::Spanned<Self::Type>> ;
 }
 
 impl ParseVmt2 for Factory {
@@ -763,8 +765,8 @@ impl ParseVmt2 for Factory {
     parser::vmt::term_parser(bytes, self)
   }
   fn parse_type<'a>(
-    & self, bytes: & 'a [u8]
-  ) -> IResult<& 'a [u8], Type> {
-    parser::type_parser(bytes)
+    & self, bytes: & 'a [u8], offset: usize
+  ) -> IResult<& 'a [u8], parser::Spanned<Type>> {
+    parser::type_parser(bytes, offset)
   }
 }

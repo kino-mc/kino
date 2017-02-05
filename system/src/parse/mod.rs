@@ -31,8 +31,9 @@ use std::thread::sleep ;
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
-  TermAndDep, Type, Offset, Cst, Sym, Term, Factory, Model, STermSet
+  Type, Offset, Cst, Sym, Term, Factory, Model, STermSet
 } ;
+use term::parsing::* ;
 
 use base::* ;
 mod parsers ;

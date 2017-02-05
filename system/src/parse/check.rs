@@ -14,7 +14,8 @@ See `parse::Context` for the description of the checks. */
 use std::fmt ;
 use std::collections::HashSet ;
 
-use term::{ TermAndDep, Type, Sym, Var, Term, STerm } ;
+use term::{ Type, Sym, Var, Term, STerm } ;
+use term::parsing::* ;
 use term::real_term ;
 
 use base::* ;

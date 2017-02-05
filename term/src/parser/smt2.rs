@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Parsers for answers to SMT Lib 2.5 queries. */
+//! Parsers for answers to SMT Lib 2.5 queries.
 
 use std::str ;
 use std::fmt::Debug ;
@@ -331,9 +331,9 @@ fn quantified_parser<'a>(
             }
           ) ~
           multispace ~
-          ty: type_parser ~
+          ty: apply!(type_parser, 0) ~
           opt!(multispace),
-          || (sym, ty)
+          || (sym, * ty)
         ),
         char!(')')
       )

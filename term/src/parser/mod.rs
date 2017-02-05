@@ -7,15 +7,74 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Parsers and such. */
+//! Parsers and such.
+
+use std::ops::{ Deref, DerefMut } ;
 
 use nom::{ digit, multispace, IResult, not_line_ending } ;
 
 use typ::{ Type, Bool, Int, Rat } ;
 use cst::Cst ;
-use term::{ CstMaker, Operator };
+use term::{ CstMaker, Operator } ;
 
-/** Used in tests for parsers. */
+/// A span indicates a position (new lines count as regular characters).
+#[derive(Clone, Debug)]
+pub struct Span {
+  /// Start of the span.
+  pub bgn: usize,
+  /// End of the span.
+  pub end: usize,
+}
+impl Span {
+  /// Creates a new span.
+  #[inline]
+  pub fn mk(bgn: usize, end: usize) -> Self {
+    debug_assert!( bgn <= end ) ;
+    Span { bgn: bgn, end: end }
+  }
+  /// Creates a dummy span.
+  #[inline]
+  pub fn dummy() -> Self {
+    Self::mk(0, 0)
+  }
+  /// Length of a span.
+  #[inline]
+  pub fn len(& self) -> usize {
+    self.end - self.bgn
+  }
+}
+
+/// Wraps a span around something.
+pub struct Spanned<T> {
+  /// Something.
+  pub val: T,
+  /// Span.
+  pub span: Span,
+}
+/// Wraps a span around something.
+#[inline]
+pub fn spnd<T>(val: T, span: Span) -> Spanned<T> {
+  Spanned { val: val, span: span }
+}
+/// Wraps a span around something from an offset and a length.
+#[inline]
+pub fn spnd_len<T>(val: T, bgn: usize, len: usize) -> Spanned<T> {
+  spnd(val, Span::mk(bgn, bgn + len))
+}
+/// Wraps a span around something from an offset and a length.
+#[inline]
+pub fn spnd_bytes<T>(val: T, bgn: usize, bytes: Bytes) -> Spanned<T> {
+  spnd_len(val, bgn, bytes.len())
+}
+impl<T> Deref for Spanned<T> {
+  type Target = T ;
+  fn deref(& self) -> & T { & self.val }
+}
+impl<T> DerefMut for Spanned<T> {
+  fn deref_mut(& mut self) -> & mut T { & mut self.val }
+}
+
+/// Used in tests for parsers.
 #[cfg(test)]
 macro_rules! try_parse {
   (
@@ -62,36 +121,83 @@ macro_rules! try_parse {
   ) ;
 }
 
+/// Bytes the parser handles.
+pub type Bytes<'a> = & 'a [u8] ;
+
+/// Special macro to create parsers.
+#[macro_export]
+macro_rules! mk_parser {
+  (
+    $(#[$attr:meta])*
+    pub fn $id:ident(
+      $bytes:ident $(, $param:ident : $param_ty:ty)* $(,)*
+    ) -> $out:ty $b:block
+  ) => (
+    $(#[$attr])*
+    pub fn $id(
+      $bytes: $crate::parsing::Bytes, $($param: $param_ty),*
+    ) -> ::nom::IResult<$crate::parsing::Bytes, $out> $b
+  ) ;
+  (
+    $(#[$attr:meta])*
+    fn $id:ident(
+      $bytes:ident $(, $param:ident : $param_ty:ty)* $(,)*
+    ) -> $out:ty $b:block
+  ) => (
+    $(#[$attr])*
+    fn $id(
+      $bytes: $crate::parsing::Bytes, $($param: $param_ty),*
+    ) -> nom::IResult<$crate::parsing::Bytes, $out> $b
+  ) ;
+}
+
 pub mod vmt ;
 pub mod smt2 ;
 
-named!{ pub type_parser<Type>,
-  alt!(
-    map!( tag!("Int"),  |_| Type::Int  ) |
-    map!( tag!("Bool"), |_| Type::Bool ) |
-    map!( tag!("Real"),  |_| Type::Rat  )
-  )
-}
-
-named!{
-  comment<()>,
-  chain!(
-    char!(';') ~
-    many0!(not_line_ending),
-    || ()
-  )
-}
-
-named!{
-  space_comment<()>,
-  map!(
-    many0!(
-      alt!(
-        comment | map!( multispace, |_| () )
+mk_parser!{
+  #[doc = "Spanned type parser."]
+  pub fn type_parser(bytes, offset: usize) -> Spanned<Type> {
+    alt!(
+      bytes,
+      map!(
+        tag!("Int"),  |bytes: Bytes| spnd_bytes(Type::Int,  offset, bytes)
+      ) | map!(
+        tag!("Bool"), |bytes: Bytes| spnd_bytes(Type::Bool, offset, bytes)
+      ) | map!(
+        tag!("Real"), |bytes: Bytes| spnd_bytes(Type::Rat,  offset, bytes)
       )
-    ),
-    |_| ()
+    )
+  }
+}
+
+named!{
+  comment<usize>,
+  // chain!(
+  //   char!(';') ~
+  //   many0!(not_line_ending),
+  //   || ()
+  // )
+  do_parse!(
+    char!(';') >>
+    line: not_line_ending >>
+    (line.len() + 1)
   )
+}
+
+mk_parser!{
+  #[doc = "Parses spaces and comments. Returns the number of bytes parsed."]
+  pub fn space_comment(bytes) -> usize {
+    let mut cnt = 0 ;
+    map!(
+      bytes,
+      many0!(
+        alt!(
+          map!( comment, |n| cnt += n ) |
+          map!( multispace, |bytes: & [u8]| cnt += bytes.len() )
+        )
+      ), |_| cnt
+    )
+  }
 }
 
 
@@ -104,21 +210,38 @@ named!{ pub bool_parser<Bool>,
 
 named!{ pub int_parser<Int>,
   alt!(
-    chain!(
-      peek!( one_of!("0123456789") ) ~
-      bytes: digit,
-      // Unwraping cannot fail.
-      || Int::parse_bytes(bytes, 10).unwrap()
+    // chain!(
+    //   peek!( one_of!("0123456789") ) ~
+    //   bytes: digit,
+    //   // Unwraping cannot fail.
+    //   || Int::parse_bytes(bytes, 10).unwrap()
+    // ) |
+    // chain!(
+    //   char!('(') ~
+    //   opt!(space_comment) ~
+    //   char!('-') ~
+    //   space_comment ~
+    //   int: int_parser ~
+    //   opt!(space_comment) ~
+    //   char!(')'),
+    //   || - int
+    // )
+    map_opt!(
+      do_parse!(
+        peek!( one_of!("0123456789") ) >>
+        bytes: digit >>
+        (bytes)
+      ), |bytes| Int::parse_bytes(bytes, 10)
     ) |
-    chain!(
-      char!('(') ~
-      opt!(space_comment) ~
-      char!('-') ~
-      space_comment ~
-      int: int_parser ~
-      opt!(space_comment) ~
-      char!(')'),
-      || - int
+    do_parse!(
+      char!('(') >>
+      opt!(space_comment) >>
+      char!('-') >>
+      space_comment >>
+      int: int_parser >>
+      opt!(space_comment) >>
+      char!(')') >>
+      (- int)
     )
   )
 }

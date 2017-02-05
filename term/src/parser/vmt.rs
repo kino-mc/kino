@@ -24,6 +24,7 @@ use term::{ Term, Operator } ;
 use factory::Factory ;
 
 use super::{
+  Span, Spanned,
   type_parser,
   space_comment,
   simple_symbol_head, simple_symbol_tail,
@@ -31,22 +32,24 @@ use super::{
   quantifier_parser, Quantifier
 } ;
 
-/** Result of TSV parsing. */
+/// Result of VMT parsing.
 #[derive(Clone,Debug)]
 pub struct TermAndDep {
-  /** The term parsed. */
+  /// The term parsed.
   pub term: Term,
-  /** The function symbol applications in the term. */
+  /// The function symbol applications in the term.
   pub apps: HashSet<Sym>,
-  /** The variables in the term. */
+  /// The variables in the term.
   pub vars: HashSet<Var>,
-  /** Types found in the term.
-  Does **not** include the types of variables. */
+  /// Types found in the term.
+  /// Does **not** include the types of variables.
   pub types: HashSet<Type>,
-  /** Whether the term is linear. */
+  /// Whether the term is linear.
   pub linear: bool,
-  /** Whether the term is quantifier-free. */
+  /// Whether the term is quantifier-free.
   pub qf: bool,
+  /// The span of the term.
+  pub span: Span,
 }
 impl fmt::Display for TermAndDep {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -54,8 +57,8 @@ impl fmt::Display for TermAndDep {
   }
 }
 impl TermAndDep {
-  /** Creates a term with dependencies from a variable. */
-  pub fn var(factory: & Factory, var: Var) -> Self {
+  /// Creates a term with dependencies from a variable.
+  pub fn var(factory: & Factory, var: Var, span: Span) -> Self {
     let term: Term = factory.mk_var(var.clone()) ;
     let mut vars = HashSet::new() ;
     vars.insert(var) ;
@@ -66,10 +69,11 @@ impl TermAndDep {
       types: HashSet::new(),
       linear: true,
       qf: true,
+      span: span,
     }
   }
-  /** Creates a term with dependencies from a constant. */
-  pub fn cst(factory: & Factory, cst: Cst) -> Self {
+  /// Creates a term with dependencies from a constant.
+  pub fn cst(factory: & Factory, cst: Cst, span: Span) -> Self {
     use term::CstMaker ;
     let mut types = HashSet::new() ;
     types.insert( cst.get().typ() ) ;
@@ -81,10 +85,11 @@ impl TermAndDep {
       types: types,
       linear: true,
       qf: true,
+      span: span,
     }
   }
 
-  /** Merges some terms with dependencies. */
+  /// Merges some terms with dependencies.
   #[inline(always)]
   fn merge(kids: Vec<TermAndDep>) -> (
     Vec<Term>,
@@ -117,8 +122,10 @@ impl TermAndDep {
     ( subs, apps, vars, types, kids_with_vars, linear, qf )
   }
 
-  /** Parses an operator. */
-  pub fn op(factory: & Factory, op: Operator, kids: Vec<TermAndDep>) -> Self {
+  /// Parses an operator.
+  pub fn op(
+    factory: & Factory, op: Operator, kids: Vec<TermAndDep>, span: Span
+  ) -> Self {
     use term::Operator::* ;
     use term::OpMaker ;
     let (
@@ -136,11 +143,14 @@ impl TermAndDep {
       types: types,
       linear: linear,
       qf: qf,
+      span: span,
     }
   }
 
-  /** Parses an application. */
-  pub fn app(factory: & Factory, sym: Sym, kids: Vec<TermAndDep>) -> Self {
+  /// Parses an application.
+  pub fn app(
+    factory: & Factory, sym: Sym, kids: Vec<TermAndDep>, span: Span
+  ) -> Self {
     use term::AppMaker ;
     let (
       subs, mut apps, vars, types, kids_with_vars, linear, qf
@@ -155,12 +165,14 @@ impl TermAndDep {
       types: types,
       linear: linear,
       qf: qf,
+      span: span,
     }
   }
 
-  /** Parses a quantifier. */
+  /// Parses a quantifier.
   fn quantifier(
-    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep, univ: bool
+    factory: & Factory, bindings: Vec<(Sym, Spanned<Type>)>, kid: TermAndDep,
+    univ: bool, span: Span
   ) -> Self {
     use term::BindMaker ;
     let term = kid.term ;
@@ -173,8 +185,8 @@ impl TermAndDep {
       let var = factory.var(sym.clone()) ;
       let was_there = vars.remove(& var) ;
       if was_there {
-        binds.push( (sym, typ) ) ;
-        types.insert(typ) ;
+        binds.push( (sym, * typ) ) ;
+        types.insert(* typ) ;
         ()
       } ;
     } ;
@@ -190,26 +202,30 @@ impl TermAndDep {
       types: types,
       linear: linear,
       qf: true,
+      span: span,
     }
   }
 
-  /** Parses a universal quantifier. */
+  /// Parses a universal quantifier.
   pub fn forall(
-    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep
+    factory: & Factory, bindings: Vec<(Sym, Spanned<Type>)>, kid: TermAndDep,
+    span: Span
   ) -> Self {
-    Self::quantifier(factory, bindings, kid, true)
+    Self::quantifier(factory, bindings, kid, true, span)
   }
 
-  /** Parses an existential quantifier. */
+  /// Parses an existential quantifier.
   pub fn exists(
-    factory: & Factory, bindings: Vec<(Sym, Type)>, kid: TermAndDep
+    factory: & Factory, bindings: Vec<(Sym, Spanned<Type>)>, kid: TermAndDep,
+    span: Span
   ) -> Self {
-    Self::quantifier(factory, bindings, kid, true)
+    Self::quantifier(factory, bindings, kid, true, span)
   }
 
-  /** Parses a let binding. */
+  /// Parses a let binding.
   pub fn let_b(
-    factory: & Factory, bindings: Vec<(Sym, TermAndDep)>, kid: TermAndDep
+    factory: & Factory, bindings: Vec<(Sym, TermAndDep)>, kid: TermAndDep,
+    span: Span
   ) -> Self {
     use term::BindMaker ;
     use std::iter::Extend ;
@@ -244,6 +260,7 @@ impl TermAndDep {
       types: types,
       linear: linear,
       qf: qf,
+      span: span,
     }
   }
 }
@@ -305,13 +322,13 @@ pub fn var_parser<'a>(
       char!(')'),
       || {
         let var = f.svar(sym, state) ;
-        TermAndDep::var(f, var)
+        TermAndDep::var(f, var, Span::dummy())
       }
     ) |
     map!(
       id_parser, |s| {
         let var = f.var( f.sym(s) ) ;
-        TermAndDep::var(f, var)
+        TermAndDep::var(f, var, Span::dummy())
       }
     )
   )
@@ -323,7 +340,7 @@ pub fn cst_parser<'a>(
   map!(
     bytes,
     apply!( super::cst_parser, f ),
-    |cst| TermAndDep::cst(f, cst)
+    |cst| TermAndDep::cst(f, cst, Span::dummy())
   )
 }
 
@@ -341,7 +358,7 @@ pub fn op_parser<'a>(
     ) ~
     opt!(space_comment) ~
     char!(')'),
-    || TermAndDep::op(f, op, args)
+    || TermAndDep::op(f, op, args, Span::dummy())
   )
 }
 
@@ -368,7 +385,7 @@ pub fn quantified_parser<'a>(
             |sym| f.sym(sym)
           ) ~
           space_comment ~
-          ty: type_parser ~
+          ty: apply!(type_parser, 0) ~
           opt!(space_comment),
           || (sym, ty)
         ),
@@ -382,8 +399,12 @@ pub fn quantified_parser<'a>(
     opt!(space_comment) ~
     char!(')'),
     || match quantifier {
-      Quantifier::Forall => TermAndDep::forall(f, bindings, term),
-      Quantifier::Exists => TermAndDep::exists(f, bindings, term),
+      Quantifier::Forall => TermAndDep::forall(
+        f, bindings, term, Span::dummy()
+      ),
+      Quantifier::Exists => TermAndDep::exists(
+        f, bindings, term, Span::dummy()
+      ),
     }
   )
 }
@@ -423,7 +444,7 @@ pub fn let_parser<'a>(
     term: apply!(term_parser, f) ~
     opt!(space_comment) ~
     char!(')'),
-    || TermAndDep::let_b(f, bindings, term)
+    || TermAndDep::let_b(f, bindings, term, Span::dummy())
   )
 }
 
@@ -444,7 +465,7 @@ fn app_parser<'a>(
     char!(')'),
     || {
       let sym = f.sym(sym) ;
-      TermAndDep::app(f, sym, args )
+      TermAndDep::app(f, sym, args, Span::dummy())
     }
   )
 }

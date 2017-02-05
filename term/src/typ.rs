@@ -40,8 +40,8 @@ impl fmt::Display for Type {
 }
 
 impl Type {
-  /** String representation of a type. */
-  #[inline(always)]
+  /// String representation of a type.
+  #[inline]
   pub fn to_str(& self) -> & 'static str {
     match * self {
       Type::Bool => "Bool",
@@ -68,7 +68,7 @@ impl Type {
 }
 
 impl Writable for Type {
-  #[inline(always)]
+  #[inline]
   fn write(& self, writer: & mut io::Write) -> io::Result<()> {
     write!(writer, "{}", self.to_str())
   }

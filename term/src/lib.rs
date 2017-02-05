@@ -179,8 +179,13 @@ pub use term::{
   Operator, Term, STerm, CstMaker, BindMaker, AppMaker, OpMaker
 } ;
 pub mod tmp ;
+#[macro_use]
 mod parser ;
-pub use parser::vmt::TermAndDep ;
+/// Parsing stuff.
+pub mod parsing {
+  pub use super::parser::vmt::TermAndDep ;
+  pub use super::parser::{ Span, Spanned, Bytes } ;
+}
 mod factory ;
 pub use factory::{ Factory, ParseVmt2, UnTermOps } ;
 pub mod gen ;
