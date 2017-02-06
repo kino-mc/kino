@@ -16,22 +16,29 @@ use term::{
 } ;
 use term::zip::* ;
 use term::real_term::Var as RVar ;
+use term::parsing::{ Spn, Spnd } ;
 
 use super::parse::Context ;
 
 /// Function passed to `fold` over terms for type checking.
 fn checker(
   context: & Context,
-  state: & Option<HashMap<Sym, Type>>,
-  sig: & Option<HashMap<Sym, Type>>,
+  state: & Option<
+    HashMap< Sym, (Spn, Spnd<Type>) >
+  >,
+  sig: & Option<
+    HashMap< Sym, (Spn, Spnd<Type>) >
+  >,
   step: Step<(Term, Type)>,
-  bindings: & [ HashMap<Sym, (Term, Type)> ],
+  bindings: & [
+    HashMap< Sym, (Term, Type) >
+  ],
   quantified: & [ HashMap<Sym, Type> ],
 ) -> Result<(Term, Type), String> {
   use term::zip::Step::* ;
   match step {
 
-    /* Application. */
+    // Application.
     App(sym, kids) => {
       let (mut nu_kids, mut types) = (
         Vec::with_capacity(kids.len()),
@@ -56,7 +63,7 @@ fn checker(
       }
     },
 
-    /* Operator. */
+    // Operator.
     Op(op, kids) => {
       let (mut nu_kids, mut types) = (
         Vec::with_capacity(kids.len()),
@@ -81,7 +88,7 @@ fn checker(
       }
     },
 
-    /* Let binding. */
+    // Let binding.
     Let(bindings, (kid, typ)) => {
       let mut nu_bindings = Vec::with_capacity(bindings.len()) ;
       for (sym, (term,_)) in bindings {
@@ -93,7 +100,7 @@ fn checker(
       ) )
     },
 
-    /* Universal quantifier. */
+    // Universal quantifier.
     Forall(qf, (kid, typ)) => {
       if typ != Type::Bool {
         return Err(
@@ -109,7 +116,7 @@ fn checker(
       ) )
     },
 
-    /* Existential quantifier. */
+    // Existential quantifier.
     Exists(qf, (kid, typ)) => {
       if typ != Type::Bool {
         return Err(
@@ -125,19 +132,19 @@ fn checker(
       ) )
     },
 
-    /* Constant. */
+    // Constant.
     C(cst) => {
       let typ = cst.typ().clone() ;
       Ok( (context.factory().mk_cst(cst), typ) )
     },
 
-    /* Variable. */
+    // Variable.
     V(var) => {
       let typ = match * var.get() {
         RVar::SVar(ref sym, _) => {
           if let Some(ref state) = * state {
-            if let Some(typ) = state.get(sym) {
-              typ.clone()
+            if let Some( & (_, ref typ) ) = state.get(sym) {
+              typ.get().clone()
             } else {
               return Err(
                 format!("unknown state variable {}", sym)
@@ -151,8 +158,8 @@ fn checker(
         },
         RVar::Var(ref sym) => {
           match if let Some(ref sig) = * sig {
-            if let Some(typ) = sig.get(sym) {
-              Some( typ.clone() )
+            if let Some( & (_, ref typ) ) = sig.get(sym) {
+              Some( typ.get().clone() )
             } else {
               None
             }
@@ -188,15 +195,16 @@ fn checker(
 /// Type checks a term.
 pub fn type_check(
   ctxt: & Context, term: & Term,
-  state: Option<& [ (Sym, Type) ]>,
-  sig: Option<& [ (Sym, Type) ]>,
+  state: Option<& [ ( Spnd<Sym>, Spnd<Type> ) ]>,
+  sig: Option<& [ ( Spnd<Sym>, Spnd<Type> ) ]>,
 ) -> Result<Type, String> {
   let state = match state {
     None => None,
     Some(state) => {
       let mut map = HashMap::with_capacity(state.len()) ;
       for & (ref sym, ref typ) in state.iter() {
-        map.insert(sym.clone(), typ.clone()) ; ()
+        let (sym, spn) = sym.extract() ;
+        map.insert( sym, (spn, typ.clone()) ) ; ()
       } ;
       Some(map)
     },
@@ -206,7 +214,8 @@ pub fn type_check(
     Some(sig) => {
       let mut map = HashMap::with_capacity(sig.len()) ;
       for & (ref sym, ref typ) in sig.iter() {
-        map.insert(sym.clone(), typ.clone()) ; ()
+        let (sym, spn) = sym.extract() ;
+        map.insert( sym, (spn, typ.clone()) ) ; ()
       } ;
       Some(map)
     },

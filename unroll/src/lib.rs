@@ -32,6 +32,7 @@ use term::smt::{
   Expr2Smt
 } ;
 use term::tmp::* ;
+use term::parsing::Spnd ;
 
 use sys::{ Prop, Sys, Callable } ;
 
@@ -255,7 +256,7 @@ impl<
       // println!("defining {}", fun.sym()) ;
       match * * fun {
         Dec(ref fun_dec) => if ! known.contains(fun_dec.sym()) {
-          known.insert( fun_dec.sym().clone() ) ;
+          known.insert( fun_dec.sym().get().clone() ) ;
           try!(
             chain_err!(
               unroll, "during function declaration" => solver.declare_fun(
@@ -276,7 +277,7 @@ impl<
             ok
           } ;
           if declare {
-            known.insert( fun_def.sym().clone() ) ;
+            known.insert( fun_def.sym().get().clone() ) ;
             try!(
               chain_err!(
                 unroll, "during function definition" => solver.define_fun(
@@ -629,7 +630,7 @@ impl<
     for fun in self.sys.calls().get() {
       match * * fun {
         Dec(ref fun) => to_get.push(
-          self.solver.parser().var( fun.sym().clone() )
+          self.solver.parser().var( fun.sym().get().clone() )
         ),
         Def(_) => (),
       }
@@ -638,10 +639,10 @@ impl<
     // Push state.
     for & (ref sym, _) in self.sys.state().args().iter() {
       to_get.push(
-        self.solver.parser().svar( sym.clone(), State::Curr )
+        self.solver.parser().svar( sym.get().clone(), State::Curr )
       ) ;
       to_get.push(
-        self.solver.parser().svar( sym.clone(), State::Next )
+        self.solver.parser().svar( sym.get().clone(), State::Next )
       ) ;
     }
 

@@ -10,12 +10,16 @@
 //! Parsers and such.
 
 use std::ops::{ Deref, DerefMut } ;
+use std::fmt ;
+use std::io::Write ;
 
 use nom::{ digit, multispace, IResult, not_line_ending } ;
 
 use typ::{ Type, Bool, Int, Rat } ;
 use cst::Cst ;
 use term::{ CstMaker, Operator } ;
+use rsmt2::{ Sort2Smt, Sym2Smt, Expr2Smt } ;
+use rsmt2::errors::Res ;
 
 
 /// Used in tests for parsers.
@@ -95,7 +99,7 @@ impl Spn {
 }
 
 /// Wraps a span around something.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Spnd<T> {
   /// Something.
   pub val: T,
@@ -107,6 +111,11 @@ impl<T> Spnd<T> {
   #[inline]
   pub fn mk(val: T, span: Spn) -> Self {
     Spnd { val: val, span: span }
+  }
+  /// Accessor for the value stored.
+  #[inline]
+  pub fn get(& self) -> & T {
+    & self.val
   }
   /// Wraps a span around something from an offset and a length.
   #[inline]
@@ -132,6 +141,11 @@ impl<T> Spnd<T> {
   #[inline]
   pub fn destroy(self) -> (T, Spn) { (self.val, self.span) }
 }
+impl<T: Clone> Spnd<T> {
+  /// Same as `destroy` but does not eats a `self`.
+  #[inline]
+  pub fn extract(& self) -> (T, Spn) { (self.val.clone(), self.span.clone()) }
+}
 impl<T> Deref for Spnd<T> {
   type Target = T ;
   fn deref(& self) -> & T { & self.val }
@@ -139,6 +153,27 @@ impl<T> Deref for Spnd<T> {
 impl<T> DerefMut for Spnd<T> {
   fn deref_mut(& mut self) -> & mut T { & mut self.val }
 }
+impl<T: fmt::Display> fmt::Display for Spnd<T> {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "{}[{},{}]", self.val, self.span.bgn, self.span.end)
+  }
+}
+impl<Info, T: Expr2Smt<Info>> Expr2Smt<Info> for Spnd<T> {
+  fn expr_to_smt2(& self, writer: & mut Write, info: & Info) -> Res<()> {
+    self.val.expr_to_smt2(writer, info)
+  }
+}
+impl<T: Sort2Smt> Sort2Smt for Spnd<T> {
+  fn sort_to_smt2(& self, writer: & mut Write) -> Res<()> {
+    self.val.sort_to_smt2(writer)
+  }
+}
+impl<Info, T: Sym2Smt<Info>> Sym2Smt<Info> for Spnd<T> {
+  fn sym_to_smt2(& self, writer: & mut Write, info: & Info) -> Res<()> {
+    self.val.sym_to_smt2(writer, info)
+  }
+}
+
 
 /// Bytes the parser handles.
 pub type Bytes<'a> = & 'a [u8] ;

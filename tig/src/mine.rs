@@ -115,10 +115,10 @@ impl Miner {
     // Splitting state variables of the system.
     for & (ref sym, ref typ) in sys.state().args().iter() {
       use term::Type::* ;
-      match * typ {
+      match * typ.get() {
         Bool => {
           boo.add_svar(sym) ;
-          let svar_term: Term = factory.svar(sym.clone(), State::Curr) ;
+          let svar_term: Term = factory.svar(sym.get().clone(), State::Curr) ;
           let svar = STerm::One(
             svar_term.clone(), factory.bump(& svar_term).unwrap()
           ) ;
@@ -131,7 +131,7 @@ impl Miner {
         },
         Int  => {
           int.add_svar(sym) ;
-          let svar_term: Term = factory.svar(sym.clone(), State::Curr) ;
+          let svar_term: Term = factory.svar(sym.get().clone(), State::Curr) ;
           let svar = STerm::One(
             svar_term.clone(), factory.bump(& svar_term).unwrap()
           ) ;
@@ -144,7 +144,7 @@ impl Miner {
         },
         Rat  => {
           rat.add_svar(sym) ;
-          let svar_term: Term = factory.svar(sym.clone(), State::Curr) ;
+          let svar_term: Term = factory.svar(sym.get().clone(), State::Curr) ;
           let svar = STerm::One(
             svar_term.clone(), factory.bump(& svar_term).unwrap()
           ) ;

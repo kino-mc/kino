@@ -258,7 +258,7 @@ impl Cex {
     let args = self.sys.state().args() ;
     for & (ref sym, _) in args {
       cst_lens.insert(
-        sym.clone(), format!("{}", sym).len()
+        sym.get().clone(), format!("{}", sym).len()
       ) ;
     } ;
     let sys_name = format!("{}", self.sys.sym()) ;
@@ -670,7 +670,7 @@ impl Context {
         match lines.next() {
           Some(Ok(line)) => {
             self.line = self.line + 1 ;
-            match comment(line.as_bytes()) {
+            match space_comment(line.as_bytes()) {
               Done(chars, _) => {
                 // Comment necessarily parses the whole line.
                 assert!( chars.len() == 0 ) ;
@@ -853,7 +853,7 @@ impl Context {
 
   /// Adds a function declaration to the context.
   pub fn add_fun_dec(
-    & mut self, sym: Sym, sig: Sig, typ: Type
+    & mut self, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
   ) -> Result<(), Error> {
     match check::check_fun_dec(self, sym, sig, typ) {
       Ok(callable) => Ok( self.internal_add_callable(callable) ),
@@ -863,7 +863,7 @@ impl Context {
 
   /// Adds a function definition to the context.
   pub fn add_fun_def(
-    & mut self, sym: Sym, args: Args, typ: Type, body: TermAndDep
+    & mut self, sym: Spnd<Sym>, args: Args, typ: Spnd<Type>, body: TermAndDep
   ) -> Result<(), Error> {
     match check::check_fun_def(self, sym, args, typ, body) {
       Ok(callable) => Ok( self.internal_add_callable(callable) ),

@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use nom::{ IResult, multispace, not_line_ending } ;
+use nom::{ IResult, multispace } ;
 
 use base::* ;
 use super::Context ;
@@ -15,60 +15,26 @@ use super::{ Atom, Res } ;
 use super::check::* ;
 use term::{ Type, Sym, Factory, ParseVmt2 } ;
 use term::parsing::* ;
-
-/// Parses a multispace and a comment.
-named!{
-  pub comment,
-  chain!(
-    opt!(multispace) ~
-    char!(';') ~
-    many0!(not_line_ending),
-    || & []
-  )
-}
-
-/// Parses a repetition of multispace/comment.
-named!{
-  space_comment<()>,
-  map!(
-    many0!(
-      alt!(
-        comment | multispace
-      )
-    ),
-    |_| ()
-  )
-}
-
-mk_parser!{
-  #[doc = "Type parser."]
-  pub fn type_parser(bytes, offset: usize) -> Spnd<Type> {
-    apply!(bytes, Factory::parse_type, offset)
-  }
-}
-// named!{
-//   type_parser<Type>,
-//   call!(Factory::parse_type)
-// }
+use term::parsing::vmt::* ;
 
 /// Parses a signature.
 named!{
   sig_parser<Sig>,
-  chain!(
-    char!('(') ~
-    opt!(space_comment) ~
+  do_parse!(
+    char!('(') >>
+    opt!(space_comment) >>
     args: separated_list!(
-      space_comment,
-      map!( apply!(type_parser, 0), |t: Spnd<Type>| * t )
-    ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || Sig::mk(args)
+      space_comment, apply!(type_parser, 0)
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      Sig::mk(args)
+    )
   )
 }
 
 /// Parses a symbol.
-fn sym_parser<'a>(
+fn sym_parser_2<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Sym> {
   f.parse_ident(bytes, 0).map( |res| res.destroy().0 )
@@ -78,28 +44,30 @@ fn sym_parser<'a>(
 fn args_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Args> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
+    char!('(') >>
+    opt!(space_comment) >>
     args: separated_list!(
       space_comment,
       delimited!(
         char!('('),
-        chain!(
-          opt!(space_comment) ~
-          sym: apply!(sym_parser, f) ~
-          space_comment ~
-          typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| *t ) ~
-          opt!(space_comment),
-          || (sym, typ)
+        do_parse!(
+          opt!(space_comment) >>
+          sym: apply!(sym_parser, 0, f) >>
+          space_comment >>
+          typ: apply!(type_parser, 0) >>
+          opt!(space_comment) >> (
+            (sym, typ)
+          )
         ),
         char!(')')
       )
-    ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || Args::mk(args)
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      Args::mk(args)
+    )
   )
 }
 
@@ -107,50 +75,45 @@ fn args_parser<'a>(
 fn fun_dec_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("declare-fun") ~
-    space_comment ~
-    sym: apply!(sym_parser, c.factory()) ~
-    opt!(space_comment) ~
-    sig: sig_parser ~
-    opt!(space_comment) ~
-    typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || c.add_fun_dec(sym, sig, typ)
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("declare-fun") >>
+    space_comment >>
+    sym: apply!(sym_parser, 0, c.factory()) >>
+    opt!(space_comment) >>
+    sig: sig_parser >>
+    opt!(space_comment) >>
+    typ: apply!(type_parser, 0) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      c.add_fun_dec(sym, sig, typ)
+    )
   )
-}
-
-/// Parses a term.
-fn term_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<& 'a [u8], TermAndDep> {
-  f.parse_expr(bytes, 0)
 }
 
 /// Parses a function definition.
 fn fun_def_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-fun") ~
-    space_comment ~
-    sym: dbg_dmp!(apply!(sym_parser, c.factory())) ~
-    opt!(space_comment) ~
-    args: dbg_dmp!(apply!(args_parser, c.factory())) ~
-    opt!(space_comment) ~
-    typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) ~
-    opt!(space_comment) ~
-    body: dbg_dmp!(apply!(term_parser, c.factory())) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || c.add_fun_def(sym, args, typ, body)
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("define-fun") >>
+    space_comment >>
+    sym: apply!(sym_parser, 0, c.factory()) >>
+    opt!(space_comment) >>
+    args: apply!(args_parser, c.factory()) >>
+    opt!(space_comment) >>
+    typ: apply!(type_parser, 0) >>
+    opt!(space_comment) >>
+    body: apply!(term_parser, 0, c.factory()) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      c.add_fun_def(sym, args, typ, body)
+    )
   )
 }
 
@@ -158,20 +121,21 @@ fn fun_def_parser<'a>(
 fn prop_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-prop") ~
-    space_comment ~
-    sym: apply!(sym_parser, c.factory()) ~
-    space_comment ~
-    state: apply!(sym_parser, c.factory()) ~
-    opt!(space_comment) ~
-    body: apply!(term_parser, c.factory()) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || c.add_prop(sym, state, body)
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("define-prop") >>
+    space_comment >>
+    sym: apply!(sym_parser_2, c.factory()) >>
+    space_comment >>
+    state: apply!(sym_parser_2, c.factory()) >>
+    opt!(space_comment) >>
+    body: apply!(term_parser, 0, c.factory()) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      c.add_prop(sym, state, body)
+    )
   )
 }
 
@@ -179,20 +143,21 @@ fn prop_parser<'a>(
 fn rel_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-rel") ~
-    space_comment ~
-    sym: apply!(sym_parser, c.factory()) ~
-    space_comment ~
-    state: apply!(sym_parser, c.factory()) ~
-    opt!(space_comment) ~
-    body: apply!(term_parser, c.factory()) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || c.add_rel(sym, state, body)
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("define-rel") >>
+    space_comment >>
+    sym: apply!(sym_parser_2, c.factory()) >>
+    space_comment >>
+    state: apply!(sym_parser_2, c.factory()) >>
+    opt!(space_comment) >>
+    body: apply!(term_parser, 0, c.factory()) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      c.add_rel(sym, state, body)
+    )
   )
 }
 
@@ -203,23 +168,27 @@ fn sub_sys_parser<'a>(
     bytes,
     char!('('),
     many0!(
-      chain!(
-        opt!(space_comment) ~
-        char!('(') ~
-        opt!(space_comment) ~
-        sym: apply!(sym_parser, f) ~
+      do_parse!(
+        opt!(space_comment) >>
+        char!('(') >>
+        opt!(space_comment) >>
+        sym: apply!(sym_parser_2, f) >>
         params: many1!(
           preceded!(
             opt!(space_comment),
-            apply!(term_parser, f)
+            apply!(term_parser, 0, f)
           )
-        ) ~
-        opt!(space_comment) ~
-        char!(')'),
-        || (sym, params)
+        ) >>
+        opt!(space_comment) >>
+        char!(')') >> (
+          (sym, params)
+        )
       )
     ),
-    chain!( opt!(space_comment) ~ char!(')'), || () )
+    do_parse!(
+      opt!(space_comment) >>
+      char!(')') >> ( () )
+    )
   )
 }
 
@@ -235,15 +204,16 @@ fn _locals_parser<'a>(
         opt!(space_comment),
         delimited!(
           char!('('),
-          chain!(
-            opt!(space_comment) ~
-            sym: apply!(sym_parser, f) ~
-            space_comment ~
-            typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) ~
-            space_comment ~
-            term: apply!(term_parser, f) ~
-            opt!(space_comment),
-            || (sym, typ, term)
+          do_parse!(
+            opt!(space_comment) >>
+            sym: apply!(sym_parser_2, f) >>
+            space_comment >>
+            typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) >>
+            space_comment >>
+            term: apply!(term_parser, 0, f) >>
+            opt!(space_comment) >> (
+              (sym, typ, term)
+            )
           ),
           char!(')')
         )
@@ -260,26 +230,27 @@ fn _locals_parser<'a>(
 fn sys_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("define-sys") ~
-    space_comment ~
-    sym: apply!(sym_parser, c.factory()) ~
-    opt!(space_comment) ~
-    state: apply!(args_parser, c.factory()) ~
-    // opt!(space_comment) ~
-    // locals: apply!(locals_parser, c.factory()) ~
-    opt!(space_comment) ~
-    init: apply!(term_parser, c.factory()) ~
-    space_comment ~
-    trans: apply!(term_parser, c.factory()) ~
-    opt!(space_comment) ~
-    sub_syss: apply!(sub_sys_parser, c.factory()) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || c.add_sys(sym, state, vec![], init, trans, sub_syss)
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("define-sys") >>
+    space_comment >>
+    sym: apply!(sym_parser_2, c.factory()) >>
+    opt!(space_comment) >>
+    state: apply!(args_parser, c.factory()) >>
+    // opt!(space_comment) >>
+    // locals: apply!(locals_parser, c.factory()) >>
+    opt!(space_comment) >>
+    init: apply!(term_parser, 0, c.factory()) >>
+    space_comment >>
+    trans: apply!(term_parser, 0, c.factory()) >>
+    opt!(space_comment) >>
+    sub_syss: apply!(sub_sys_parser, c.factory()) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      c.add_sys(sym, state, vec![], init, trans, sub_syss)
+    )
   )
 }
 
@@ -304,30 +275,31 @@ pub fn item_parser<'a>(
 pub fn check_parser<'a>(
   bytes: & 'a [u8], c: & Context
 ) -> IResult<& 'a [u8], Result<Res, Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    opt!(space_comment) ~
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("verify") ~
-    space_comment ~
-    sys: apply!(sym_parser, c.factory()) ~
-    opt!(space_comment) ~
+    opt!(space_comment) >>
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("verify") >>
+    space_comment >>
+    sys: apply!(sym_parser_2, c.factory()) >>
+    opt!(space_comment) >>
     props: delimited!(
       char!('('),
       delimited!(
         opt!(space_comment),
         separated_list!(
           space_comment,
-          apply!(sym_parser, c.factory())
+          apply!(sym_parser_2, c.factory())
         ),
         opt!(space_comment)
       ),
       char!(')')
-    ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || check_check(c, sys, props, None)
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      check_check(c, sys, props, None)
+    )
   )
 }
 
@@ -337,14 +309,15 @@ pub fn atom_parser<'a>(
 ) -> IResult<& 'a [u8], Atom> {
   alt!(
     bytes,
-    map!( apply!(sym_parser, f), |sym| Atom::Pos(sym) ) |
+    map!( apply!(sym_parser_2, f), |sym| Atom::Pos(sym) ) |
     delimited!(
       terminated!(char!('('), opt!(space_comment)),
-      chain!(
-        tag!("not") ~
-        space_comment ~
-        sym: apply!(sym_parser, f),
-        || Atom::Neg(sym)
+      do_parse!(
+        tag!("not") >>
+        space_comment >>
+        sym: apply!(sym_parser_2, f) >> (
+          Atom::Neg(sym)
+        )
       ),
       preceded!(opt!(space_comment), char!(')'))
     )
@@ -355,28 +328,28 @@ pub fn atom_parser<'a>(
 pub fn check_assuming_parser<'a>(
   bytes: & 'a [u8], c: & Context
 ) -> IResult<& 'a [u8], Result<Res, Error>> {
-  chain!(
+  do_parse!(
     bytes,
-    opt!(space_comment) ~
-    char!('(') ~
-    opt!(space_comment) ~
-    tag!("verify-assuming") ~
-    space_comment ~
-    sys: apply!(sym_parser, c.factory()) ~
-    opt!(space_comment) ~
+    opt!(space_comment) >>
+    char!('(') >>
+    opt!(space_comment) >>
+    tag!("verify-assuming") >>
+    space_comment >>
+    sys: apply!(sym_parser_2, c.factory()) >>
+    opt!(space_comment) >>
     props: delimited!(
       char!('('),
       delimited!(
         opt!(space_comment),
         separated_list!(
           space_comment,
-          apply!(sym_parser, c.factory())
+          apply!(sym_parser_2, c.factory())
         ),
         opt!(space_comment)
       ),
       char!(')')
-    ) ~
-    opt!(space_comment) ~
+    ) >>
+    opt!(space_comment) >>
     atoms: delimited!(
       char!('('),
       delimited!(
@@ -388,10 +361,11 @@ pub fn check_assuming_parser<'a>(
         opt!(space_comment)
       ),
       char!(')')
-    ) ~
-    opt!(space_comment) ~
-    char!(')'),
-    || check_check(c, sys, props, Some(atoms))
+    ) >>
+    opt!(space_comment) >>
+    char!(')') >> (
+      check_check(c, sys, props, Some(atoms))
+    )
   )
 }
 

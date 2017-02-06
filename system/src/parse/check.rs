@@ -221,7 +221,7 @@ fn svar_in_state(
   svar: & Sym, state: & Args
 ) -> bool {
   for & (ref s, _) in state.args().iter() {
-    if s == svar { return true }
+    if s.get() == svar { return true }
   } ;
   false
 }
@@ -239,11 +239,11 @@ fn is_sym_in_locals(
 
 /// Checks that a function declaration is legal.
 pub fn check_fun_dec(
-  ctxt: & Context, sym: Sym, sig: Sig, typ: Type
+  ctxt: & Context, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
 ) -> Result<Callable, Error> {
   let desc = super::uf_desc ;
-  check_sym!(ctxt, sym, desc) ;
-  match ctxt.factory().set_fun_type(sym.clone(), typ) {
+  check_sym!(ctxt, sym.get().clone(), desc) ;
+  match ctxt.factory().set_fun_type(sym.get().clone(), * typ.get()) {
     Ok(()) => (),
     Err(e) => return Err(
       TypeCheck(
@@ -256,17 +256,18 @@ pub fn check_fun_dec(
 
 /// Checks that a function definition is legal.
 pub fn check_fun_def(
-  ctxt: & Context, sym: Sym, args: Args, typ: Type, body: TermAndDep
+  ctxt: & Context, sym: Spnd<Sym>, args: Args,
+  typ: Spnd<Type>, body: TermAndDep
 ) -> Result<Callable, Error> {
   let desc = super::fun_desc ;
-  check_sym!(ctxt, sym, desc) ;
+  check_sym!(ctxt, sym.get().clone(), desc) ;
 
   let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
   for call_sym in body.apps.iter() {
     match app_defined(ctxt, call_sym) {
-      None => return Err( UkCall(call_sym.clone(), sym, desc) ),
+      None => return Err( UkCall(call_sym.clone(), sym.get().clone(), desc) ),
       Some(f) => {
         // Don't care if it was already there.
         calls.insert(f) ;
@@ -281,28 +282,30 @@ pub fn check_fun_def(
           None => {
             let mut exists = false ;
             for & (ref dsym, _) in args.args() {
-              if dsym == var_sym { exists = true }
+              if dsym.get() == var_sym { exists = true }
             } ;
             if ! exists {
-              return Err( UkVar(var.clone(), sym, desc) )
+              return Err( UkVar(var.clone(), sym.get().clone(), desc) )
             }
           },
           Some(fun) => { calls.insert(fun) ; },
         }
       },
-      _ => return Err( SVarInDef(var.clone(), sym) ),
+      _ => return Err( SVarInDef(var.clone(), sym.get().clone()) ),
     }
   } ;
 
   type_check!(
-    ctxt, body.term, typ, sig: args.args(),
+    ctxt, body.term, typ.get().clone(), sig: args.args(),
     format!("in body of `(define-fun {} ...)`", sym),
     t => "body of function is inconsistent with return type\n  \
       expected {}, got {}",
     typ, t
   ) ;
 
-  match ctxt.factory().set_fun_type(sym.clone(), typ) {
+  match ctxt.factory().set_fun_type(
+    sym.get().clone(), typ.get().clone()
+  ) {
     Ok(()) => (),
     Err(e) => return Err(
       TypeCheck(
@@ -623,11 +626,17 @@ pub fn check_sys(
   {
     let f = ctxt.factory() ;
     for & (ref sym, ref typ) in state.args() {
-      let var: Var = f.svar(sym.clone(), Curr) ;
-      init_state.push( (var.clone(), * typ) ) ;
-      trans_state.push( (var, * typ) ) ;
-      let nxt: Var = f.svar(sym.clone(), Next) ;
-      tmp_state.push( (nxt, * typ) ) ;
+      let var: Var = f.svar(sym.get().clone(), Curr) ;
+      init_state.push(
+        (var.clone(), typ.get().clone())
+      ) ;
+      trans_state.push(
+        (var, typ.get().clone())
+      ) ;
+      let nxt: Var = f.svar(sym.get().clone(), Next) ;
+      tmp_state.push(
+        (nxt, typ.get().clone())
+      ) ;
     }
   }
   trans_state.extend(tmp_state) ;
@@ -661,11 +670,15 @@ pub fn check_sys(
 
   let mut init_params = Vec::with_capacity(init_state.len()) ;
   for & (ref var, _) in init_state.iter() {
-    init_params.push(ctxt.factory().mk_var(var.clone()))
+    init_params.push(
+      ctxt.factory().mk_var(var.clone())
+    )
   } ;
   let mut trans_params = Vec::with_capacity(trans_state.len()) ;
   for & (ref var, _) in trans_state.iter() {
-    trans_params.push(ctxt.factory().mk_var(var.clone()))
+    trans_params.push(
+      ctxt.factory().mk_var(var.clone())
+    )
   } ;
   let (init_term, trans_term) = (
     ctxt.factory().app(init_sym.clone(), init_params),
@@ -673,8 +686,10 @@ pub fn check_sys(
   ) ;
 
   for & (ref v_sym, ref typ) in state.args() {
-    let svar = ctxt.factory().svar(v_sym.clone(), Curr) ;
-    match ctxt.factory().set_var_type(Some(sym.clone()), svar, * typ) {
+    let svar = ctxt.factory().svar(v_sym.get().clone(), Curr) ;
+    match ctxt.factory().set_var_type(
+      Some( sym.clone() ), svar, typ.get().clone()
+    ) {
       Ok(()) => (),
       Err(e) => return Err(
         TypeCheck(

@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Parsers for the `vmt` format. */
+//! Parsers for the `vmt` format.
 
 use std::str ;
 use std::collections::HashSet ;
@@ -334,7 +334,19 @@ mk_parser!{
   }
 }
 
+/// Parsed a spanned symbol.
+pub fn sym_parser<'a>(
+  bytes: Bytes<'a>, offset: usize, f: & Factory
+) -> IResult<& 'a [u8], Spnd<Sym>> {
+  use sym::SymMaker ;
+  map!(
+    bytes,
+    apply!(id_parser, offset),
+    |s: Spnd<String>| s.map( |s| f.sym(s) )
+  )
+}
 
+/// Spanned variable parser.
 pub fn var_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
@@ -368,6 +380,7 @@ pub fn var_parser<'a>(
   )
 }
 
+/// Spanned constant parser.
 pub fn cst_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
@@ -381,6 +394,7 @@ pub fn cst_parser<'a>(
   )
 }
 
+/// Spanned operator parser.
 pub fn op_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
@@ -407,7 +421,7 @@ pub fn op_parser<'a>(
   )
 }
 
-
+/// Spanned quantifier parser.
 pub fn quantified_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
@@ -460,6 +474,7 @@ pub fn quantified_parser<'a>(
   )
 }
 
+/// Spanned let binding parser.
 pub fn let_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
@@ -502,6 +517,7 @@ pub fn let_parser<'a>(
   )
 }
 
+/// Spanned application parser.
 fn app_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
@@ -526,7 +542,7 @@ fn app_parser<'a>(
   )
 }
 
-
+/// VMT spanned term parser.
 pub fn term_parser<'a>(
   bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
