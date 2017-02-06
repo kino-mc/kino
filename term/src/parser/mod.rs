@@ -228,6 +228,16 @@ macro_rules! len_add {
       |int| $len += int
     )
   ) ;
+  ($bytes:expr, $len:ident < spn thru $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |stuff| {
+        $len += $crate::parsing::Spnd::len(& stuff) ;
+        stuff
+      }
+    )
+  ) ;
   ($bytes:expr, $len:ident < spn $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
@@ -381,7 +391,7 @@ mk_parser!{
 
 named_attr!{
   #[doc = "Parses a line comment, returns the number of bytes parsed."],
-  comment<usize>,
+  pub comment<usize>,
   do_parse!(
     char!(';') >>
     line: not_line_ending >>

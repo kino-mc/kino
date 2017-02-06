@@ -184,7 +184,7 @@ mod parser ;
 /// Parsing stuff.
 pub mod parsing {
   pub use super::parser::vmt::TermAndDep ;
-  pub use super::parser::{ Spn, Spnd, Bytes, space_comment } ;
+  pub use super::parser::{ Spn, Spnd, Bytes, space_comment, comment } ;
   /// VMT parsing stuff.
   pub mod vmt {
     pub use super::super::parser::type_parser ;

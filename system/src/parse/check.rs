@@ -386,16 +386,16 @@ fn check_term_and_dep(
 
 /// Checks that a proposition definition is legal.
 pub fn check_prop(
-  ctxt: & Context, sym: Sym, sys: Sym, body: TermAndDep
+  ctxt: & Context, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
 ) -> Result<Prop, Error> {
   use term::State::Curr ;
   use term::UnTermOps ;
   let desc = super::prop_desc ;
-  check_sym!(ctxt, sym, desc) ;
-  let sys = match ctxt.get_sys(& sys) {
+  check_sym!(ctxt, sym.get().clone(), desc) ;
+  let sys = match ctxt.get_sys( sys.get() ) {
     Some(s) => s.clone(),
     None => {
-      return Err( UkSys(sys, Some(sym), desc) )
+      return Err( UkSys(sys.get().clone(), Some(sym.get().clone()), desc) )
     },
   } ;
 
@@ -404,7 +404,7 @@ pub fn check_prop(
   // All symbols used in applications actually exist.
   for app_sym in body.apps.iter() {
     match app_defined(ctxt, app_sym) {
-      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+      None => return Err( UkCall(app_sym.clone(), sym.get().clone(), desc) ),
       Some(fun) => { calls.insert(fun) ; },
     }
   } ;
@@ -413,7 +413,7 @@ pub fn check_prop(
     match * var.get() {
       // Non-stateful var exist.
       real_term::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
-        None => return Err( UkVar(var.clone(), sym, desc) ),
+        None => return Err( UkVar(var.clone(), sym.get().clone(), desc) ),
         Some(fun) => { calls.insert(fun) ; },
       },
       // Stateful var belong to state.
@@ -421,10 +421,10 @@ pub fn check_prop(
       real_term::Var::SVar(ref var_sym, Curr) => if ! svar_in_state(
         var_sym, sys.state()
       ) {
-        return Err( UkVar(var.clone(), sym, desc) )
+        return Err( UkVar(var.clone(), sym.get().clone(), desc) )
       },
       real_term::Var::SVar(_, _) => return Err(
-        NxtInProp1(var.clone(), sym, desc)
+        NxtInProp1(var.clone(), sym.get().clone(), desc)
       ),
     }
   } ;
@@ -446,14 +446,14 @@ pub fn check_prop(
 
 /// Checks that a relation definition is legal.
 pub fn check_rel(
-  ctxt: & Context, sym: Sym, sys: Sym, body: TermAndDep
+  ctxt: & Context, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
 ) -> Result<Prop, Error> {
   let desc = super::prop_desc ;
-  check_sym!(ctxt, sym, desc) ;
+  check_sym!(ctxt, sym.get().clone(), desc) ;
   let sys = match ctxt.get_sys(& sys) {
     Some(s) => s.clone(),
     None => {
-      return Err( UkSys(sys, Some(sym), desc) )
+      return Err( UkSys(sys.get().clone(), Some(sym.get().clone()), desc) )
     },
   } ;
 
@@ -462,7 +462,7 @@ pub fn check_rel(
   // All symbols used in applications actually exist.
   for app_sym in body.apps.iter() {
     match app_defined(ctxt, app_sym) {
-      None => return Err( UkCall(app_sym.clone(), sym, desc) ),
+      None => return Err( UkCall(app_sym.clone(), sym.get().clone(), desc) ),
       Some(fun) => { calls.insert(fun) ; },
     }
   } ;
@@ -471,7 +471,7 @@ pub fn check_rel(
     match * var.get() {
       // Non-stateful var exist.
       real_term::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
-        None => return Err( UkVar(var.clone(), sym, desc) ),
+        None => return Err( UkVar(var.clone(), sym.get().clone(), desc) ),
         Some(fun) => { calls.insert(fun) ; },
       },
       // Stateful var belong to state.
@@ -479,7 +479,7 @@ pub fn check_rel(
       real_term::Var::SVar(ref var_sym, _) => if ! svar_in_state(
         var_sym, sys.state()
       ) {
-        return Err( UkVar(var.clone(), sym, desc) )
+        return Err( UkVar(var.clone(), sym.get().clone(), desc) )
       },
     }
   } ;
@@ -516,7 +516,7 @@ pub fn check_sys(
   ctxt: & Context, sym: Sym, state: Args,
   locals: Vec<(Sym, Type, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
-  sub_syss: Vec<(Sym, Vec<TermAndDep>)>
+  sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
 ) -> Result<Sys, Error> {
   use term::State::* ;
   use term::{
@@ -582,12 +582,13 @@ pub fn check_sys(
   let mut subsys = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.
   for (sub_sym, params) in sub_syss.into_iter() {
-    let sub_sys = match ctxt.get_sys(& sub_sym) {
-      None => return Err( UkSysCall(sub_sym.clone(), sym) ),
+    let sub_sys = match ctxt.get_sys(sub_sym.get()) {
+      None => return Err( UkSysCall(sub_sym.get().clone(), sym) ),
       Some(ref sub_sys) => if sub_sys.state().args().len() != params.len() {
         return Err(
           IncSysCall(
-            sub_sym.clone(), sub_sys.state().args().len(), sym, params.len()
+            sub_sym.get().clone(), sub_sys.state().args().len(),
+            sym, params.len()
           )
         )
       } else {

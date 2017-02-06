@@ -32,7 +32,7 @@ use term::smt::{
   Expr2Smt
 } ;
 use term::tmp::* ;
-use term::parsing::Spnd ;
+// use term::parsing::Spnd ;
 
 use sys::{ Prop, Sys, Callable } ;
 
@@ -766,7 +766,7 @@ fn actlit_name_of_sym(sym: & Sym) -> String {
 
 /// Actlit name of a property.
 fn actlit_name_of(prop: & Prop) -> String {
-  actlit_name_of_sym(prop.sym())
+  actlit_name_of_sym(prop.sym().get())
 }
 
 /// Handles properties by providing a positive actlits for each.
@@ -813,14 +813,14 @@ impl TermManager<Sym> {
         STerm::One(state, next) => {
           let state_impl = state.clone().under_actlit( actlit.clone() ) ;
           let was_there = map_1.insert(
-            prop.sym().clone(), (state, next, state_impl, actlit)
+            prop.sym().get().clone(), (state, next, state_impl, actlit)
           ) ;
           debug_assert!( was_there.is_none() )
         },
         STerm::Two(next) => {
           let next_impl = next.clone().under_actlit( actlit.clone() ) ;
           let was_there = map_2.insert(
-            prop.sym().clone(), (next, next_impl, actlit)
+            prop.sym().get().clone(), (next, next_impl, actlit)
           ) ;
           debug_assert!( was_there.is_none() )
         },

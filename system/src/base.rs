@@ -415,7 +415,7 @@ impl fmt::Display for PropStatus {
 #[derive(Debug,Clone)]
 pub struct Prop {
   /// Identifier of the property.
-  sym: Sym,
+  sym: Spnd<Sym>,
   /// System the property is over.
   sys: ::Sys,
   /// Body of the property.
@@ -426,12 +426,14 @@ pub struct Prop {
 impl Prop {
   /// Creates a new property.
   #[inline(always)]
-  pub fn mk(sym: Sym, sys: ::Sys, body: STerm, calls: CallSet) -> Self {
+  pub fn mk(
+    sym: Spnd<Sym>, sys: ::Sys, body: STerm, calls: CallSet
+  ) -> Self {
     Prop { sym: sym, sys: sys, body: body, calls: calls }
   }
   /// Identifier of a property.
   #[inline(always)]
-  pub fn sym(& self) -> & Sym { & self.sym }
+  pub fn sym(& self) -> & Spnd<Sym> { & self.sym }
   /// System a property ranges over.
   #[inline(always)]
   pub fn sys(& self) -> & ::Sys { & self.sys }
@@ -445,7 +447,7 @@ impl Prop {
 impl fmt::Display for Prop {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     write!(
-      fmt, "{} ({}) {{ {} }}", self.sym, self.sys.sym(), self.body
+      fmt, "{} ({}) {{ {} }}", self.sym.get(), self.sys.sym(), self.body
     )
   }
 }

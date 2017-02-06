@@ -535,8 +535,12 @@ impl Context {
     let mut res = vec![] ;
     for prop in props {
       match self.props.get( prop.sym() ) {
-        Some( & (_, PropStatus::Unknown) ) => res.push(prop.sym()),
-        Some( & (_, PropStatus::KTrue(_)) ) => res.push(prop.sym()),
+        Some( & (_, PropStatus::Unknown) ) => res.push(
+          prop.sym().get()
+        ),
+        Some( & (_, PropStatus::KTrue(_)) ) => res.push(
+          prop.sym().get()
+        ),
         Some( _ ) => (),
         None => return Err(
           format!("[Context::unknown_props] unknown property {}", prop)
@@ -670,7 +674,7 @@ impl Context {
         match lines.next() {
           Some(Ok(line)) => {
             self.line = self.line + 1 ;
-            match space_comment(line.as_bytes()) {
+            match comment(line.as_bytes()) {
               Done(chars, _) => {
                 // Comment necessarily parses the whole line.
                 assert!( chars.len() == 0 ) ;
@@ -816,7 +820,7 @@ impl Context {
     }
   }
   fn internal_add_prop(& mut self, prop: Prop, status: PropStatus) {
-    let sym = prop.sym().clone() ;
+    let sym = prop.sym().get().clone() ;
     match self.all.insert(sym.clone()) {
       true => (),
       false => panic!(
@@ -873,7 +877,7 @@ impl Context {
 
   /// Adds a state property definition to the context.
   pub fn add_prop(
-    & mut self, sym: Sym, sys: Sym, body: TermAndDep
+    & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
   ) -> Result<(), Error> {
     match check::check_prop(self, sym, sys, body) {
       Ok(prop) => Ok( self.internal_add_prop(prop, PropStatus::Unknown) ),
@@ -883,7 +887,7 @@ impl Context {
 
   /// Adds a state relation definition to the context.
   pub fn add_rel(
-    & mut self, sym: Sym, sys: Sym, body: TermAndDep
+    & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
   ) -> Result<(), Error> {
     match check::check_rel(self, sym, sys, body) {
       Ok(rel) => Ok( self.internal_add_prop(rel, PropStatus::Unknown) ),
@@ -896,7 +900,7 @@ impl Context {
     & mut self, sym: Sym, state: Args,
     locals: Vec<(Sym, Type, TermAndDep)>,
     init: TermAndDep, trans: TermAndDep,
-    sub_syss: Vec<(Sym, Vec<TermAndDep>)>
+    sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
   ) -> Result<(), Error> {
     match check::check_sys(
       self, sym, state, locals, init, trans, sub_syss

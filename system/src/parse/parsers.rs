@@ -17,20 +17,29 @@ use term::{ Type, Sym, Factory, ParseVmt2 } ;
 use term::parsing::* ;
 use term::parsing::vmt::* ;
 
-/// Parses a signature.
-named!{
-  sig_parser<Sig>,
-  do_parse!(
-    char!('(') >>
-    opt!(space_comment) >>
-    args: separated_list!(
-      space_comment, apply!(type_parser, 0)
-    ) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      Sig::mk(args)
+mk_parser!{
+  #[doc = "/// Parses a signature."]
+  pub fn sig_parser(bytes, offset: usize) -> Spnd<Sig> {
+    let mut len = 0 ;
+    do_parse!(
+      bytes,
+      len_set!(len < char '(') >>
+      opt!( len_add!(len < int space_comment) ) >>
+      args: separated_list!(
+        len_add!(len < int space_comment),
+        map!(
+          apply!(type_parser, 0), |t: Spnd<Type>| {
+            len += t.len() ;
+            t
+          }
+        )
+      ) >>
+      opt!( len_add!(len < int space_comment) ) >>
+      len_add!(len < char ')') >> (
+        Spnd::len_mk(Sig::mk(args), offset, len)
+      )
     )
-  )
+  }
 }
 
 /// Parses a symbol.
@@ -42,214 +51,274 @@ fn sym_parser_2<'a>(
 
 /// Parses some arguments.
 fn args_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<& 'a [u8], Args> {
+  bytes: & 'a [u8], offset: usize, f: & Factory
+) -> IResult<& 'a [u8], Spnd<Args>> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
     args: separated_list!(
-      space_comment,
+      len_add!(len < int space_comment),
       delimited!(
-        char!('('),
+        len_add!(len < char '('),
         do_parse!(
-          opt!(space_comment) >>
-          sym: apply!(sym_parser, 0, f) >>
-          space_comment >>
-          typ: apply!(type_parser, 0) >>
-          opt!(space_comment) >> (
+          opt!( len_add!(len < int space_comment) ) >>
+          sym: len_add!(
+            len < spn thru apply!(sym_parser, 0, f)
+          ) >>
+          len_add!(len < int space_comment) >>
+          typ: len_add!(
+            len < spn thru apply!(type_parser, 0)
+          ) >>
+          opt!( len_add!(len < int space_comment) ) >> (
             (sym, typ)
           )
         ),
-        char!(')')
+        len_add!(len < char ')')
       )
     ) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      Args::mk(args)
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      Spnd::len_mk(Args::mk(args), offset, len)
     )
   )
 }
 
 /// Parses a function declaration.
 fn fun_dec_parser<'a>(
-  bytes: & 'a [u8], c: & mut Context
-) -> IResult<& 'a [u8], Result<(), Error>> {
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IResult<& 'a [u8], Result<usize, Error>> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    tag!("declare-fun") >>
-    space_comment >>
-    sym: apply!(sym_parser, 0, c.factory()) >>
-    opt!(space_comment) >>
-    sig: sig_parser >>
-    opt!(space_comment) >>
-    typ: apply!(type_parser, 0) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      c.add_fun_dec(sym, sig, typ)
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < bytes tag!("declare-fun")) >>
+    len_add!(len < int space_comment) >>
+    sym: len_add!(
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    sig: len_add!(
+      len < spn apply!(sig_parser, 0)
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    typ: len_add!(
+      len < spn thru apply!(type_parser, 0)
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      c.add_fun_dec(sym, sig, typ).map(|()| len)
     )
   )
 }
 
 /// Parses a function definition.
 fn fun_def_parser<'a>(
-  bytes: & 'a [u8], c: & mut Context
-) -> IResult<& 'a [u8], Result<(), Error>> {
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IResult<& 'a [u8], Result<usize, Error>> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    tag!("define-fun") >>
-    space_comment >>
-    sym: apply!(sym_parser, 0, c.factory()) >>
-    opt!(space_comment) >>
-    args: apply!(args_parser, c.factory()) >>
-    opt!(space_comment) >>
-    typ: apply!(type_parser, 0) >>
-    opt!(space_comment) >>
-    body: apply!(term_parser, 0, c.factory()) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      c.add_fun_def(sym, args, typ, body)
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < bytes tag!("define-fun")) >>
+    len_add!(len < int space_comment) >>
+    sym: len_add!(
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    args: len_add!(
+      len < spn apply!(args_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    typ: len_add!(
+      len < spn thru apply!(type_parser, offset + len)
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    body: len_add!(
+      len < trm apply!(term_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      c.add_fun_def(sym, args, typ, body).map(|()| len)
     )
   )
 }
 
 /// Parses a state property definition.
 fn prop_parser<'a>(
-  bytes: & 'a [u8], c: & mut Context
-) -> IResult<& 'a [u8], Result<(), Error>> {
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IResult<& 'a [u8], Result<usize, Error>> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    tag!("define-prop") >>
-    space_comment >>
-    sym: apply!(sym_parser_2, c.factory()) >>
-    space_comment >>
-    state: apply!(sym_parser_2, c.factory()) >>
-    opt!(space_comment) >>
-    body: apply!(term_parser, 0, c.factory()) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      c.add_prop(sym, state, body)
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < bytes tag!("define-prop")) >>
+    len_add!(len < int space_comment) >>
+    sym: len_add!(
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    len_add!(len < int space_comment) >>
+    sys: len_add!(
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    body: len_add!(
+      len < trm apply!(term_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      c.add_prop(sym, sys, body).map(|()| len)
     )
   )
 }
 
 /// Parses a state relation definition.
 fn rel_parser<'a>(
-  bytes: & 'a [u8], c: & mut Context
-) -> IResult<& 'a [u8], Result<(), Error>> {
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IResult<& 'a [u8], Result<usize, Error>> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    tag!("define-rel") >>
-    space_comment >>
-    sym: apply!(sym_parser_2, c.factory()) >>
-    space_comment >>
-    state: apply!(sym_parser_2, c.factory()) >>
-    opt!(space_comment) >>
-    body: apply!(term_parser, 0, c.factory()) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      c.add_rel(sym, state, body)
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < bytes tag!("define-rel")) >>
+    len_add!(len < int space_comment) >>
+    sym: len_add!(
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    len_add!(len < int space_comment) >>
+    sys: len_add!(
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    body: len_add!(
+      len < trm apply!(term_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      c.add_rel(sym, sys, body).map(|()| len)
     )
   )
 }
 
 fn sub_sys_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<& 'a [u8], Vec<(Sym, Vec<TermAndDep>)>> {
-  delimited!(
+  bytes: & 'a [u8], offset: usize, f: & Factory
+) -> IResult<& 'a [u8], (usize, Vec<(Spnd<Sym>, Vec<TermAndDep>)>)> {
+  let mut len = 0 ;
+  map!(
     bytes,
-    char!('('),
-    many0!(
-      do_parse!(
-        opt!(space_comment) >>
-        char!('(') >>
-        opt!(space_comment) >>
-        sym: apply!(sym_parser_2, f) >>
-        params: many1!(
-          preceded!(
-            opt!(space_comment),
-            apply!(term_parser, 0, f)
+    delimited!(
+      len_set!(len < char '('),
+      many0!(
+        do_parse!(
+          opt!( len_add!(len < int space_comment) ) >>
+          len_add!(len < char '(') >>
+          opt!( len_add!(len < int space_comment) ) >>
+          sym: len_add!(
+            len < spn thru apply!(sym_parser, offset + len, f)
+          ) >>
+          params: many1!(
+            preceded!(
+              opt!( len_add!(len < int space_comment) ),
+              len_add!(
+                len < trm apply!(term_parser, 0, f)
+              )
+            )
+          ) >>
+          opt!( len_add!(len < int space_comment) ) >>
+          len_add!(len < char ')') >> (
+            (sym, params)
           )
-        ) >>
-        opt!(space_comment) >>
-        char!(')') >> (
-          (sym, params)
         )
+      ),
+      do_parse!(
+        opt!( len_add!(len < int space_comment) ) >>
+        len_add!(len < char ')') >> ( () )
       )
     ),
-    do_parse!(
-      opt!(space_comment) >>
-      char!(')') >> ( () )
-    )
+    |vec| (len, vec)
   )
 }
 
-/// Parses a local definitions.
-fn _locals_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
-) -> IResult<& 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
-  delimited!(
-    bytes,
-    char!('('),
-    many0!(
-      preceded!(
-        opt!(space_comment),
-        delimited!(
-          char!('('),
-          do_parse!(
-            opt!(space_comment) >>
-            sym: apply!(sym_parser_2, f) >>
-            space_comment >>
-            typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) >>
-            space_comment >>
-            term: apply!(term_parser, 0, f) >>
-            opt!(space_comment) >> (
-              (sym, typ, term)
-            )
-          ),
-          char!(')')
-        )
-      )
-    ),
-    preceded!(
-      opt!(space_comment),
-      char!(')')
-    )
-  )
-}
+// /// Parses local definitions.
+// fn _locals_parser<'a>(
+//   bytes: & 'a [u8], f: & Factory
+// ) -> IResult<& 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
+//   delimited!(
+//     bytes,
+//     char!('('),
+//     many0!(
+//       preceded!(
+//         opt!(space_comment),
+//         delimited!(
+//           char!('('),
+//           do_parse!(
+//             opt!(space_comment) >>
+//             sym: apply!(sym_parser_2, f) >>
+//             space_comment >>
+//             typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) >>
+//             space_comment >>
+//             term: apply!(term_parser, 0, f) >>
+//             opt!(space_comment) >> (
+//               (sym, typ, term)
+//             )
+//           ),
+//           char!(')')
+//         )
+//       )
+//     ),
+//     preceded!(
+//       opt!(space_comment),
+//       char!(')')
+//     )
+//   )
+// }
 
 /// Parses a system definition.
 fn sys_parser<'a>(
-  bytes: & 'a [u8], c: & mut Context
-) -> IResult<& 'a [u8], Result<(), Error>> {
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IResult<& 'a [u8], Result<usize, Error>> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    tag!("define-sys") >>
-    space_comment >>
-    sym: apply!(sym_parser_2, c.factory()) >>
-    opt!(space_comment) >>
-    state: apply!(args_parser, c.factory()) >>
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < bytes tag!("define-sys") ) >>
+    len_add!(len < int space_comment) >>
+    sym: len_add!(
+      len < spn apply!(sym_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    state: len_add!(
+      len < spn apply!(args_parser, offset + len, c.factory())
+    ) >>
     // opt!(space_comment) >>
     // locals: apply!(locals_parser, c.factory()) >>
-    opt!(space_comment) >>
-    init: apply!(term_parser, 0, c.factory()) >>
-    space_comment >>
-    trans: apply!(term_parser, 0, c.factory()) >>
-    opt!(space_comment) >>
-    sub_syss: apply!(sub_sys_parser, c.factory()) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      c.add_sys(sym, state, vec![], init, trans, sub_syss)
+    opt!( len_add!(len < int space_comment) ) >>
+    init: len_add!(
+      len < trm apply!(term_parser, offset + len, c.factory())
+    ) >>
+    len_add!(len < int space_comment) >>
+    trans: len_add!(
+      len < trm apply!(term_parser, offset + len, c.factory())
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    sub_syss: map!(
+      apply!(sub_sys_parser, offset + len, c.factory()),
+      |(n,vec)| {
+        len += n ;
+        vec
+      }
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      c.add_sys(sym, state, vec![], init, trans, sub_syss).map(
+        |()| len
+      )
     )
   )
 }
@@ -262,11 +331,26 @@ pub fn item_parser<'a>(
     bytes,
     opt!(multispace),
     alt!(
-      apply!(fun_dec_parser, c) |
-      apply!(fun_def_parser, c) |
-      apply!(prop_parser, c) |
-      apply!(rel_parser, c) |
-      apply!(sys_parser, c)
+      map!(
+        apply!(fun_dec_parser, 0, c),
+        |res: Result<usize, Error>| res.map(|_| ())
+      ) |
+      map!(
+        apply!(fun_def_parser, 0, c),
+        |res: Result<usize, Error>| res.map(|_| ())
+      ) |
+      map!(
+        apply!(prop_parser, 0, c),
+        |res: Result<usize, Error>| res.map(|_| ())
+      ) |
+      map!(
+        apply!(rel_parser, 0, c),
+        |res: Result<usize, Error>| res.map(|_| ())
+      ) |
+      map!(
+        apply!(sys_parser, 0, c),
+        |res: Result<usize, Error>| res.map(|_| ())
+      )
     )
   )
 }
