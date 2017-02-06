@@ -24,7 +24,7 @@ use term::{ Term, Operator } ;
 use factory::Factory ;
 
 use super::{
-  Spn, Spnd,
+  Spn, Spnd, Bytes,
   type_parser,
   space_comment,
   simple_symbol_head, simple_symbol_tail,
@@ -58,7 +58,9 @@ impl fmt::Display for TermAndDep {
 }
 impl TermAndDep {
   /// Creates a term with dependencies from a variable.
-  pub fn var(factory: & Factory, var: Var, span: Spn) -> Self {
+  pub fn var(
+    factory: & Factory, var: Var, span: Spn
+  ) -> Self {
     let term: Term = factory.mk_var(var.clone()) ;
     let mut vars = HashSet::new() ;
     vars.insert(var) ;
@@ -73,7 +75,9 @@ impl TermAndDep {
     }
   }
   /// Creates a term with dependencies from a constant.
-  pub fn cst(factory: & Factory, cst: Cst, span: Spn) -> Self {
+  pub fn cst(
+    factory: & Factory, cst: Cst, span: Spn
+  ) -> Self {
     use term::CstMaker ;
     let mut types = HashSet::new() ;
     types.insert( cst.get().typ() ) ;
@@ -265,81 +269,111 @@ impl TermAndDep {
   }
 }
 
-named!{ state<State>,
-  do_parse!(
-    char!('_') >>
-    space_comment >>
-    state: alt!(
-      map!( tag!("curr"), |_| State::Curr ) |
-      map!( tag!("next"), |_| State::Next  )
-    ) >> (state)
-  )
+mk_parser!{
+  #[doc = "State parser."]
+  pub fn state(bytes, offset: usize) -> Spnd<State> {
+    let mut len = 0 ;
+    do_parse!(
+      bytes,
+      len_set!(len < char '_') >>
+      len_add!(len < int space_comment) >>
+      state: alt!(
+        map!(
+          tag!("curr"), |b: Bytes| Spnd::len_mk(
+            State::Curr, offset, b.len() + len
+          )
+        ) |
+        map!(
+          tag!("next"), |b: Bytes| Spnd::len_mk(
+            State::Next, offset, b.len() + len
+          )
+         )
+      ) >> (state)
+    )
+  }
 }
 
-named!{ pub id_parser<String>,
-  alt!(
-    // Simple symbol.
-    do_parse!(
-      head: simple_symbol_head >>
-      tail: opt!(
-        map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
-      ) >> (
-        format!("{}{}", head, tail.unwrap_or(""))
-      )
-    ) |
-    // Quoted symbol.
-    delimited!(
-      char!('|'),
+mk_parser!{
+  #[doc = "Parsed a spanned ident."]
+  pub fn id_parser(bytes, offset: usize) -> Spnd<String> {
+    let mut len = 0 ;
+    alt!(
+      bytes,
+      // Simple symbol.
       do_parse!(
-        head: none_of!("|\\@") >>
-        sym: map!(
-          is_not!("|\\"), str::from_utf8
-        ) >> (
-          format!("{}{}", head, sym.unwrap())
-        )
-      ),
-      char!('|')
+        head: map!(
+          simple_symbol_head, |c| { len = 1 ; c }
+        ) >>
+        tail: opt!(
+          map_res!(
+            simple_symbol_tail, str::from_utf8
+          )
+        ) >> ({
+          let id = format!("{}{}", head, tail.unwrap_or("")) ;
+          len = id.len() ;
+          Spnd::len_mk(id, offset, len)
+        })
+      ) |
+      // Quoted symbol.
+      //
+      // Careful with the handling of `len` here, don't fuck it up if you touch
+      // this.
+      delimited!(
+        char!('|'),
+        do_parse!(
+          head: none_of!("|\\@") >>
+          tail: map_res!(is_not!("|\\"), str::from_utf8) >> ({
+            let id = format!("{}{}", head, tail) ;
+            len = id.len() + 2 ;
+            Spnd::len_mk(id, offset, len)
+          })
+        ),
+        char!('|')
+      )
     )
-  )
+  }
 }
 
 
 pub fn var_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
   use var::VarMaker ;
+  let mut len = 0 ;
   alt!(
     bytes,
     do_parse!(
-      char!('(') >>
-      opt!(space_comment) >>
-      state: state >>
-      space_comment >>
+      len_set!(len < char '(') >>
+      opt!( len_add!(len < int space_comment) ) >>
+      state: len_add!(len < spn apply!(state, offset + len)) >>
+      len_add!(len < int space_comment) >>
       sym: map!(
-        id_parser, |s| f.sym(s)
+        len_add!(len < spn apply!(id_parser, offset + len)),
+        |s| f.sym(s)
       ) >>
-      opt!(space_comment) >>
-      char!(')') >> ({
+      opt!( len_add!(len < int space_comment) ) >>
+      len_add!( len < char ')') >> ({
         let var = f.svar(sym, state) ;
-        TermAndDep::var(f, var, Spn::dummy())
+        TermAndDep::var(f, var, Spn::len_mk(offset, len))
       })
     ) |
     map!(
-      id_parser, |s| {
-        let var = f.var( f.sym(s) ) ;
-        TermAndDep::var(f, var, Spn::dummy())
+      apply!(id_parser, offset), |sym| {
+        let (sym, span) = Spnd::destroy(sym) ;
+        let var = f.var( f.sym(sym) ) ;
+        TermAndDep::var(f, var, span)
       }
     )
   )
 }
 
 pub fn cst_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   map!(
     bytes,
-    apply!( super::cst_parser, 0, f ),
+    apply!( super::cst_parser, offset, f ),
     |cst: Spnd<Cst>| {
       let (cst, span) = cst.destroy() ;
       TermAndDep::cst(f, cst, span)
@@ -348,65 +382,78 @@ pub fn cst_parser<'a>(
 }
 
 pub fn op_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    op: apply!(operator_parser, 0) >>
-    space_comment >>
-    args: separated_list!(
-      space_comment, apply!(term_parser, f)
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    op: len_add!(
+      len < spn apply!(operator_parser, 0)
     ) >>
-    opt!(space_comment) >>
-    char!(')') >>(
-      TermAndDep::op(f, op.destroy().0, args, Spn::dummy())
+    args: many1!(
+      do_parse!(
+        len_add!(len < int space_comment) >>
+        term: len_add!(
+          len < trm apply!(term_parser, offset + len, f)
+        ) >> (term)
+      )
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >>(
+      TermAndDep::op(f, op, args, Spn::len_mk(offset, len))
     )
   )
 }
 
 
 pub fn quantified_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    quantifier: apply!(quantifier_parser, 0) >>
-    opt!(space_comment) >>
-    char!('(') >>
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    quantifier: len_add!(
+      len < spn apply!(quantifier_parser, offset + len)
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char '(') >>
     bindings: separated_list!(
-      space_comment,
+      len_add!(len < int space_comment),
       delimited!(
-        char!('('),
+        len_add!(len < char '('),
         do_parse!(
-          opt!(space_comment) >>
+          opt!( len_add!(len < int space_comment) ) >>
           sym: map!(
-            id_parser,
+            len_add!(len < spn apply!(id_parser, offset + len)),
             |sym| f.sym(sym)
           ) >>
-          space_comment >>
-          ty: apply!(type_parser, 0) >>
-          opt!(space_comment) >> (sym, ty)
+          len_add!(len < int space_comment) >>
+          ty: map!(
+            apply!(type_parser, offset + len),
+            |ty: Spnd<Type>| { len += ty.len() ; ty }
+          ) >>
+          opt!( len_add!(len < int space_comment) ) >> (sym, ty)
         ),
-        char!(')')
+        len_add!(len < char ')')
       )
     ) >>
-    opt!(space_comment) >>
-    char!(')') >>
-    opt!(space_comment) >>
-    term: apply!(term_parser, f) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      match quantifier.destroy().0 {
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    term: len_add!(len < trm apply!(term_parser, offset + len, f)) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      match quantifier {
         Quantifier::Forall => TermAndDep::forall(
-          f, bindings, term, Spn::dummy()
+          f, bindings, term, Spn::len_mk(offset, len)
         ),
         Quantifier::Exists => TermAndDep::exists(
-          f, bindings, term, Spn::dummy()
+          f, bindings, term, Spn::len_mk(offset, len)
         ),
       }
     )
@@ -414,83 +461,90 @@ pub fn quantified_parser<'a>(
 }
 
 pub fn let_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    opt!(space_comment) >>
-    tag!("let") >>
-    opt!(space_comment) >>
-    char!('(') >>
-    opt!(space_comment) >>
+    len_set!(len < char '(') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < bytes tag!("let")) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char'(') >>
+    opt!( len_add!(len < int space_comment) ) >>
     bindings: separated_list!(
-      space_comment,
+      len_add!(len < int space_comment),
       delimited!(
-        char!('('),
+        len_add!(len < char '('),
         do_parse!(
-          opt!(space_comment) >>
+          opt!( len_add!(len < int space_comment) ) >>
           sym: map!(
-            id_parser,
+            len_add!(len < spn apply!(id_parser, 0)),
             |sym| f.sym(sym)
           ) >>
-          space_comment >>
-          term: apply!(term_parser, f) >> (sym, term)
+          len_add!(len < int space_comment) >>
+          term: len_add!(len < trm apply!(term_parser, offset + len, f)) >> (
+            sym, term
+          )
         ),
-        char!(')')
+        len_add!(len < char ')')
       )
     ) >>
-    opt!(space_comment) >>
-    char!(')') >>
-    opt!(space_comment) >>
-    term: apply!(term_parser, f) >>
-    opt!(space_comment) >>
-    char!(')') >> (
-      TermAndDep::let_b(f, bindings, term, Spn::dummy())
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >>
+    opt!( len_add!(len < int space_comment) ) >>
+    term: len_add!(len < trm apply!(term_parser, offset + len, f)) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> (
+      TermAndDep::let_b(f, bindings, term, Spn::len_mk(offset,len))
     )
   )
 }
 
 fn app_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
   use sym::SymMaker ;
+  let mut len = 0 ;
   do_parse!(
     bytes,
-    char!('(') >>
-    space_comment >>
-    sym: id_parser >>
-    space_comment >>
-    args: separated_nonempty_list!(
-      space_comment, apply!(term_parser, f)
+    len_set!(len < char '(') >>
+    len_add!(len < int space_comment) >>
+    sym: map!(
+      len_add!(len < spn apply!(id_parser, 0)), |sym| f.sym(sym)
     ) >>
-    opt!(space_comment) >>
-    char!(')') >> ({
-      let sym = f.sym(sym) ;
-      TermAndDep::app(f, sym, args, Spn::dummy())
+    len_add!(len < int space_comment) >>
+    args: separated_nonempty_list!(
+      len_add!(len < int space_comment),
+      len_add!(len < trm apply!(term_parser, offset + len, f))
+    ) >>
+    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < char ')') >> ({
+      TermAndDep::app(f, sym, args, Spn::len_mk(offset, len))
     })
   )
 }
 
 
 pub fn term_parser<'a>(
-  bytes: & 'a [u8], f: & Factory
+  bytes: & 'a [u8], offset: usize, f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
+  let mut len = 0 ;
   alt!(
     bytes,
-    apply!(cst_parser, f) |
-    apply!(var_parser, f) |
-    apply!(op_parser, f) |
-    apply!(quantified_parser, f) |
-    apply!(let_parser, f) |
-    apply!(app_parser, f) |
+    apply!(cst_parser, offset, f) |
+    apply!(var_parser, offset, f) |
+    apply!(op_parser, offset, f) |
+    apply!(quantified_parser, offset, f) |
+    apply!(let_parser, offset, f) |
+    apply!(app_parser, offset, f) |
     do_parse!(
-      char!('(') >>
-      opt!(space_comment) >>
-      t: apply!(term_parser, f) >>
-      opt!(space_comment) >>
-      char!(')') >> (t)
+      len_set!(len < char '(') >>
+      opt!( len_add!(len < int space_comment) ) >>
+      t: apply!(term_parser, offset + len, f) >>
+      opt!( len_add!(len < int space_comment) ) >>
+      len_add!(len < char ')') >> (t)
     )
   )
 }
@@ -506,7 +560,8 @@ macro_rules! try_parse_term {
   ($fun:expr, $factory:expr, $arg:expr, $e:expr) => (
     try_parse!($fun, $factory, $arg,
       (s, res) -> {
-        assert_eq!(res.term, $e)
+        assert_eq!(res.term, * $e) ;
+        assert_eq!(res.span, $e.span)
       }
     )
   ) ;
@@ -518,35 +573,41 @@ mod terms {
   use base::{ State, PrintVmt } ;
   use sym::* ;
   use var::* ;
-  use term::{ Operator, CstMaker, OpMaker, AppMaker } ;
+  use term::{ Term, Operator, CstMaker, OpMaker, AppMaker } ;
   use factory::* ;
   use typ::* ;
   use std::str::FromStr ;
+  use parsing::Spnd ;
 
   #[test]
   fn cst() {
     use super::* ;
     let factory = Factory::mk() ;
-    let res = factory.cst( Int::from_str("7").unwrap() ) ;
+    let res: Term = factory.cst( Int::from_str("7").unwrap() ) ;
     try_parse_term!(
-      term_parser, & factory, b"7", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"7",
+      Spnd::len_mk(res.clone(), 0, 1)
     ) ;
-    let res = factory.cst(
+    let res: Term = factory.cst(
       Rat::new(
         Int::from_str("5357").unwrap(),
         Int::from_str("2046").unwrap()
       )
     ) ;
     try_parse_term!(
-      term_parser, & factory, b"(/ 5357 2046)", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory,
+      b"(/ 5357 2046)",
+      Spnd::len_mk(res.clone(), 0, 13)
     ) ;
-    let res = factory.cst( true ) ;
+    let res: Term = factory.cst( true ) ;
     try_parse_term!(
-      term_parser, & factory, b"true", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"true",
+      Spnd::len_mk(res.clone(), 0, 4)
     ) ;
-    let res = factory.cst( false ) ;
+    let res: Term = factory.cst( false ) ;
     try_parse_term!(
-      term_parser, & factory, b"false", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"false",
+      Spnd::len_mk(res.clone(), 0, 5)
     ) ;
   }
 
@@ -554,21 +615,27 @@ mod terms {
   fn var() {
     use super::* ;
     let factory = Factory::mk() ;
-    let res = factory.var( factory.sym("bla") ) ;
+    let res: Term = factory.var( factory.sym("bla") ) ;
     try_parse_term!(
-      term_parser, & factory, b"|bla|", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"|bla|",
+      Spnd::len_mk(res.clone(), 0, 5)
     ) ;
-    let res = factory.var( factory.sym("bly.bla") ) ;
+    let res: Term = factory.var( factory.sym("bly.bla") ) ;
     try_parse_term!(
-      term_parser, & factory, b"|bly.bla|", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"|bly.bla|",
+      Spnd::len_mk(res.clone(), 0, 9)
     ) ;
-    let res = factory.svar( factory.sym("bla"), State::Curr ) ;
+    let res: Term = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
-      term_parser, & factory, b"(_ curr |bla|)", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory,
+      b"(_ curr |bla|)",
+      Spnd::len_mk(res.clone(), 0, 14)
     ) ;
-    let res = factory.svar( factory.sym("bla"), State::Next ) ;
+    let res: Term = factory.svar( factory.sym("bla"), State::Next ) ;
     try_parse_term!(
-      term_parser, & factory, b"(_ next |bla|)", res
+      |bytes, factory| term_parser(bytes, 0, factory), & factory,
+      b"(_ next |bla|)",
+      Spnd::len_mk(res.clone(), 0, 14)
     ) ;
   }
 
@@ -577,7 +644,7 @@ mod terms {
     use super::* ;
     let factory = Factory::mk() ;
 
-    let bla_plus_7 = factory.op(
+    let bla_plus_7: Term = factory.op(
       Operator::Add, vec![
         factory.var( factory.sym("bla") ),
         factory.cst( Int::from_str("7").unwrap() )
@@ -586,10 +653,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, bla_plus_7
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(bla_plus_7.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.op(
+    let nested: Term = factory.op(
       Operator::Le, vec![
         factory.cst( Int::from_str("17").unwrap() ), bla_plus_7
       ]
@@ -597,10 +665,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.op(
+    let nested: Term = factory.op(
       Operator::And, vec![
         factory.svar( factory.sym("svar"), State::Curr ),
         nested
@@ -609,10 +678,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.op(
+    let nested: Term = factory.op(
       Operator::Or, vec![
         factory.svar( factory.sym("something else"), State::Next ),
         nested
@@ -621,10 +691,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.op(
+    let nested: Term = factory.op(
       Operator::Ite, vec![
         factory.var( factory.sym("bla.bla") ),
         factory.op(
@@ -644,7 +715,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
   }
 
@@ -653,7 +725,7 @@ mod terms {
     use super::* ;
     let factory = Factory::mk() ;
 
-    let bla_plus_7 = factory.app(
+    let bla_plus_7: Term = factory.app(
       factory.sym("function symbol"), vec![
         factory.var( factory.sym("bla") ),
         factory.cst( Int::from_str("7").unwrap() )
@@ -662,10 +734,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, bla_plus_7
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(bla_plus_7.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.app(
+    let nested: Term = factory.app(
       factory.sym("another function symbol"), vec![
         factory.cst( Int::from_str("17").unwrap() ),
         bla_plus_7
@@ -674,10 +747,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.app(
+    let nested: Term = factory.app(
       factory.sym("yet another one"), vec![
         factory.svar( factory.sym("svar"), State::Curr ),
         nested
@@ -686,10 +760,11 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory, & s, nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
 
-    let nested = factory.op(
+    let nested: Term = factory.op(
       Operator::Or, vec![
         factory.svar( factory.sym("something else"), State::Next ),
         nested
@@ -698,16 +773,15 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      term_parser, & factory,
-      & s,
-      nested
+      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 0, s.len())
     ) ;
   }
 
   #[test]
   fn empty() {
     let factory = Factory::mk() ;
-    match super::term_parser(& b""[..], & factory) {
+    match super::term_parser(& b""[..], 0, & factory) {
       ::nom::IResult::Incomplete(_) => (),
       other => panic!("unexpected result on parsing empty string: {:?}", other)
     } ;

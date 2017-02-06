@@ -62,7 +62,7 @@ macro_rules! try_parse {
 
 
 /// A span indicates a position (new lines count as regular characters).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Spn {
   /// Start of the span.
   pub bgn: usize,
@@ -75,6 +75,12 @@ impl Spn {
   pub fn mk(bgn: usize, end: usize) -> Self {
     debug_assert!( bgn <= end ) ;
     Spn { bgn: bgn, end: end }
+  }
+  /// Creates a new span from an offset and a length.
+  #[inline]
+  pub fn len_mk(bgn: usize, len: usize) -> Self {
+    debug_assert!( len > 0 ) ;
+    Spn::mk(bgn, bgn + len - 1)
   }
   /// Creates a dummy span.
   #[inline]
@@ -198,6 +204,16 @@ macro_rules! len_add {
       }
     )
   ) ;
+  ($bytes:expr, $len:ident < trm $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)+),
+      |term: $crate::parsing::TermAndDep| {
+        $len += term.span.len() ;
+        term
+      }
+    )
+  ) ;
   ($bytes:expr, $len:ident < bytes $parser:expr) => (
     map!(
       $bytes,
@@ -220,6 +236,16 @@ macro_rules! len_add {
         let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
         $len += span.len() ;
         stuff
+      }
+    )
+  ) ;
+  ($bytes:expr, $len:ident < trm $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |term: $crate::parsing::TermAndDep| {
+        $len += term.span.len() ;
+        term
       }
     )
   ) ;
@@ -254,6 +280,14 @@ macro_rules! len_set {
       }
     )
   ) ;
+  ($bytes:expr, trm $len:ident < $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $($rest)+, |term: $crate::parsing::TermAndDep| {
+        $len = term.span.len() ;
+        term
+      }
+    )
+  ) ;
   ($bytes:expr, len $len:ident < $parser:expr) => (
     map!(
       $bytes,
@@ -276,6 +310,16 @@ macro_rules! len_set {
         let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
         $len = span.len() ;
         stuff
+      }
+    )
+  ) ;
+  ($bytes:expr, trm $len:ident < $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),
+      |term: $crate::parsing::TermAndDep| {
+        $len = term.span.len() ;
+        term
       }
     )
   ) ;

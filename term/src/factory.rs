@@ -758,14 +758,14 @@ impl ParseVmt2 for Factory {
   ) -> IResult<& 'a [u8], Sym> {
     map!(
       bytes,
-      parser::vmt::id_parser,
-      |sym| self.sym(sym)
+      apply!(parser::vmt::id_parser, 0),
+      |sym| self.sym(::parsing::Spnd::destroy(sym).0)
     )
   }
   fn parse_expr<'a>(
     & self, bytes: & 'a [u8]
   ) -> IResult<& 'a [u8], TermAndDep> {
-    parser::vmt::term_parser(bytes, self)
+    parser::vmt::term_parser(bytes, 0, self)
   }
   fn parse_type<'a>(
     & self, bytes: & 'a [u8], offset: usize
