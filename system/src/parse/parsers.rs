@@ -16,7 +16,7 @@ use super::check::* ;
 use term::{ Type, Sym, Factory, ParseVmt2 } ;
 use term::parsing::* ;
 
-/** Parses a multispace and a comment. */
+/// Parses a multispace and a comment.
 named!{
   pub comment,
   chain!(
@@ -51,7 +51,7 @@ mk_parser!{
 //   call!(Factory::parse_type)
 // }
 
-/** Parses a signature. */
+/// Parses a signature.
 named!{
   sig_parser<Sig>,
   chain!(
@@ -67,14 +67,14 @@ named!{
   )
 }
 
-/** Parses a symbol. */
+/// Parses a symbol.
 fn sym_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Sym> {
-  f.parse_ident(bytes)
+  f.parse_ident(bytes, 0).map( |res| res.destroy().0 )
 }
 
-/** Parses some arguments. */
+/// Parses some arguments.
 fn args_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Args> {
@@ -103,7 +103,7 @@ fn args_parser<'a>(
   )
 }
 
-/** Parses a function declaration. */
+/// Parses a function declaration.
 fn fun_dec_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
@@ -124,14 +124,14 @@ fn fun_dec_parser<'a>(
   )
 }
 
-/** Parses a term. */
+/// Parses a term.
 fn term_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], TermAndDep> {
-  f.parse_expr(bytes)
+  f.parse_expr(bytes, 0)
 }
 
-/** Parses a function definition. */
+/// Parses a function definition.
 fn fun_def_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
@@ -154,7 +154,7 @@ fn fun_def_parser<'a>(
   )
 }
 
-/** Parses a state property definition. */
+/// Parses a state property definition.
 fn prop_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
@@ -175,7 +175,7 @@ fn prop_parser<'a>(
   )
 }
 
-/** Parses a state relation definition. */
+/// Parses a state relation definition.
 fn rel_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
@@ -223,7 +223,7 @@ fn sub_sys_parser<'a>(
   )
 }
 
-/** Parses a local definitions. */
+/// Parses a local definitions.
 fn _locals_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
@@ -256,7 +256,7 @@ fn _locals_parser<'a>(
   )
 }
 
-/** Parses a system definition. */
+/// Parses a system definition.
 fn sys_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
@@ -283,7 +283,7 @@ fn sys_parser<'a>(
   )
 }
 
-/** Parses an item. */
+/// Parses an item.
 pub fn item_parser<'a>(
   bytes: & 'a [u8], c: & mut Context
 ) -> IResult<& 'a [u8], Result<(), Error>> {
@@ -300,7 +300,7 @@ pub fn item_parser<'a>(
   )
 }
 
-/** Parses a check. */
+/// Parses a check.
 pub fn check_parser<'a>(
   bytes: & 'a [u8], c: & Context
 ) -> IResult<& 'a [u8], Result<Res, Error>> {
@@ -331,7 +331,7 @@ pub fn check_parser<'a>(
   )
 }
 
-/** Parses an atom. */
+/// Parses an atom.
 pub fn atom_parser<'a>(
   bytes: & 'a [u8], f: & Factory
 ) -> IResult<& 'a [u8], Atom> {
@@ -351,7 +351,7 @@ pub fn atom_parser<'a>(
   )
 }
 
-/** Parses a check with assumptions. */
+/// Parses a check with assumptions.
 pub fn check_assuming_parser<'a>(
   bytes: & 'a [u8], c: & Context
 ) -> IResult<& 'a [u8], Result<Res, Error>> {
@@ -395,7 +395,7 @@ pub fn check_assuming_parser<'a>(
   )
 }
 
-/** Parses exit. */
+/// Parses exit.
 named!{
   pub exit_parser< Result<Res, Error> >,
   preceded!(
@@ -412,7 +412,7 @@ named!{
   )
 }
 
-/** Parses a check with assumptions. */
+/// Parses a check with assumptions.
 pub fn check_exit_parser<'a>(
   bytes: & 'a [u8], c: & Context
 ) -> IResult<& 'a [u8], Result<Res, Error>> {

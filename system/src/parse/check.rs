@@ -7,9 +7,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Checks what has been parsed makes sense.
-
-See `parse::Context` for the description of the checks. */
+//! Checks what has been parsed makes sense.
+//!
+//! See `parse::Context` for the description of the checks.
 
 use std::fmt ;
 use std::collections::HashSet ;
@@ -24,39 +24,39 @@ use super::{ Context, Atom, Res } ;
 use self::Error::* ;
 use self::CheckFailed::* ;
 
-/** Parse error. */
+/// Parse error.
 pub enum Error {
-  /** Redefinition of identifier. */
+  /// Redefinition of identifier.
   Redef(Sym, & 'static str, & 'static str),
-  /** State var in define-fun. */
+  /// State var in define-fun.
   SVarInDef(Var, Sym),
-  /** Use of unknown symbol in application. */
+  /// Use of unknown symbol in application.
   UkCall(Sym, Sym, & 'static str),
-  /** Use of unknown (state) variable. */
+  /// Use of unknown (state) variable.
   UkVar(Var, Sym, & 'static str),
-  /** Use of unknown system identifier in verify or property. */
+  /// Use of unknown system identifier in verify or property.
   UkSys(Sym, Option<Sym>, & 'static str),
-  /** Use of unknown prop identifier in verify. */
+  /// Use of unknown prop identifier in verify.
   UkProp(Sym, Sym, & 'static str),
-  /** Unknown atom in check with assumption. */
+  /// Unknown atom in check with assumption.
   UkAtom(Sym, Sym, & 'static str),
-  /** Illegal use of state variable. */
+  /// Illegal use of state variable.
   IllSVar(Var, Sym, & 'static str),
-  /** Illegal use of next state variable. */
+  /// Illegal use of next state variable.
   IllNxtSVar(Var, Sym, & 'static str),
-  /** Inconsistent property in check. */
+  /// Inconsistent property in check.
   IncProp(::Prop, ::Sys, & 'static str),
-  /** A next was found in a one-state property. */
+  /// A next was found in a one-state property.
   NxtInProp1(Var, Sym, & 'static str),
-  /** Illegal next state variable in init. */
+  /// Illegal next state variable in init.
   NxtInit(Sym, Sym),
-  /** Uknown system call in system definition. */
+  /// Uknown system call in system definition.
   UkSysCall(Sym, Sym),
-  /** Inconsistent arity of system call in system definition. */
+  /// Inconsistent arity of system call in system definition.
   IncSysCall(Sym, usize, Sym, usize),
-  /** Type check error. */
+  /// Type check error.
   TypeCheck(String),
-  /** I/O error. */
+  /// I/O error.
   Io(::std::io::Error),
 }
 impl fmt::Display for Error {
@@ -133,7 +133,7 @@ impl fmt::Display for Error {
   }
 }
 
-/** Checks that an identifier is unused. */
+/// Checks that an identifier is unused.
 macro_rules! check_sym {
   ($ctxt:expr, $sym:expr, $desc:expr) => (
     match $ctxt.sym_unused(& $sym) {
@@ -145,7 +145,7 @@ macro_rules! check_sym {
   )
 }
 
-/** Type checks a term. */
+/// Type checks a term.
 macro_rules! type_check {
   (
     $ctxt:expr, $term:expr, $ty:expr,
@@ -186,8 +186,8 @@ macro_rules! type_check {
   ) ;
 }
 
-/** Checks that a variable is defined. That is, looks for a function symbol
-declaration/definition for the variable's symbol with arity zero. */
+/// Checks that a variable is defined. That is, looks for a function symbol
+/// declaration/definition for the variable's symbol with arity zero.
 fn var_defined(
   ctxt: & Context, sym: & Sym
 ) -> Option<::Callable> {
@@ -201,8 +201,8 @@ fn var_defined(
   }
 }
 
-/** Checks that an application is defined. That is, looks for a function symbol
-declaration/definition for a symbol with arity greater than zero. */
+/// Checks that an application is defined. That is, looks for a function symbol
+/// declaration/definition for a symbol with arity greater than zero.
 fn app_defined(
   ctxt: & Context, sym: & Sym
 ) -> Option<::Callable> {
@@ -216,7 +216,7 @@ fn app_defined(
   }
 }
 
-/** Checks that a state variables belongs to a state. */
+/// Checks that a state variables belongs to a state.
 fn svar_in_state(
   svar: & Sym, state: & Args
 ) -> bool {
@@ -226,8 +226,8 @@ fn svar_in_state(
   false
 }
 
-/** Checks that a symbol is in a list of local definitions. Returns an option
-of the relevant binding if it is, `None` otherwise. */
+/// Checks that a symbol is in a list of local definitions. Returns an option
+/// of the relevant binding if it is, `None` otherwise.
 fn is_sym_in_locals(
   sym: & Sym, locals: & [(Sym, Type, Term)]
 ) -> Option<(Sym, Term)> {
@@ -237,7 +237,7 @@ fn is_sym_in_locals(
   None
 }
 
-/** Checks that a function declaration is legal. */
+/// Checks that a function declaration is legal.
 pub fn check_fun_dec(
   ctxt: & Context, sym: Sym, sig: Sig, typ: Type
 ) -> Result<Callable, Error> {
@@ -254,7 +254,7 @@ pub fn check_fun_dec(
   Ok( Callable::Dec( Uf::mk(sym, sig, typ) ) )
 }
 
-/** Checks that a function definition is legal. */
+/// Checks that a function definition is legal.
 pub fn check_fun_def(
   ctxt: & Context, sym: Sym, args: Args, typ: Type, body: TermAndDep
 ) -> Result<Callable, Error> {
@@ -324,10 +324,10 @@ enum CheckFailed {
   UnknownCall(Sym),
 }
 
-/** Checks everything in a term is well defined.
-
-Returns a `Result` of the bindings from the `locals` necessary for the term to
-make sense. */
+/// Checks everything in a term is well defined.
+///
+/// Returns a `Result` of the bindings from the `locals` necessary for the
+/// term to make sense.
 fn check_term_and_dep(
   ctxt: & Context,
   term: & TermAndDep,
@@ -381,7 +381,7 @@ fn check_term_and_dep(
   Ok(bindings)
 }
 
-/** Checks that a proposition definition is legal. */
+/// Checks that a proposition definition is legal.
 pub fn check_prop(
   ctxt: & Context, sym: Sym, sys: Sym, body: TermAndDep
 ) -> Result<Prop, Error> {
@@ -441,7 +441,7 @@ pub fn check_prop(
   )
 }
 
-/** Checks that a relation definition is legal. */
+/// Checks that a relation definition is legal.
 pub fn check_rel(
   ctxt: & Context, sym: Sym, sys: Sym, body: TermAndDep
 ) -> Result<Prop, Error> {
@@ -508,7 +508,7 @@ macro_rules! sys_try {
   )
 }
 
-/** Checks that a system definition is legal. */
+/// Checks that a system definition is legal.
 pub fn check_sys(
   ctxt: & Context, sym: Sym, state: Args,
   locals: Vec<(Sym, Type, TermAndDep)>,
@@ -694,7 +694,7 @@ pub fn check_sys(
   )
 }
 
-/** Checks that a check is legal. */
+/// Checks that a check is legal.
 pub fn check_check(
   ctxt: & Context, sym: Sym, props: Vec<Sym>, atoms: Option<Vec<Atom>>
 ) -> Result<Res, Error> {

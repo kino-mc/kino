@@ -737,35 +737,35 @@ pub trait ParseVmt2 {
   type Type ;
   /// Parses an identifier in VMT format.
   fn parse_ident<'a>(
-    & self, bytes: & 'a [u8]
+    & self, bytes: & 'a [u8], offset: usize
   ) -> IResult<& 'a [u8], Self::Ident> ;
   /// Parses an expression in VMT format.
   fn parse_expr<'a>(
-    & self, bytes: & 'a [u8]
+    & self, bytes: & 'a [u8], offset: usize
   ) -> IResult<& 'a [u8], Self::ExprRes> ;
   /// Parses a Type in VMT format.
   fn parse_type<'a>(
     & self, bytes: & 'a [u8], offset: usize
-  ) -> IResult<& 'a [u8], Spnd<Self::Type>> ;
+  ) -> IResult<& 'a [u8], Self::Type> ;
 }
 
 impl ParseVmt2 for Factory {
-  type Ident = Sym ;
+  type Ident = Spnd<Sym> ;
   type ExprRes = TermAndDep ;
-  type Type = Type ;
+  type Type = Spnd<Type> ;
   fn parse_ident<'a>(
-    & self, bytes: & 'a [u8]
-  ) -> IResult<& 'a [u8], Sym> {
+    & self, bytes: & 'a [u8], offset: usize
+  ) -> IResult<& 'a [u8], Spnd<Sym>> {
     map!(
       bytes,
-      apply!(parser::vmt::id_parser, 0),
-      |sym| self.sym(::parsing::Spnd::destroy(sym).0)
+      apply!(parser::vmt::id_parser, offset),
+      |sym: Spnd<String>| sym.map( |sym| self.sym(sym) )
     )
   }
   fn parse_expr<'a>(
-    & self, bytes: & 'a [u8]
+    & self, bytes: & 'a [u8], offset: usize
   ) -> IResult<& 'a [u8], TermAndDep> {
-    parser::vmt::term_parser(bytes, 0, self)
+    parser::vmt::term_parser(bytes, offset, self)
   }
   fn parse_type<'a>(
     & self, bytes: & 'a [u8], offset: usize

@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Type checking. */
+//! Type checking.
 
 use std::collections::HashMap ;
 
@@ -19,7 +19,7 @@ use term::real_term::Var as RVar ;
 
 use super::parse::Context ;
 
-/** Function passed to `fold` over terms for type checking. */
+/// Function passed to `fold` over terms for type checking.
 fn checker(
   context: & Context,
   state: & Option<HashMap<Sym, Type>>,
@@ -185,7 +185,7 @@ fn checker(
   }
 }
 
-/** Type checks a term. */
+/// Type checks a term.
 pub fn type_check(
   ctxt: & Context, term: & Term,
   state: Option<& [ (Sym, Type) ]>,
@@ -224,7 +224,7 @@ pub fn type_check(
 
 
 
-/** Tests the evaluator. */
+/// Tests the evaluator.
 #[cfg(test)]
 pub mod test {
   use term::gen::* ;
@@ -232,7 +232,7 @@ pub mod test {
   use base::Callable ;
   use parse::{ Context, Res } ;
 
-  /** Generates random terms to check the evaluator. */
+  /// Generates random terms to check the evaluator.
   #[test]
   pub fn rand_terms_fault_conf() {
     use std::fs::File ;
