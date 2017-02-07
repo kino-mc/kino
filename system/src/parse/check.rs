@@ -712,7 +712,8 @@ pub fn check_sys(
 
 /// Checks that a check is legal.
 pub fn check_check(
-  ctxt: & Context, sym: Sym, props: Vec<Sym>, atoms: Option<Vec<Atom>>
+  ctxt: & Context, sym: Spnd<Sym>,
+  props: Vec< Spnd<Sym> >, atoms: Option<Vec<Atom>>
 ) -> Result<Res, Error> {
   let desc = if atoms.is_none() {
     super::check_desc
@@ -721,14 +722,16 @@ pub fn check_check(
   } ;
 
   let sys = match ctxt.get_sys(& sym) {
-    None => return Err( UkSys(sym.clone(), None, desc) ),
+    None => return Err( UkSys(sym.get().clone(), None, desc) ),
     Some(sys) => (* sys).clone(),
   } ;
 
   let mut real_props = Vec::with_capacity(props.len()) ;
   for prop in props.iter() {
-    let prop = match ctxt.get_prop(prop) {
-      None => return Err( UkProp(prop.clone(), sym.clone(), desc) ),
+    let prop = match ctxt.get_prop(prop.get()) {
+      None => return Err(
+        UkProp(prop.get().clone(), sym.get().clone(), desc)
+      ),
       Some(prop) => (* prop).0.clone(),
     } ;
     if sys.sym() != prop.sys().sym() {
@@ -746,7 +749,9 @@ pub fn check_check(
       let mut nu_atoms = Vec::with_capacity(atoms.len()) ;
       for atom in atoms.into_iter() {
         match var_defined(ctxt, atom.sym()) {
-          None => return Err( UkAtom(atom.sym().clone(), sym.clone(), desc) ),
+          None => return Err(
+            UkAtom(atom.sym().get().clone(), sym.get().clone(), desc)
+          ),
           Some(_) => (),
         } ;
         nu_atoms.push( atom.into_var(ctxt.factory()) )

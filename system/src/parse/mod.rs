@@ -92,13 +92,13 @@ macro_rules! try_get {
 /// A positive or negative literal.
 pub enum Atom {
   /// A positive literal.
-  Pos(Sym),
+  Pos( Spnd<Sym> ),
   /// A negative literal.
-  Neg(Sym),
+  Neg( Spnd<Sym> ),
 }
 impl Atom {
   #[inline]
-  pub fn sym(& self) -> & Sym {
+  pub fn sym(& self) -> & Spnd<Sym> {
     match * self {
       Atom::Pos(ref sym) => sym,
       Atom::Neg(ref sym) => sym,
@@ -108,8 +108,14 @@ impl Atom {
   pub fn into_var(self, f: & Factory) -> Term {
     use term::VarMaker ;
     match self {
-      Atom::Pos(sym) => f.var(sym),
-      Atom::Neg(sym) => f.not( f.var(sym) ),
+      Atom::Pos(sym) => {
+        let (sym, _) = sym.destroy() ;
+        f.var(sym)
+      },
+      Atom::Neg(sym) => {
+        let (sym, _) = sym.destroy() ;
+        f.not( f.var(sym) )
+      },
     }
   }
 }
@@ -731,7 +737,7 @@ impl Context {
             Done(chars, res) => {
               self.buffer.clear() ;
               self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
-              return res
+              return res.map(|res| res.destroy().0)
             },
             Incomplete(_) => {
               println!("Context:") ;

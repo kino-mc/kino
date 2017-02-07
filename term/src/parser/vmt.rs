@@ -276,16 +276,18 @@ mk_parser!{
     do_parse!(
       bytes,
       len_set!(len < char '_') >>
-      len_add!(len < int space_comment) >>
+      len_add!(len < spc cmt) >>
       state: alt!(
         map!(
-          tag!("curr"), |b: Bytes| Spnd::len_mk(
-            State::Curr, offset, b.len() + len
+          len_add!(len < tag "curr"),
+          |_| Spnd::len_mk(
+            State::Curr, offset, len
           )
         ) |
         map!(
-          tag!("next"), |b: Bytes| Spnd::len_mk(
-            State::Next, offset, b.len() + len
+          len_add!(len < tag "next"),
+          |_| Spnd::len_mk(
+            State::Next, offset, len
           )
          )
       ) >> (state)
@@ -357,15 +359,15 @@ pub fn var_parser<'a>(
     bytes,
     do_parse!(
       len_set!(len < char '(') >>
-      opt!( len_add!(len < int space_comment) ) >>
+      len_add!(len < opt spc cmt) >>
       state: len_add!(len < spn apply!(state, offset + len)) >>
-      len_add!(len < int space_comment) >>
+      len_add!(len < spc cmt) >>
       sym: map!(
         len_add!(len < spn apply!(id_parser, offset + len)),
         |s| f.sym(s)
       ) >>
-      opt!( len_add!(len < int space_comment) ) >>
-      len_add!( len < char ')') >> ({
+      len_add!(len < opt spc cmt) >>
+      len_add!(len < char ')') >> ({
         let var = f.svar(sym, state) ;
         TermAndDep::var(f, var, Spn::len_mk(offset, len))
       })
@@ -402,19 +404,19 @@ pub fn op_parser<'a>(
   do_parse!(
     bytes,
     len_set!(len < char '(') >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     op: len_add!(
       len < spn apply!(operator_parser, 0)
     ) >>
     args: many1!(
       do_parse!(
-        len_add!(len < int space_comment) >>
+        len_add!(len < spc cmt) >>
         term: len_add!(
           len < trm apply!(term_parser, offset + len, f)
         ) >> (term)
       )
     ) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char ')') >>(
       TermAndDep::op(f, op, args, Spn::len_mk(offset, len))
     )
@@ -430,37 +432,37 @@ pub fn quantified_parser<'a>(
   do_parse!(
     bytes,
     len_set!(len < char '(') >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     quantifier: len_add!(
       len < spn apply!(quantifier_parser, offset + len)
     ) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char '(') >>
     bindings: separated_list!(
-      len_add!(len < int space_comment),
+      len_add!(len < spc cmt),
       delimited!(
         len_add!(len < char '('),
         do_parse!(
-          opt!( len_add!(len < int space_comment) ) >>
+          len_add!(len < opt spc cmt) >>
           sym: map!(
             len_add!(len < spn apply!(id_parser, offset + len)),
             |sym| f.sym(sym)
           ) >>
-          len_add!(len < int space_comment) >>
+          len_add!(len < spc cmt) >>
           ty: map!(
             apply!(type_parser, offset + len),
             |ty: Spnd<Type>| { len += ty.len() ; ty }
           ) >>
-          opt!( len_add!(len < int space_comment) ) >> (sym, ty)
+          len_add!(len < opt spc cmt) >> (sym, ty)
         ),
         len_add!(len < char ')')
       )
     ) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char ')') >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     term: len_add!(len < trm apply!(term_parser, offset + len, f)) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char ')') >> (
       match quantifier {
         Quantifier::Forall => TermAndDep::forall(
@@ -483,34 +485,36 @@ pub fn let_parser<'a>(
   do_parse!(
     bytes,
     len_set!(len < char '(') >>
-    opt!( len_add!(len < int space_comment) ) >>
-    len_add!(len < bytes tag!("let")) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
+    len_add!(len < tag "let") >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char'(') >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     bindings: separated_list!(
-      len_add!(len < int space_comment),
+      len_add!(len < spc cmt),
       delimited!(
         len_add!(len < char '('),
         do_parse!(
-          opt!( len_add!(len < int space_comment) ) >>
+          len_add!(len < spc cmt) >>
           sym: map!(
             len_add!(len < spn apply!(id_parser, 0)),
             |sym| f.sym(sym)
           ) >>
-          len_add!(len < int space_comment) >>
-          term: len_add!(len < trm apply!(term_parser, offset + len, f)) >> (
+          len_add!(len < spc cmt) >>
+          term: len_add!(
+            len < trm apply!(term_parser, offset + len, f)
+          ) >> (
             sym, term
           )
         ),
         len_add!(len < char ')')
       )
     ) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char ')') >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     term: len_add!(len < trm apply!(term_parser, offset + len, f)) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char ')') >> (
       TermAndDep::let_b(f, bindings, term, Spn::len_mk(offset,len))
     )
@@ -526,16 +530,17 @@ fn app_parser<'a>(
   do_parse!(
     bytes,
     len_set!(len < char '(') >>
-    len_add!(len < int space_comment) >>
+    len_add!(len < spc cmt) >>
     sym: map!(
-      len_add!(len < spn apply!(id_parser, 0)), |sym| f.sym(sym)
+      len_add!(len < spn apply!(id_parser, 0)),
+      |sym| f.sym(sym)
     ) >>
-    len_add!(len < int space_comment) >>
+    len_add!(len < spc cmt) >>
     args: separated_nonempty_list!(
-      len_add!(len < int space_comment),
+      len_add!(len < spc cmt),
       len_add!(len < trm apply!(term_parser, offset + len, f))
     ) >>
-    opt!( len_add!(len < int space_comment) ) >>
+    len_add!(len < opt spc cmt) >>
     len_add!(len < char ')') >> ({
       TermAndDep::app(f, sym, args, Spn::len_mk(offset, len))
     })
@@ -557,10 +562,16 @@ pub fn term_parser<'a>(
     apply!(app_parser, offset, f) |
     do_parse!(
       len_set!(len < char '(') >>
-      opt!( len_add!(len < int space_comment) ) >>
-      t: apply!(term_parser, offset + len, f) >>
-      opt!( len_add!(len < int space_comment) ) >>
-      len_add!(len < char ')') >> (t)
+      len_add!(len < opt spc cmt) >>
+      t: len_add!(
+        len < trm apply!(term_parser, offset + len, f)
+      ) >>
+      len_add!(len < opt spc cmt) >>
+      len_add!(len < char ')') >> ({
+        let mut t = t ;
+        t.span = Spn::len_mk(offset, len) ;
+        t
+      })
     )
   )
 }

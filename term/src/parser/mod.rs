@@ -214,6 +214,15 @@ macro_rules! len_add {
   ($bytes:expr, $len:ident < char $c:expr) => (
     map!($bytes, char!($c), |_| $len += 1)
   ) ;
+  ($bytes:expr, $len:ident < tag $c:expr) => (
+    map!($bytes, tag!($c), |bytes: & [u8]| $len += bytes.len())
+  ) ;
+  ($byte:expr, $len:ident < spc cmt) => (
+    len_add!($byte, $len < int space_comment)
+  ) ;
+  ($byte:expr, $len:ident < opt spc cmt) => (
+    opt!($byte, len_add!($len < spc cmt) )
+  ) ;
   ($bytes:expr, $len:ident < bytes $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
