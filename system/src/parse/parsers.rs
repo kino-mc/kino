@@ -895,6 +895,7 @@ pub fn _item_parser<'a>(
         len_add!(len < char '(')
         ! at (offset + len), "opening command"
       ) >>
+      len_add!(len < opt spc cmt) >>
       len_add!(
         len < spn thru try_parsers!(
 
@@ -925,6 +926,7 @@ pub fn _item_parser<'a>(
 
         )
       ) >>
+      len_add!(len < opt spc cmt) >>
       parse_or_fail!(
         len_add!(len < char ')')
         ! at (offset + len), "closing command"

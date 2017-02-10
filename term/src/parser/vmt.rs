@@ -679,14 +679,12 @@ macro_rules! try_parse_term {
 
 #[cfg(test)]
 mod terms {
-  use base::{ State, PrintVmt } ;
+  use base::{ PrintVmt } ;
   use sym::* ;
-  use var::* ;
-  use term::{ Term, Operator, CstMaker, OpMaker, AppMaker } ;
+  use term::{ CstMaker, OpMaker, AppMaker } ;
   use factory::* ;
   use typ::* ;
   use std::str::FromStr ;
-  use parsing::Spnd ;
 
   #[test]
   fn cst() {

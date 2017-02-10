@@ -25,7 +25,6 @@ use factory::{ Factory, UnTermOps } ;
 
 use super::{
   Spnd, type_parser,
-  simple_symbol_head, simple_symbol_tail,
   operator_parser,
   quantifier_parser, Quantifier
 } ;
@@ -223,31 +222,33 @@ named!{ pub id_parser< (String, Smt2Offset) >,
   preceded!(
     opt!(multispace),
     alt!(
-      // Simple symbol.
-      do_parse!(
-        opt!(offset) >>
-        head: simple_symbol_head >>
-        tail: opt!(
-          map!( simple_symbol_tail, |bytes| str::from_utf8(bytes).unwrap() )
-        ) >> ({
-          let sym = format!("{}{}", head, tail.unwrap_or("")) ;
-          panic!("simple symbol {}", sym)
-        })
-        // (
-        //   format!("{}{}", head, str::from_utf8(tail).unwrap()),
-        //   Smt2Offset::of_opt(offset)
-        // )
-      ) |
+      // Simple symbol should never happen at smt level.
+      // do_parse!(
+      //   opt!(offset) >>
+      //   head: simple_symbol_head >>
+      //   tail: opt!(
+      //     map_res!(
+      //       simple_symbol_tail, str::from_utf8
+      //     )
+      //   ) >> ({
+      //     let sym = format!("{}{}", head, tail.unwrap_or("")) ;
+      //     panic!("simple symbol {}", sym)
+      //   })
+      //   // (
+      //   //   format!("{}{}", head, str::from_utf8(tail).unwrap()),
+      //   //   Smt2Offset::of_opt(offset)
+      //   // )
+      // ) |
       // Quoted symbol.
       delimited!(
         char!('|'),
         do_parse!(
           offset: opt!(offset) >>
           char!(' ') >>
-          sym: map!(
+          sym: map_res!(
             is_not!("|\\"), str::from_utf8
           ) >> (
-            sym.unwrap().to_string(), Smt2Offset::of_opt(offset)
+            sym.to_string(), Smt2Offset::of_opt(offset)
           )
         ),
         char!('|')
@@ -508,7 +509,7 @@ macro_rules! try_parse_term {
 
 #[cfg(test)]
 mod quoted_sym {
-  use base::Offset ;
+  // use base::Offset ;
   use base::Smt2Offset::* ;
   #[test]
   fn nsvar() {
