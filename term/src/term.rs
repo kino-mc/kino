@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Terms. */
+//! Terms.
 
 use std::io ;
 use std::fmt ;
@@ -1074,7 +1074,7 @@ pub fn debump<F: Factory>(f: & F, term: Term) -> Res<Term> {
 
 /** Zipper stuff. */
 mod zip {
-  use super::* ;
+  use super::{ Operator, Term, RealTerm, Factory } ;
   use ::sym::Sym ;
   use ::typ::Type ;
 
@@ -1296,7 +1296,7 @@ pub mod zip2 {
   use ::cst::Cst ;
   use ::var::Var ;
 
-  use super::* ;
+  use super::{ Operator, Term, RealTerm } ;
 
   use self::ZipStep::* ;
   use self::Res::* ;
