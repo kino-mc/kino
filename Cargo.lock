@@ -231,6 +231,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "system"
 version = "0.1.0"
 dependencies = [
+ "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "term 0.2.0",
 ]

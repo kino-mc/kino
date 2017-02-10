@@ -115,7 +115,7 @@ impl CallSet {
 
 
 /// A signature, a list of types. Used only in `Uf`.
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone, PartialEq, Eq)]
 pub struct Sig {
   /// Types of the signature.
   types: Vec< Spnd<Type> >,
@@ -453,7 +453,7 @@ impl fmt::Display for Prop {
 }
 impl PartialEq for Prop {
   fn eq(& self, other: & Prop) -> bool {
-    self.sym == other.sym
+    self.sym.get() == other.sym.get()
   }
 }
 impl Eq for Prop {}

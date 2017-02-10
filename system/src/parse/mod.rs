@@ -665,7 +665,7 @@ impl Context {
   /// * an error.
   pub fn read(
     & mut self, reader: & mut io::Read
-  ) -> Result<Res, Error> {
+  ) -> Result<Res, ::parse_errors::Error> {
     use nom::IResult::* ;
     use std::io::{ BufRead, BufReader } ;
     use std::str ;
@@ -699,7 +699,9 @@ impl Context {
               },
             }
           },
-          Some(Err(e)) => return Err( check::Error::Io(e) ),
+          Some(Err(e)) => bail!(
+            ::parse_errors::ErrorKind::OldError(check::Error::Io(e))
+          ),
           None => {
             if new_things { break } else {
               sleep(Duration::from_millis(10))

@@ -242,17 +242,17 @@ pub mod test {
   use parse::{ Context, Res } ;
 
   /// Generates random terms to check the evaluator.
-  #[test]
-  pub fn rand_terms_fault_conf() {
+  // #[test]
+  pub fn _rand_terms_fault_conf() {
     use std::fs::File ;
     use std::collections::HashMap ;
 
-    let file = "rsc/vmt/fault_conf.vmt" ;
+    let file = "rsc/simple/fault_conf.vmt" ;
     let factory = Factory::mk() ;
     let mut context = Context::mk(factory.clone(), 1000) ;
 
     println!("| opening file {}", file) ;
-    match File::open(& format!("../{}", file)) {
+    match File::open(file) {
       Ok(mut f) => {
         println!("| parsing") ;
         match context.read(& mut f) {
@@ -324,7 +324,7 @@ pub mod test {
                 term_map.insert(Type::Rat, rat_terms) ;
 
                 // Add variable definitions to map.
-                for call in sys.calls().iter() {
+                for call in sys.calls().get().iter() {
                   match * * call {
                     Callable::Dec(_) => (),
                     Callable::Def(ref def) => {
@@ -333,7 +333,7 @@ pub mod test {
                         match term_map.get_mut(def.typ()) {
                           Some(set) => {
                             set.insert(
-                              factory.var(def.sym().clone())
+                              factory.var(def.sym().get().clone())
                             ) ;
                             ()
                           },
@@ -352,10 +352,10 @@ pub mod test {
                   match term_map.get_mut(typ) {
                     Some(set) => {
                       set.insert(
-                        factory.svar(sym.clone(), State::Curr)
+                        factory.svar(sym.get().clone(), State::Curr)
                       ) ;
                       set.insert(
-                        factory.svar(sym.clone(), State::Next)
+                        factory.svar(sym.get().clone(), State::Next)
                       ) ;
                       ()
                     },

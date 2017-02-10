@@ -35,11 +35,42 @@
 
 #[macro_use]
 extern crate nom ;
-
+#[macro_use]
+extern crate error_chain ;
 #[macro_use]
 extern crate term ;
 
 use std::sync::Arc ;
+
+/// Errors that can happen during command parsing.
+pub mod parse_errors {
+  use term::parsing::Spn ;
+  error_chain!{
+    types {
+      Error, ErrorKind, Res, ResExt ;
+    }
+    errors {
+      #[doc = "Legacy error, to remove after transition to spanned things."]
+      OldError(e: ::parse::check::Error) {
+        description("legacy error")
+        display("legacy error: {}", e)
+      }
+      #[doc = "Parsing error."]
+      ParseError(
+        span: Spn, blah: String,
+        notes: Vec< (Spn, String) >
+      ) {
+        description("parse error")
+        display("parse error `{}`: {}", span, blah)
+      }
+      #[doc = "IO Error."]
+      IoError(e: ::std::io::Error) {
+        description("IO error")
+        display("IO error: {:?}", e)
+      }
+    }
+  }
+}
 
 mod base ;
 mod type_check ;

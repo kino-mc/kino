@@ -406,7 +406,7 @@ pub fn op_parser<'a>(
     len_set!(len < char '(') >>
     len_add!(len < opt spc cmt) >>
     op: len_add!(
-      len < spn apply!(operator_parser, 0)
+      len < spn apply!(operator_parser, offset + len)
     ) >>
     args: many1!(
       do_parse!(
@@ -497,7 +497,7 @@ pub fn let_parser<'a>(
         do_parse!(
           len_add!(len < spc cmt) >>
           sym: map!(
-            len_add!(len < spn apply!(id_parser, 0)),
+            len_add!(len < spn apply!(id_parser, offset + len)),
             |sym| f.sym(sym)
           ) >>
           len_add!(len < spc cmt) >>
@@ -532,7 +532,7 @@ fn app_parser<'a>(
     len_set!(len < char '(') >>
     len_add!(len < spc cmt) >>
     sym: map!(
-      len_add!(len < spn apply!(id_parser, 0)),
+      len_add!(len < spn apply!(id_parser, offset + len)),
       |sym| f.sym(sym)
     ) >>
     len_add!(len < spc cmt) >>
@@ -579,6 +579,88 @@ pub fn term_parser<'a>(
 
 
 
+mk_parser!{
+  #[doc = "
+    Parses a token, used for error reporting.
+    Returns the token's span and a description of the token.
+
+    Always succeeds.
+  "]
+  pub fn token_parser(bytes, offset: usize) -> (Spn, String) {
+    alt_complete!(
+      bytes,
+      map!(
+        apply!(super::rat_parser, offset), |res| (
+          Spnd::to_span(res), "a rational".into()
+        )
+      ) |
+      map!(
+        apply!(super::int_parser, offset), |res| (
+          Spnd::to_span(res), "an integer".into()
+        )
+      ) |
+      map!(
+        apply!(super::bool_parser, offset), |res| (
+          Spnd::to_span(res), "a boolean".into()
+        )
+      ) |
+      map!(
+        apply!(type_parser, offset), |res| (
+          Spnd::to_span(res), "a type".into()
+        )
+      ) |
+      map!(
+        apply!(id_parser, offset), |res| (
+          Spnd::to_span(res), "an identifier".into()
+        )
+      ) |
+      map!(
+        take_str!(1), |res: & str| (
+          Spn::len_mk(offset, 1), format!("`{}`", res)
+        )
+      ) |
+      map!(
+        take!(0), |_| (
+          Spn::len_mk(offset, 1), "end of file".into()
+        )
+      )
+    )
+  }
+}
+
+#[test]
+fn test_token_parser() {
+  try_parse!{
+    |bytes| token_parser(bytes, 7), b"blah", (s, res) -> {
+      assert_eq!(res, (Spn::len_mk(7, 4), "an identifier".into()))
+    }
+  }
+  try_parse!{
+    |bytes| token_parser(bytes, 7), b"7.32", (s, res) -> {
+      assert_eq!(res, (Spn::len_mk(7, 4), "a rational".into()))
+    }
+  }
+  try_parse!{
+    |bytes| token_parser(bytes, 7), b"732", (s, res) -> {
+      assert_eq!(res, (Spn::len_mk(7, 3), "an integer".into()))
+    }
+  }
+  try_parse!{
+    |bytes| token_parser(bytes, 7), b"false)", (s, res) -> {
+      assert_eq!(res, (Spn::len_mk(7, 5), "a boolean".into()))
+    }
+  }
+  try_parse!{
+    |bytes| token_parser(bytes, 7), b")", (s, res) -> {
+      assert_eq!(res, (Spn::len_mk(7, 1), "`)`".into()))
+    }
+  }
+  try_parse!{
+    |bytes| token_parser(bytes, 7), b"", (s, res) -> {
+      assert_eq!(res, (Spn::len_mk(7, 1), "end of file".into()))
+    }
+  }
+}
 
 
 
@@ -612,8 +694,8 @@ mod terms {
     let factory = Factory::mk() ;
     let res: Term = factory.cst( Int::from_str("7").unwrap() ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"7",
-      Spnd::len_mk(res.clone(), 0, 1)
+      |bytes, factory| term_parser(bytes, 3, factory), & factory, b"7",
+      Spnd::len_mk(res.clone(), 3, 1)
     ) ;
     let res: Term = factory.cst(
       Rat::new(
@@ -622,19 +704,30 @@ mod terms {
       )
     ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory,
+      |bytes, factory| term_parser(bytes, 3, factory), & factory,
       b"(/ 5357 2046)",
-      Spnd::len_mk(res.clone(), 0, 13)
+      Spnd::len_mk(res.clone(), 3, 13)
+    ) ;
+    let res: Term = factory.cst(
+      Rat::new(
+        Int::from_str("0").unwrap(),
+        Int::from_str("1").unwrap()
+      )
+    ) ;
+    try_parse_term!(
+      |bytes, factory| term_parser(bytes, 3, factory), & factory,
+      b"0.0",
+      Spnd::len_mk(res.clone(), 3, 3)
     ) ;
     let res: Term = factory.cst( true ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"true",
-      Spnd::len_mk(res.clone(), 0, 4)
+      |bytes, factory| term_parser(bytes, 3, factory), & factory, b"true",
+      Spnd::len_mk(res.clone(), 3, 4)
     ) ;
     let res: Term = factory.cst( false ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"false",
-      Spnd::len_mk(res.clone(), 0, 5)
+      |bytes, factory| term_parser(bytes, 3, factory), & factory, b"false",
+      Spnd::len_mk(res.clone(), 3, 5)
     ) ;
   }
 
@@ -644,25 +737,25 @@ mod terms {
     let factory = Factory::mk() ;
     let res: Term = factory.var( factory.sym("bla") ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"|bla|",
-      Spnd::len_mk(res.clone(), 0, 5)
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, b"|bla|",
+      Spnd::len_mk(res.clone(), 9, 5)
     ) ;
     let res: Term = factory.var( factory.sym("bly.bla") ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, b"|bly.bla|",
-      Spnd::len_mk(res.clone(), 0, 9)
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, b"|bly.bla|",
+      Spnd::len_mk(res.clone(), 9, 9)
     ) ;
     let res: Term = factory.svar( factory.sym("bla"), State::Curr ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory,
+      |bytes, factory| term_parser(bytes, 9, factory), & factory,
       b"(_ curr |bla|)",
-      Spnd::len_mk(res.clone(), 0, 14)
+      Spnd::len_mk(res.clone(), 9, 14)
     ) ;
     let res: Term = factory.svar( factory.sym("bla"), State::Next ) ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory,
+      |bytes, factory| term_parser(bytes, 9, factory), & factory,
       b"(_ next |bla|)",
-      Spnd::len_mk(res.clone(), 0, 14)
+      Spnd::len_mk(res.clone(), 9, 14)
     ) ;
   }
 
@@ -680,8 +773,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(bla_plus_7.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(bla_plus_7.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.op(
@@ -692,8 +785,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.op(
@@ -705,8 +798,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.op(
@@ -718,8 +811,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.op(
@@ -742,8 +835,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
   }
 
@@ -761,8 +854,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     bla_plus_7.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(bla_plus_7.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(bla_plus_7.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.app(
@@ -774,8 +867,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.app(
@@ -787,8 +880,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
 
     let nested: Term = factory.op(
@@ -800,8 +893,8 @@ mod terms {
     let mut s: Vec<u8> = vec![] ;
     nested.to_vmt(& mut s).unwrap() ;
     try_parse_term!(
-      |bytes, factory| term_parser(bytes, 0, factory), & factory, & s,
-      Spnd::len_mk(nested.clone(), 0, s.len())
+      |bytes, factory| term_parser(bytes, 9, factory), & factory, & s,
+      Spnd::len_mk(nested.clone(), 9, s.len())
     ) ;
   }
 

@@ -97,6 +97,11 @@ impl Spn {
     self.end - self.bgn + 1
   }
 }
+impl fmt::Display for Spn {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "[{}-{}]", self.bgn, self.end)
+  }
+}
 
 /// Wraps a span around something.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -120,7 +125,7 @@ impl<T> Spnd<T> {
   /// Wraps a span around something from an offset and a length.
   #[inline]
   pub fn len_mk(val: T, bgn: usize, len: usize) -> Self {
-    Self::mk(val, Spn::mk(bgn, bgn + len - 1))
+    Self::mk(val, Spn::len_mk(bgn, len))
   }
   /// Wraps a span around something from an offset and a length.
   #[inline]
@@ -140,6 +145,9 @@ impl<T> Spnd<T> {
   /// Destroys a `Spnd`.
   #[inline]
   pub fn destroy(self) -> (T, Spn) { (self.val, self.span) }
+  /// Destroys a `Spnd`, returning its span.
+  #[inline]
+  pub fn to_span(self) -> Spn { self.destroy().1 }
 }
 impl<T: Clone> Spnd<T> {
   /// Same as `destroy` but does not eats a `self`.
@@ -155,7 +163,7 @@ impl<T> DerefMut for Spnd<T> {
 }
 impl<T: fmt::Display> fmt::Display for Spnd<T> {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
-    write!(fmt, "{}[{},{}]", self.val, self.span.bgn, self.span.end)
+    write!(fmt, "{}{}", self.val, self.span)
   }
 }
 impl<Info, T: Expr2Smt<Info>> Expr2Smt<Info> for Spnd<T> {
@@ -217,6 +225,14 @@ macro_rules! len_add {
   ($bytes:expr, $len:ident < tag $c:expr) => (
     map!($bytes, tag!($c), |bytes: & [u8]| $len += bytes.len())
   ) ;
+  ($bytes:expr, $len:ident < tag spn($offset:expr) $c:expr) => (
+    map!(
+      $bytes, tag!($c), |bytes: & [u8]| {
+        $len += bytes.len() ;
+        $crate::parsing::Spn::len_mk($offset, bytes.len())
+      }
+    )
+  ) ;
   ($byte:expr, $len:ident < spc cmt) => (
     len_add!($byte, $len < int space_comment)
   ) ;
@@ -226,21 +242,21 @@ macro_rules! len_add {
   ($bytes:expr, $len:ident < bytes $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |stuff: & [u8]| $len += stuff.len()
     )
   ) ;
   ($bytes:expr, $len:ident < int $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |int| $len += int
     )
   ) ;
   ($bytes:expr, $len:ident < spn thru $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |stuff| {
         $len += $crate::parsing::Spnd::len(& stuff) ;
         stuff
@@ -250,7 +266,7 @@ macro_rules! len_add {
   ($bytes:expr, $len:ident < spn $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |stuff| {
         let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
         $len += span.len() ;
@@ -261,7 +277,7 @@ macro_rules! len_add {
   ($bytes:expr, $len:ident < trm $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |term: $crate::parsing::TermAndDep| {
         $len += term.span.len() ;
         term
@@ -311,52 +327,69 @@ macro_rules! len_set {
   ($bytes:expr, $len:ident < char $c:expr) => (
     map!($bytes, char!($c), |_| $len = 1)
   ) ;
-  ($bytes:expr, len $len:ident < $submac:ident!( $($args:tt)* )) => (
+  ($byte:expr, $len:ident < spc cmt) => (
+    len_set!($byte, $len < int space_comment)
+  ) ;
+  ($byte:expr, $len:ident < opt spc cmt) => (
+    opt!($byte, len_set!($len < spc cmt) )
+  ) ;
+  ($bytes:expr, $len:ident < len $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |stuff| { $len = stuff.len() ; stuff }
     )
   ) ;
-  ($bytes:expr, int $len:ident < $submac:ident!( $($args:tt)* )) => (
+  ($bytes:expr, $len:ident < int $submac:ident!( $($args:tt)* )) => (
     map!(
       $bytes,
-      $submac!($($args)+),
+      $submac!($($args)*),
       |int| { $len = int ; int }
     )
   ) ;
-  ($bytes:expr, spn $len:ident < $submac:ident!( $($args:tt)* )) => (
+  ($bytes:expr, $len:ident < spn $submac:ident!( $($args:tt)* )) => (
     map!(
-      $($rest)+, |stuff| {
+      $bytes,
+      $submac!($($args)*), |stuff| {
         let (stuff, span) = $crate::parsing::Spnd::destroy(stuff) ;
         $len = span.len() ;
         stuff
       }
     )
   ) ;
-  ($bytes:expr, trm $len:ident < $submac:ident!( $($args:tt)* )) => (
+  ($bytes:expr, $len:ident < spn thru $submac:ident!( $($args:tt)* )) => (
     map!(
-      $($rest)+, |term: $crate::parsing::TermAndDep| {
+      $bytes,
+      $submac!($($args)*), |stuff| {
+        $len += $crate::parsing::Spnd::len(& stuff) ;
+        stuff
+      }
+    )
+  ) ;
+  ($bytes:expr, $len:ident < trm $submac:ident!( $($args:tt)* )) => (
+    map!(
+      $bytes,
+      $submac!($($args)*), |term: $crate::parsing::TermAndDep| {
         $len = term.span.len() ;
         term
       }
     )
   ) ;
-  ($bytes:expr, len $len:ident < $parser:expr) => (
+  ($bytes:expr, $len:ident < len $parser:expr) => (
     map!(
       $bytes,
       call!($parser),
       |stuff| { $len = stuff.len() ; stuff }
     )
   ) ;
-  ($bytes:expr, int $len:ident < $parser:expr) => (
+  ($bytes:expr, $len:ident < int $parser:expr) => (
     map!(
       $bytes,
       call!($parser),
       |int| { $len = int ; int }
     )
   ) ;
-  ($bytes:expr, spn $len:ident < $parser:expr) => (
+  ($bytes:expr, $len:ident < spn $parser:expr) => (
     map!(
       $bytes,
       call!($parser),
@@ -367,7 +400,16 @@ macro_rules! len_set {
       }
     )
   ) ;
-  ($bytes:expr, trm $len:ident < $parser:expr) => (
+  ($bytes:expr, $len:ident < spn thru $parser:expr) => (
+    map!(
+      $bytes,
+      call!($parser),|stuff| {
+        $len += $crate::parsing::Spnd::len(& stuff) ;
+        stuff
+      }
+    )
+  ) ;
+  ($bytes:expr, $len:ident < trm $parser:expr) => (
     map!(
       $bytes,
       call!($parser),
@@ -578,12 +620,12 @@ where F: CstMaker<Bool, Cst> + CstMaker<Int, Cst> + CstMaker<Rat, Cst> {
   preceded!(
     bytes,
     opt!( len_add!(len < int space_comment) ),
-    alt!(
-      map!(
-        apply!(int_parser, offset),  |i:Spnd<Int>| i.map(|i| f.cst(i))
-      ) |
+    alt_complete!(
       map!(
         apply!(rat_parser, offset),  |r:Spnd<Rat>| r.map(|r| f.cst(r))
+      ) |
+      map!(
+        apply!(int_parser, offset),  |i:Spnd<Int>| i.map(|i| f.cst(i))
       ) |
       map!(
         apply!(bool_parser, offset), |b:Spnd<Bool>| b.map(|b| f.cst(b))
@@ -713,8 +755,6 @@ mk_parser!{
     )
   }
 }
-
-
 
 
 

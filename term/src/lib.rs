@@ -189,7 +189,7 @@ pub mod parsing {
   pub mod vmt {
     pub use super::super::parser::type_parser ;
     pub use super::super::parser::vmt::{
-      id_parser, term_parser, sym_parser
+      id_parser, term_parser, sym_parser, token_parser
     } ;
   }
 }

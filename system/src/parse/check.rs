@@ -25,6 +25,7 @@ use self::Error::* ;
 use self::CheckFailed::* ;
 
 /// Parse error.
+#[derive(Debug)]
 pub enum Error {
   /// Redefinition of identifier.
   Redef(Sym, & 'static str, & 'static str),
