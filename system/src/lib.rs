@@ -9,28 +9,37 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Transition system library.
-//! 
-//! ## Hash consing
-//! 
-//! [`Sym`][sym type] and [`Term`][term type] come from the kinō
-//! [`term`][term crate] crate and are hash consed. Remember that one should
-//! **never** create more that one [Factory][factory struct] for these. It is
-//! thread-safe and can be cloned.
-//! [`Context`][context struct] holds one for parsing.
-//! 
-//! ## To do
-//! 
-//! * more clever input consumption in [`Context`][context struct]
-//! * less copy in [`Context`][context struct]
-//! * more informative parse error (depency checking)
-//! * integrate type checking in parser
-//! 
-//! [sym type]: ../term/type.Sym.html (Sym type)
-//! [term type]: ../term/type.Term.html (Term type)
-//! [term crate]: ../term/index.html (term crate)
-//! [factory struct]: ../term/struct.Factory.html (Factory struct)
-//! [context struct]: ctxt/struct.Context.html (Context struct)
+/*! Transition system library.
+
+## Hash consing
+
+[`Sym`][sym type] and [`Term`][term type] come from the kinō
+[`term`][term crate] crate and are hash consed. Remember that one should
+**never** create more that one [Factory][factory struct] for these. It is
+thread-safe and can be cloned.
+
+[`Context`][context struct] holds one for parsing.
+
+## Thread-safety
+
+All constructions related to systems (`Sys`, `Prop`, `Args`, *etc.*) are
+wrapped in an `Arc` and thus are thread-safe.
+
+## To do
+
+* more clever input consumption in [`Context`][context struct]
+* less copy in [`Context`][context struct]
+* more informative parse error (depency checking)
+* spanned parse errors
+* integrate type checking in parser
+* support for `stdin`-like input
+
+[sym type]: ../term/type.Sym.html (Sym type)
+[term type]: ../term/type.Term.html (Term type)
+[term crate]: ../term/index.html (term crate)
+[factory struct]: ../term/struct.Factory.html (Factory struct)
+[context struct]: ctxt/struct.Context.html (Context struct)
+*/
 
 
 #[macro_use]
