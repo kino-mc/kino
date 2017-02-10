@@ -24,46 +24,46 @@ use cst::Cst ;
 use var::{ Var, VarMaker } ;
 use self::RealTerm::* ;
 
-/** Standard operators. */
+/// Standard operators.
 #[derive(Debug,Clone,Copy,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum Operator {
-  /** Equality. */
+  /// Equality.
   Eq,
-  /** If then else operator. */
+  /// If then else operator.
   Ite,
-  /** Negation operator. */
+  /// Negation operator.
   Not,
-  /** Conjunction operator. */
+  /// Conjunction operator.
   And,
-  /** Disjunction operator. */
+  /// Disjunction operator.
   Or,
-  /** Implication operator. */
+  /// Implication operator.
   Impl,
-  /** Exclusive disjunction operator. */
+  /// Exclusive disjunction operator.
   Xor,
-  /** Distinct operator. */
+  /// Distinct operator.
   Distinct,
-  /** Plus operator. */
+  /// Plus operator.
   Add,
-  /** Minus operator. */
+  /// Minus operator.
   Sub,
-  /** Multiplication operator. */
+  /// Multiplication operator.
   Mul,
-  /** Division operator. */
+  /// Division operator.
   Div,
-  /** Less or equal operator. */
+  /// Less or equal operator.
   Le,
-  /** Greater or equal operator. */
+  /// Greater or equal operator.
   Ge,
-  /** Less than operator. */
+  /// Less than operator.
   Lt,
-  /** Greater than operator. */
+  /// Greater than operator.
   Gt,
 }
 
 impl Operator {
 
-  /** The arity of the operator. `None` for n-ary operators. */
+  /// The arity of the operator. `None` for n-ary operators.
   pub fn arity(& self) -> Option<u8> {
     use self::Operator::* ;
     match * self {
@@ -274,7 +274,7 @@ impl Operator {
     }
   }
 
-  /** Evaluates itself given some arguments. */
+  /// Evaluates itself given some arguments.
   pub fn eval(
     & self, factory: & ::Factory, mut args: Vec<Cst>
   ) -> Res<Cst> {
@@ -687,24 +687,24 @@ impl Writable for Operator {
   }
 }
 
-/** Underlying representation of terms. */
+/// Underlying representation of terms.
 #[derive(
   Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone
 )]
 pub enum RealTerm {
-  /** A variable. */
+  /// A variable.
   V(Var),
-  /** A constant value. */
+  /// A constant value.
   C(Cst),
-  /** An application of an operator. */
+  /// An application of an operator.
   Op(Operator, Vec<Term>),
-  /** A universal quantification. */
+  /// A universal quantification.
   Forall(Vec<(Sym, Type)>, Term),
-  /** An existential quantification. */
+  /// An existential quantification.
   Exists(Vec<(Sym, Type)>, Term),
-  /** A let-binding. */
+  /// A let-binding.
   Let(Vec<(Sym, Term)>, Term),
-  /** An application of a function symbol. */
+  /// An application of a function symbol.
   App(Sym, Vec<Term>),
 }
 impl RealTerm {
@@ -778,22 +778,22 @@ impl fmt::Display for RealTerm {
   }
 }
 
-/** Hash consed term. */
+/// Hash consed term.
 pub type Term = HConsed<RealTerm> ;
 
-/** A stateful term. Either one-state or two-state. */
+/// A stateful term. Either one-state or two-state.
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum STerm {
-  /** A one-state term. Stores the state (init) and next (trans) version. That
-  is, the second element is the bump of the first. */
+  /// A one-state term. Stores the state (init) and next (trans) version. That
+  /// is, the second element is the bump of the first.
   One(Term,Term),
-  /** A two-state term. Stores the next (trans) version. Understood as true in
-  the initial state. */
+  /// A two-state term. Stores the next (trans) version. Understood as true in
+  /// the initial state.
   Two(Term),
 }
 
 impl STerm {
-  /** The state version of a term. */
+  /// The state version of a term.
   #[inline(always)]
   pub fn state(& self) -> Option<& Term> {
     match * self {
@@ -801,7 +801,7 @@ impl STerm {
       STerm::Two(_) => None,
     }
   }
-  /** The next version of a term. */
+  /// The next version of a term.
   #[inline(always)]
   pub fn next(& self) -> & Term {
     match * self {
@@ -820,7 +820,7 @@ impl fmt::Display for STerm {
   }
 }
 
-/** Hash cons table for terms. */
+/// Hash cons table for terms.
 pub type TermConsign = HConsign<RealTerm> ;
 
 impl<Svw: SVarWriter<Sym>> StateWritable<Sym, Svw> for Term {
@@ -902,9 +902,9 @@ impl PrintSmt2 for Term {
   }
 }
 
-/** Can create variables. */
+/// Can create variables.
 pub trait VariableMaker {
-  /** Creates a variable. */
+  /// Creates a variable.
   #[inline]
   fn var(& self, Var) -> Term ;
 }
@@ -914,9 +914,9 @@ impl VariableMaker for TermConsign {
   }
 }
 
-/** Can create a constant value. */
+/// Can create a constant value.
 pub trait CstMaker<Const, Out> {
-  /** Creates a constant value. */
+  /// Creates a constant value.
   #[inline]
   fn cst(& self, Const) -> Out ;
 }
@@ -933,9 +933,9 @@ impl CstMaker<Cst, Term> for TermConsign {
   }
 }
 
-/** Can create an application of an operator. */
+/// Can create an application of an operator.
 pub trait OpMaker {
-  /** Creates an application of an operator. */
+  /// Creates an application of an operator.
   #[inline]
   fn op(& self, Operator, Vec<Term>) -> Term ;
 }
@@ -946,9 +946,9 @@ impl OpMaker for TermConsign {
   }
 }
 
-/** Can create an application of a function symbol. */
+/// Can create an application of a function symbol.
 pub trait AppMaker<Id> {
-  /** Creates an application of a function symbol. */
+  /// Creates an application of a function symbol.
   #[inline]
   fn app(& self, Id, Vec<Term>) -> Term ;
 }
@@ -966,15 +966,15 @@ impl AppMaker<Sym> for TermConsign {
   }
 }
 
-/** Can create quantified terms and let-bindings. */
+/// Can create quantified terms and let-bindings.
 pub trait BindMaker<Trm> {
-  /** Creates a universal quantification over some symbols. */
+  /// Creates a universal quantification over some symbols.
   #[inline]
   fn forall(& self, Vec<(Sym, Type)>, Trm) -> Term ;
-  /** Creates an existential quantification over some symbols. */
+  /// Creates an existential quantification over some symbols.
   #[inline]
   fn exists(& self, Vec<(Sym, Type)>, Trm) -> Term ;
-  /** Creates a let-binding. */
+  /// Creates a let-binding.
   #[inline]
   fn let_b(& self, Vec<(Sym, Term)>, Trm) -> Term ;
 }
@@ -1018,7 +1018,7 @@ impl BindMaker<Term> for TermConsign {
   }
 }
 
-/** A trait aggregating variable, constant, and term making traits. */
+/// A trait aggregating variable, constant, and term making traits.
 pub trait Factory :
   VarMaker<Sym, Term> +
   CstMaker<Cst, Term> +
@@ -1072,7 +1072,7 @@ pub fn debump<F: Factory>(f: & F, term: Term) -> Res<Term> {
 
 
 
-/** Zipper stuff. */
+/// Zipper stuff.
 mod zip {
   use super::{ Operator, Term, RealTerm, Factory } ;
   use ::sym::Sym ;
@@ -1081,54 +1081,54 @@ mod zip {
   use self::Res::* ;
   use self::Step::* ;
 
-  /** Result of going up in a zipper. */
+  /// Result of going up in a zipper.
   enum Res {
-    /** Zipper is done, contains the resulting term. */
+    /// Zipper is done, contains the resulting term.
     Done(Term),
-    /** Zipper is not done, contains the new state of the zipper. */
+    /// Zipper is not done, contains the new state of the zipper.
     NYet(Zip)
   }
 
-  /** A zipper step. */
+  /// A zipper step.
   enum Step {
-    /** We're below an operator application. */
+    /// We're below an operator application.
     Op(
       Operator, Vec<Term>, Vec<Term>
     ),
-    /** We're below a function symbol application. */
+    /// We're below a function symbol application.
     App(
       Sym, Vec<Term>, Vec<Term>
     ),
-    /** We're below a universal quantifier. */
+    /// We're below a universal quantifier.
     Forall(
       Vec<(Sym, Type)>
     ),
-    /** We're below an existential quantifier. */
+    /// We're below an existential quantifier.
     Exists(
       Vec<(Sym, Type)>
     ),
-    /** We're below a let-binding, in the terms symbols are binded to. */
+    /// We're below a let-binding, in the terms symbols are binded to.
     Let1(
       Vec<(Sym, Term)>
     ),
-    /** We're below a let-binding, in the term the let ranges over. */
+    /// We're below a let-binding, in the term the let ranges over.
     Let2(
       Vec<(Sym, Term)>, Sym, Vec<(Sym, Term)>, Term
     ),
   }
 
-  /** A zipper on terms. */
+  /// A zipper on terms.
   struct Zip {
-    /** Path of steps leading to the current term. */
+    /// Path of steps leading to the current term.
     path: Vec<Step>,
-    /** Current term. */
+    /// Current term.
     curr: Term,
   }
 
   impl Zip {
-    /** Goes down the current term stops when it reaches a leaf.
-
-    That is, a variable or a constant. */
+    /// Goes down the current term stops when it reaches a leaf.
+    ///
+    /// That is, a variable or a constant.
     pub fn go_down(mut self) -> Self {
       loop {
         let update = match * self.curr.get() {
@@ -1180,9 +1180,9 @@ mod zip {
       }
     }
 
-    /** Goes up in the zipper recursively.
-
-    Stops if going up an empty path, or unexplored siblings are found. */
+    /// Goes up in the zipper recursively.
+    ///
+    /// Stops if going up an empty path, or unexplored siblings are found.
     pub fn go_up<F: Factory>(mut self, cons: & F) -> Res {
       loop {
         match self.path.pop() {
@@ -1263,7 +1263,7 @@ mod zip {
   //   }
   // }
 
-  /** Applies some function to the variables in a term. */
+  /// Applies some function to the variables in a term.
   pub fn var_map<'a, F: Factory, Fun, E>(
     cons: & 'a F, f: Fun, term: Term
   ) -> Result<Term,E>
@@ -1318,21 +1318,21 @@ pub mod zip2 {
     ),
   }
 
-  /** A step upward in the zipper. */
+  /// A step upward in the zipper.
   pub enum Step<T> {
-    /** Application. */
+    /// Application.
     App(Sym, Vec<T>),
-    /** Operator. */
+    /// Operator.
     Op(Operator, Vec<T>),
-    /** Let binding. */
+    /// Let binding.
     Let(Vec<(Sym,T)>, T),
-    /** Universal quantifier. */
+    /// Universal quantifier.
     Forall(Vec<(Sym, Type)>, T),
-    /** Existential quantifier. */
+    /// Existential quantifier.
     Exists(Vec<(Sym, Type)>, T),
-    /** Constant. */
+    /// Constant.
     C(Cst),
-    /** Variable. */
+    /// Variable.
     V(Var),
   }
 
@@ -1519,7 +1519,7 @@ pub mod zip2 {
 
   }
 
-  /** Bottom-up, left-to-right fold. */
+  /// Bottom-up, left-to-right fold.
   pub fn fold<
     T: Clone, Fun: Fn(Step<T>) -> T
   >(f: Fun, term: Term) -> T {
@@ -1536,7 +1536,7 @@ pub mod zip2 {
     }
   }
 
-  /** Bottom-up, left-to-right fold with information. */
+  /// Bottom-up, left-to-right fold with information.
   pub fn fold_info<
     T: Clone, E,
     Fun: Fn(
@@ -1562,7 +1562,7 @@ pub mod zip2 {
     }
   }
 
-  /** Extracts the value associated to a symbol in a hash map. */
+  /// Extracts the value associated to a symbol in a hash map.
   pub fn extract<'a, T>(
     sym: & Sym, maps: & 'a [ HashMap<Sym, T> ]
   ) -> Option<& 'a T> {
@@ -1581,7 +1581,7 @@ pub mod zip2 {
 
 
 
-/** Term evaluator. */
+/// Term evaluator.
 pub mod eval {
   use ::{
     Type, Cst, Sym, Term, Offset2, Factory, UnTermOps
@@ -1591,7 +1591,7 @@ pub mod eval {
   use ::zip::{ Step, fold_info, extract } ;
   use ::zip::Step::* ;
 
-  /** Function passed to fold to evaluate a term. */
+  /// Function passed to fold to evaluate a term.
   fn eval_term(
     factory: & Factory,
     model: & HashMap<Term, & Cst>,
@@ -1643,7 +1643,7 @@ pub mod eval {
     }
   }
 
-  /** Evaluates a term. */
+  /// Evaluates a term.
   pub fn eval(
     factory: & Factory, term: & Term, offset: & Offset2,
     model: & ::Model, scope: Sym
