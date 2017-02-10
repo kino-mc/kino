@@ -150,7 +150,7 @@ fn twind<
             => "while forgetting some properties\n\
               because of a `Forget` message (1)"
           ),
-          MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+          MsgDown::Invariants(sym, invs) => if sys.sym().get() == & sym  {
             log_try!(
               event, unroller.add_invs(invs, & check_offset, & k)
               => "while adding invariants from supervisor"
@@ -272,7 +272,8 @@ fn twind<
                         disproved = disproved || unfalsifiable.remove(p)
                       }
                     },
-                    MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+                    MsgDown::Invariants(sym, invs) =>
+                    if sys.sym().get() == & sym  {
                       // event.log(
                       //   & format!("received {} invariants", invs.len())
                       // ) ;
@@ -315,7 +316,7 @@ fn twind<
               => "while forgetting some properties \
                 because of a `Forget` message (1)"
             ),
-            MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+            MsgDown::Invariants(sym, invs) => if sys.sym().get() == & sym  {
               // event.log(
               //   & format!("received {} invariants", invs.len())
               // ) ;
@@ -356,7 +357,7 @@ fn twind<
                   because of a `Forget` message (1)"
               )
             },
-            MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+            MsgDown::Invariants(sym, invs) => if sys.sym().get() == & sym  {
               new_stuff = true ;
               // event.log(
               //   & format!("received {} invariants", invs.len())

@@ -75,7 +75,7 @@ impl Master {
     use std::time::Instant ;
 
     let mut invar_map = HashMap::new() ;
-    invar_map.insert(sys.sym().clone(), STermSet::new()) ;
+    invar_map.insert(sys.sym().get().clone(), STermSet::new()) ;
     for sub in sys.subsys_syms().into_iter() {
       invar_map.insert(sub, STermSet::new()) ; ()
     }
@@ -257,7 +257,9 @@ impl Master {
             )
           } ;
           manager.broadcast( MsgDown::Forget(props, Status::Proved) ) ;
-          manager.broadcast( MsgDown::Invariants(sys.sym().clone(), invs) ) ;
+          manager.broadcast(
+            MsgDown::Invariants(sys.sym().get().clone(), invs)
+          ) ;
         },
 
         Ok( KTrue(from, props, _, o) ) => {

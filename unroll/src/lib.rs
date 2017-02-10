@@ -313,7 +313,7 @@ impl<
           ok
         } ;
         if declare {
-          known.insert( sys.sym().clone() ) ;
+          known.insert( sys.sym().get().clone() ) ;
           try!(
             chain_err!(
               unroll, "during system definition" => define(

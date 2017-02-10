@@ -387,7 +387,7 @@ impl<
     println!("{}", pref) ;
     println!("(proved") ;
     for prop in props.iter() {
-      println!("  {}", prop.sym()) ;
+      println!("  {}", prop) ;
       // println!("{}   {}", pref, self.mk_happy(prop.sym())) ;
     } ;
     println!(")") ;
