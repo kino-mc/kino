@@ -285,7 +285,7 @@ pub fn sys_parser<'a>(
     len_add!(len < bytes tag!("define-sys") ) >>
     len_add!(len < spc cmt) >>
     sym: len_add!(
-      len < spn apply!(sym_parser, offset + len, c.factory())
+      len < spn thru apply!(sym_parser, offset + len, c.factory())
     ) >>
     len_add!(len < opt spc cmt) >>
     state: len_add!(
@@ -939,6 +939,121 @@ pub fn _rel_parser<'a>(
   )
 }
 
+
+
+pub fn _sys_call_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<
+  'a, Spnd<
+    Vec< (Spnd<Sym>, Vec<TermAndDep>) >
+  >
+> {
+  let mut len = 0 ;
+  delimited!(
+    bytes,
+    do_parse!(
+      parse_or_fail!(
+        len_set!(len < char '(')
+        ! at (offset + len), "starting system calls"
+      ) >>
+      len_add!(len < opt spc cmt) >> (())
+    ),
+    map!(
+      many0!(
+        do_parse!(
+          len_add!(len < char '(') >>
+          len_add!(len < opt spc cmt) >>
+          sym: parse_or_fail!(
+            len_add!(len < sym (offset + len, c))
+            ! at (offset + len), "for system called's name"
+          ) >>
+          len_add!(len < opt spc cmt) >>
+          params: many0!(
+            len_add!(
+              len < trm apply!(term_parser, offset + len, c.factory())
+            )
+          ) >>
+          len_add!(len < opt spc cmt) >>
+          parse_or_fail!(
+            len_add!(len < char ')')
+            ! at (offset + len),
+            "closing system arguments, or another argument"
+          ) >> (
+            (sym, params)
+          )
+        )
+      ), |vec| Spnd::len_mk(vec, offset, len)
+    ),
+    do_parse!(
+      len_add!(len < opt spc cmt) >>
+      parse_or_fail!(
+        len_add!(len < char ')')
+        ! at (offset + len), "closing system calls, or another system call"
+      ) >> (())
+    )
+  )
+}
+pub fn _sys_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<'a, Spnd<()>> {
+  let mut len = 0 ;
+  do_parse!(
+    bytes,
+    sym: parse_or_fail!(
+      len_add!(len < sym (offset + len, c))
+      ! at (offset + len), "in `define-sys`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    state: return_err!(
+      |s, d, mut vec| {
+        vec.push(
+          (sym.span.clone(), "in this `define-sys`".into())
+        ) ;
+        (s, d, vec)
+      },
+      len_add!(
+        len < spn apply!(_args_parser, offset + len, c)
+      )
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    init: parse_or_fail!(
+      len_add!(len < trm (offset + len, c))
+      ! at sym.span.clone(), "parse error in initial term of `define-sys`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    trans: parse_or_fail!(
+      len_add!(len < trm (offset + len, c))
+      ! at sym.span.clone(), "parse error in transition term of `define-sys`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    sys_calls: return_err!(
+      |s, d, mut vec| {
+        vec.push(
+          (sym.span.clone(), "in this `define-sys`".into())
+        ) ;
+        (s, d, vec)
+      },
+      len_add!(
+        len < spn apply!(_sys_call_parser, offset + len, c)
+      )
+    ) >> ({
+      let sym_span = sym.span.clone() ;
+      match c.add_sys(sym, state, vec![], init, trans, sys_calls) {
+        Err(err) => return ::nom::IResult::Error(
+          ::nom::ErrorKind::Custom(
+            ::parse_errors::ErrorKind::ParseError(
+              sym_span.clone(), format!("{}", err), vec![
+                (sym_span, "in this `define-sys`".into())
+              ]
+            ).into()
+          )
+        ),
+        Ok(()) => Spnd::len_mk((), offset, len),
+      }
+    })
+  )
+}
+
 /// Tries to run `$parser`:
 ///
 /// - if successful, runs `$and_then` without backtracking
@@ -1001,12 +1116,12 @@ pub fn _item_parser<'a>(
           terminated!(
             len_add!(len < tag "define-rel"),
             len_add!(len < opt spc cmt)
-          ) >> apply!(_rel_parser, offset + len, ctx) // |
+          ) >> apply!(_rel_parser, offset + len, ctx) |
 
-          // terminated!(
-          //   len_add!(len < tag "define-sys"),
-          //   len_add!(len < opt spc cmt)
-          // ) >> apply!(_sig_parser, offset + len)
+          terminated!(
+            len_add!(len < tag "define-sys"),
+            len_add!(len < opt spc cmt)
+          ) >> apply!(_sys_parser, offset + len, ctx)
 
         )
       ) >>

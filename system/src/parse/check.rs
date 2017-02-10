@@ -514,7 +514,7 @@ macro_rules! sys_try {
 
 /// Checks that a system definition is legal.
 pub fn check_sys(
-  ctxt: & Context, sym: Sym, state: Args,
+  ctxt: & Context, sym: Spnd<Sym>, state: Args,
   locals: Vec<(Sym, Type, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
   sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
@@ -526,7 +526,7 @@ pub fn check_sys(
   use std::iter::{ Extend, FromIterator } ;
 
   let desc = super::sys_desc ;
-  check_sym!(ctxt, sym, desc) ;
+  check_sym!(ctxt, sym.get().clone(), desc) ;
 
   let mut calls = CallSet::empty() ;
 
@@ -537,7 +537,7 @@ pub fn check_sys(
     let term = sys_try!(
       check_term_and_dep(
         ctxt, & term, & local_vars, & state, true, false, & mut calls
-      ), ctxt, term.term, sym, desc
+      ), ctxt, term.term, sym.get().clone(), desc
     ) ;
 
     type_check!(
@@ -563,7 +563,7 @@ pub fn check_sys(
   let init = sys_try!(
     check_term_and_dep(
       ctxt, & init, & local_vars, & state, true, false, & mut calls
-    ), ctxt, init.term, sym, desc
+    ), ctxt, init.term, sym.get().clone(), desc
   ) ;
 
   // Trans:
@@ -577,19 +577,21 @@ pub fn check_sys(
   let trans = sys_try!(
     check_term_and_dep(
       ctxt, & trans, & local_vars, & state, true, true, & mut calls
-    ), ctxt, trans.term, sym, desc
+    ), ctxt, trans.term, sym.get().clone(), desc
   ) ;
 
   let mut subsys = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.
   for (sub_sym, params) in sub_syss.into_iter() {
     let sub_sys = match ctxt.get_sys(sub_sym.get()) {
-      None => return Err( UkSysCall(sub_sym.get().clone(), sym) ),
+      None => return Err(
+        UkSysCall(sub_sym.get().clone(), sym.get().clone())
+      ),
       Some(ref sub_sys) => if sub_sys.state().args().len() != params.len() {
         return Err(
           IncSysCall(
             sub_sym.get().clone(), sub_sys.state().args().len(),
-            sym, params.len()
+            sym.get().clone(), params.len()
           )
         )
       } else {
@@ -602,7 +604,7 @@ pub fn check_sys(
       let term = sys_try!(
         check_term_and_dep(
           ctxt, & param, & local_vars, & state, true, false, & mut calls
-        ), ctxt, param.term, sym, desc
+        ), ctxt, param.term, sym.get().clone(), desc
       ) ;
       nu_params.push(term)
     } ;
@@ -690,7 +692,7 @@ pub fn check_sys(
   for & (ref v_sym, ref typ) in state.args() {
     let svar = ctxt.factory().svar(v_sym.get().clone(), Curr) ;
     match ctxt.factory().set_var_type(
-      Some( sym.clone() ), svar, typ.get().clone()
+      Some( sym.get().clone() ), svar, typ.get().clone()
     ) {
       Ok(()) => (),
       Err(e) => return Err(

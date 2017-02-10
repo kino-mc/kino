@@ -467,7 +467,7 @@ impl Hash for Prop {
 #[derive(Debug,Clone)]
 pub struct Sys {
   /// Identifier of the system.
-  sym: Sym,
+  sym: Spnd<Sym>,
   /// State of the system.
   state: Args,
   /// Local variables of the system.
@@ -485,7 +485,7 @@ impl Sys {
   /// Creates a new system.
   #[inline(always)]
   pub fn mk(
-    sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
+    sym: Spnd<Sym>, state: Args, locals: Vec<(Sym, Type, Term)>,
     init: (Sym, Vec<(Var, Type)>, Term, Term),
     trans: (Sym, Vec<(Var, Type)>, Term, Term),
     subsys: Vec<(::Sys, Vec<Term>)>,
@@ -499,7 +499,7 @@ impl Sys {
   }
   /// Identifier of a system.
   #[inline(always)]
-  pub fn sym(& self) -> & Sym { & self.sym }
+  pub fn sym(& self) -> & Spnd<Sym> { & self.sym }
   /// State of a system.
   #[inline(always)]
   pub fn state(& self) -> & Args { & self.state }
@@ -530,7 +530,7 @@ impl Sys {
   pub fn subsys_syms(& self) -> HashSet<Sym> {
     let mut set = HashSet::with_capacity( self.subsys.len() ) ;
     for & (ref sub, _) in self.subsys.iter() {
-      set.insert(sub.sym().clone()) ; ()
+      set.insert(sub.sym().get().clone()) ; ()
     }
     set.shrink_to_fit() ;
     set
@@ -576,7 +576,7 @@ impl Sys {
 }
 impl PartialEq<Sym> for Sys {
   fn eq(& self, rhs: & Sym) -> bool {
-    self.sym == * rhs
+    self.sym.get() == rhs
   }
 }
 impl fmt::Display for Sys {

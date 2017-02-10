@@ -846,13 +846,13 @@ impl Context {
   }
   fn internal_add_sys(& mut self, sys: Sys) {
     let sym = sys.sym().clone() ;
-    match self.all.insert(sym.clone()) {
+    match self.all.insert(sym.get().clone()) {
       true => (),
       false => panic!(
         println!("added system {} but symbol is already used", sym)
       ),
     }
-    match self.syss.insert(sym, Arc::new(sys)) {
+    match self.syss.insert(sym.get().clone(), Arc::new(sys)) {
       None => (),
       Some(e) => {
         self.stdin_print() ;
@@ -905,7 +905,7 @@ impl Context {
 
   /// Adds a system definition to the context.
   pub fn add_sys(
-    & mut self, sym: Sym, state: Args,
+    & mut self, sym: Spnd<Sym>, state: Args,
     locals: Vec<(Sym, Type, TermAndDep)>,
     init: TermAndDep, trans: TermAndDep,
     sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
