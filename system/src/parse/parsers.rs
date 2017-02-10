@@ -540,8 +540,6 @@ pub fn check_exit_parser<'a>(
 //   }
 // }
 
-/// Alias type for parsing result output.
-pub type PRes<T> = Result<T, parse_errors::Error> ;
 
 /// Alias type for parsing result.
 pub type IRes<'a, T> = IResult<Bytes<'a>, T, parse_errors::Error> ;
@@ -643,6 +641,24 @@ macro_rules! parse_or_fail {
           "expected symbol {}, found {}", $blah, desc
         ), vec![]
       ), as Spnd<Sym>
+    )
+  ) ;
+  (
+    $bytes:expr, $submac:ident!($len:ident < trm ($t_offset:expr, $ctx:expr))
+    ! at $span:expr, $blah:expr
+  ) => (
+    return_err!(
+      $bytes,
+      ::nom::ErrorKind::Custom(
+        ::parse_errors::ErrorKind::ParseError(
+          $span,
+          $blah.into(),
+          vec![]
+        ).into()
+      ),
+      $submac!(
+        $len < trm apply!(term_parser, $t_offset, $ctx.factory())
+      )
     )
   ) ;
   (
@@ -826,17 +842,9 @@ pub fn _fun_def_parser<'a>(
       ! at (offset + len), "in `define-fun`"
     ) >>
     len_add!(len < opt spc cmt) >>
-    body: return_err!(
-      ::nom::ErrorKind::Custom(
-        ::parse_errors::ErrorKind::ParseError(
-          sym.span.clone(),
-          format!("parse error in body of `define-fun`"),
-          vec![]
-        ).into()
-      ),
-      len_add!(
-        len < trm apply!(term_parser, offset + len, c.factory())
-      )
+    body: parse_or_fail!(
+      len_add!(len < trm (offset + len, c))
+      ! at sym.span.clone(), "parse error in body of `define-fun`"
     ) >> ({
       let sym_span = sym.span.clone() ;
       match c.add_fun_def(sym, args, typ, body) {
@@ -845,6 +853,82 @@ pub fn _fun_def_parser<'a>(
             ::parse_errors::ErrorKind::ParseError(
               sym_span.clone(), format!("{}", err), vec![
                 (sym_span, "in this `define-fun`".into())
+              ]
+            ).into()
+          )
+        ),
+        Ok(()) => Spnd::len_mk((), offset, len),
+      }
+    })
+  )
+}
+
+/// Parses a state property definition.
+pub fn _prop_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<'a, Spnd<()>> {
+  let mut len = 0 ;
+  do_parse!(
+    bytes,
+    sym: parse_or_fail!(
+      len_add!( len < sym (offset + len, c) )
+      ! at (offset + len), "in `define-prop`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    sys: parse_or_fail!(
+      len_add!( len < sym (offset + len, c) )
+      ! at (offset + len), "for system name in `define-prop`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    body: parse_or_fail!(
+      len_add!( len < trm (offset + len, c) )
+      ! at sym.span.clone(), "parse error in body of `define-prop`"
+    ) >> ({
+      let sym_span = sym.span.clone() ;
+      match c.add_prop(sym, sys, body) {
+        Err(err) => return ::nom::IResult::Error(
+          ::nom::ErrorKind::Custom(
+            ::parse_errors::ErrorKind::ParseError(
+              sym_span.clone(), format!("{}", err), vec![
+                (sym_span, "in this `define-prop`".into())
+              ]
+            ).into()
+          )
+        ),
+        Ok(()) => Spnd::len_mk((), offset, len),
+      }
+    })
+  )
+}
+
+/// Parses a state relation definition.
+pub fn _rel_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<'a, Spnd<()>> {
+  let mut len = 0 ;
+  do_parse!(
+    bytes,
+    sym: parse_or_fail!(
+      len_add!( len < sym (offset + len, c) )
+      ! at (offset + len), "in `define-rel`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    sys: parse_or_fail!(
+      len_add!( len < sym (offset + len, c) )
+      ! at (offset + len), "for system name in `define-rel`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    body: parse_or_fail!(
+      len_add!( len < trm (offset + len, c) )
+      ! at sym.span.clone(), "parse error in body of `define-rel`"
+    ) >> ({
+      let sym_span = sym.span.clone() ;
+      match c.add_rel(sym, sys, body) {
+        Err(err) => return ::nom::IResult::Error(
+          ::nom::ErrorKind::Custom(
+            ::parse_errors::ErrorKind::ParseError(
+              sym_span.clone(), format!("{}", err), vec![
+                (sym_span, "in this `define-rel`".into())
               ]
             ).into()
           )
@@ -907,17 +991,17 @@ pub fn _item_parser<'a>(
           terminated!(
             len_add!(len < tag "define-fun"),
             len_add!(len < opt spc cmt)
-          ) >> apply!(_fun_dec_parser, offset + len, ctx)
+          ) >> apply!(_fun_def_parser, offset + len, ctx) |
 
-          // terminated!(
-          //   len_add!(len < tag "define-prop"),
-          //   len_add!(len < opt spc cmt)
-          // ) >> apply!(_sig_parser, offset + len) |
+          terminated!(
+            len_add!(len < tag "define-prop"),
+            len_add!(len < opt spc cmt)
+          ) >> apply!(_prop_parser, offset + len, ctx) |
 
-          // terminated!(
-          //   len_add!(len < tag "define-rel"),
-          //   len_add!(len < opt spc cmt)
-          // ) >> apply!(_sig_parser, offset + len) |
+          terminated!(
+            len_add!(len < tag "define-rel"),
+            len_add!(len < opt spc cmt)
+          ) >> apply!(_rel_parser, offset + len, ctx) // |
 
           // terminated!(
           //   len_add!(len < tag "define-sys"),
