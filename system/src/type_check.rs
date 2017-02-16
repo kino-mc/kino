@@ -405,9 +405,7 @@ pub mod test {
           },
           Err(e) => {
             println!("could not parse input file:") ;
-            for line in format!("{}", e).lines() {
-              println!("| {}", line)
-            } ;
+            e.print() ;
             panic!("could not parse test file")
           },
         }

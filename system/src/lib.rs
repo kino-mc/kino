@@ -50,33 +50,79 @@ extern crate error_chain ;
 extern crate term ;
 
 use std::sync::Arc ;
+use std::fmt ;
 
-/// Errors that can happen during command parsing.
-pub mod parse_errors {
-  use term::parsing::Spn ;
-  error_chain!{
-    types {
-      Error, ErrorKind, Res, ResExt ;
+/// A line with a line number, a sub line indicating something in the line,
+/// and a column number.
+#[derive(Debug)]
+pub struct Line {
+  /// The line.
+  pub line: String,
+  /// The subline showing something in the line above.
+  pub subline: String,
+  /// The line number of the line.
+  pub l: usize,
+  /// The column of the token of interest in the line.
+  pub c: usize,
+}
+impl Line {
+  /// Creates a line.
+  #[inline]
+  pub fn mk(line: String, subline: String, l: usize, c: usize) -> Self {
+    Line { line: line, subline: subline, l: l, c: c }
+  }
+}
+impl fmt::Display for Line {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    write!(fmt, "[{}:{}] `{}`", self.line, self.l, self.c)
+  }
+}
+
+/// Errors.
+#[derive(Debug)]
+pub enum Error {
+  /// Parse error.
+  Parse {
+    /// Line of the error.
+    line: Line,
+    /// Description of the error.
+    blah: String,
+    /// Optional notes about the error.
+    notes: Vec<(Line, String)>
+  },
+  /// IO error.
+  Io(::std::io::Error)
+}
+impl Error {
+  /// Creates a parsing error.
+  #[inline]
+  pub fn parse_mk(
+    line: Line, blah: String, notes: Vec<(Line, String)>
+  ) -> Self {
+    Error::Parse { line: line, blah: blah, notes: notes }
+  }
+
+  /// Prints an internal parse error.
+  #[cfg(test)]
+  pub fn print(& self) {
+    match * self {
+      Error::Parse { ref line, ref blah, ref notes } => {
+        println!("parse error {}: {}", line, blah) ;
+        for & (ref line, ref blah) in notes {
+          println!("| {}: {}", line, blah)
+        }
+      },
+      Error::Io(ref e) => println!("io error: {:?}", e)
     }
-    errors {
-      #[doc = "Legacy error, to remove after transition to spanned things."]
-      OldError(e: ::parse::check::Error) {
-        description("legacy error")
-        display("legacy error: {}", e)
-      }
-      #[doc = "Parsing error."]
-      ParseError(
-        span: Spn, blah: String,
-        notes: Vec< (Spn, String) >
-      ) {
-        description("parse error")
-        display("parse error `{}`: {}", span, blah)
-      }
-      #[doc = "IO Error."]
-      IoError(e: ::std::io::Error) {
-        description("IO error")
-        display("IO error: {:?}", e)
-      }
+  }
+}
+impl fmt::Display for Error {
+  fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
+    match * self {
+      Error::Parse { ref line, ref blah, .. } => write!(
+        fmt, "{} in line {}", blah, line
+      ),
+      Error::Io(ref e) => write!(fmt, "io error: {:?}", e),
     }
   }
 }
@@ -98,7 +144,7 @@ pub mod ctxt {
   pub use super::parse::{
     Res, Context
   } ;
-  pub use super::parse::check::Error ;
+  pub use super::parse::check::CheckError ;
   pub use type_check::type_check ;
 }
 

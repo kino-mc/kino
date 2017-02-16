@@ -21,12 +21,12 @@ use term::real_term ;
 use base::* ;
 use super::{ Context, Atom, Res } ;
 
-use self::Error::* ;
+use self::CheckError::* ;
 use self::CheckFailed::* ;
 
 /// Parse error.
 #[derive(Debug)]
-pub enum Error {
+pub enum CheckError {
   /// Redefinition of identifier.
   Redef(Sym, & 'static str, & 'static str),
   /// State var in define-fun.
@@ -60,7 +60,7 @@ pub enum Error {
   /// I/O error.
   Io(::std::io::Error),
 }
-impl fmt::Display for Error {
+impl fmt::Display for CheckError {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     use term::real_term::Var::* ;
     match * self {
@@ -241,7 +241,7 @@ fn is_sym_in_locals(
 /// Checks that a function declaration is legal.
 pub fn check_fun_dec(
   ctxt: & Context, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
-) -> Result<Callable, Error> {
+) -> Result<Callable, CheckError> {
   let desc = super::uf_desc ;
   check_sym!(ctxt, sym.get().clone(), desc) ;
   match ctxt.factory().set_fun_type(sym.get().clone(), * typ.get()) {
@@ -259,7 +259,7 @@ pub fn check_fun_dec(
 pub fn check_fun_def(
   ctxt: & Context, sym: Spnd<Sym>, args: Args,
   typ: Spnd<Type>, body: TermAndDep
-) -> Result<Callable, Error> {
+) -> Result<Callable, CheckError> {
   let desc = super::fun_desc ;
   check_sym!(ctxt, sym.get().clone(), desc) ;
 
@@ -388,7 +388,7 @@ fn check_term_and_dep(
 /// Checks that a proposition definition is legal.
 pub fn check_prop(
   ctxt: & Context, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
-) -> Result<Prop, Error> {
+) -> Result<Prop, CheckError> {
   use term::State::Curr ;
   use term::UnTermOps ;
   let desc = super::prop_desc ;
@@ -448,7 +448,7 @@ pub fn check_prop(
 /// Checks that a relation definition is legal.
 pub fn check_rel(
   ctxt: & Context, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
-) -> Result<Prop, Error> {
+) -> Result<Prop, CheckError> {
   let desc = super::prop_desc ;
   check_sym!(ctxt, sym.get().clone(), desc) ;
   let sys = match ctxt.get_sys(& sys) {
@@ -518,7 +518,7 @@ pub fn check_sys(
   locals: Vec<(Sym, Type, TermAndDep)>,
   init: TermAndDep, trans: TermAndDep,
   sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
-) -> Result<Sys, Error> {
+) -> Result<Sys, CheckError> {
   use term::State::* ;
   use term::{
     SymMaker, VarMaker, AppMaker, UnTermOps, BindMaker
@@ -717,7 +717,7 @@ pub fn check_sys(
 pub fn check_check(
   ctxt: & Context, sym: Spnd<Sym>,
   props: Vec< Spnd<Sym> >, atoms: Option<Vec<Atom>>
-) -> Result<Res, Error> {
+) -> Result<Res, CheckError> {
   let desc = if atoms.is_none() {
     super::check_desc
   } else {

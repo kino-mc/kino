@@ -81,6 +81,7 @@ fn main() {
           } ;
 
           match res {
+            Res::Success => panic!("update master to work with new parsers"),
             Res::Exit => (),
             Res::Check(sys, props) => {
               log.trail() ;
@@ -100,8 +101,7 @@ fn main() {
           }
         },
         Err(e) => {
-          log.nl() ;
-          log.bad( & Kino, & format!("{}", e) ) ;
+          log.log_error(& Kino, & e.into()) ;
           log.trail()
         },
       }

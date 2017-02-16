@@ -12,6 +12,8 @@
 
 //! API for the kinō model-checker.
 
+#[macro_use]
+extern crate error_chain ;
 extern crate term ;
 extern crate system ;
 extern crate unroll ;
@@ -25,10 +27,34 @@ extern crate pruner ;
 
 mod master ;
 
-pub use term::{ Sym, SymMaker } ;
-pub use system::* ;
+// use term::{ Sym, SymMaker } ;
+use system::Prop ;
+pub use system::Error as SysError ;
 // pub use unroll::* ;
 // pub use common::* ;
+
+/// Top level errors.
+pub mod errors {
+  use SysError ;
+  error_chain!{
+    types {
+      Error, ErrorKind, ResExt, Res ;
+    }
+    errors {
+      #[doc = "Error during system creation."]
+      SysError(e: SysError) {
+        description("error in system creation")
+        display("system error: {}", e)
+      }
+      #[doc = "Error during an analysis."]
+      AnalysisError(s: String) {
+        description("error during analysis")
+        display("{}", s)
+      }
+    }
+  }
+}
+use errors::* ;
 
 /// The techniques provided by kino.
 pub mod teks {
@@ -42,7 +68,7 @@ pub use system::ctxt::Context ;
 use system::ctxt::Res as CtxtRes ;
 
 /// Loads a file, creates a context.
-pub fn load(path: & str) -> Result< (Context, CtxtRes), String> {
+pub fn load(path: & str) -> Res< (Context, CtxtRes) > {
   use std::fs::File ;
   use term::Factory ;
   match File::open(path) {
@@ -51,21 +77,20 @@ pub fn load(path: & str) -> Result< (Context, CtxtRes), String> {
       let mut context = Context::mk(factory, 1000) ;
       match context.read(& mut file) {
         Ok(res) => Ok( (context, res) ),
-        Err(e) => Err(
-          format!("error reading file `{}`\n{}", path, e)
-        ),
+        Err(e) => bail!( ErrorKind::SysError(e) ),
       }
     },
-    Err(e) => Err(
-      format!("could not open file `{}`\n{}", path, e)
+    Err(e) => bail!(
+      ErrorKind::SysError( SysError::Io(e) )
     ),
   }
 }
 
 /// Loads a file, creates a context, runs the master.
-pub fn analyze(path: & str) -> Result< (Context, Vec<Prop>), String> {
+pub fn analyze(path: & str) -> Res<(Context, Vec<Prop>)> {
   let (mut context, res) = try!( load(path) ) ;
   match res {
+    CtxtRes::Success => Err("got success".into()),
     CtxtRes::Exit => Ok( (context, vec![]) ),
     CtxtRes::Check(sys, props) => {
       let log = ::common::log::MasterLog::default() ;
@@ -75,12 +100,12 @@ pub fn analyze(path: & str) -> Result< (Context, Vec<Prop>), String> {
       ) {
         Ok(()) => Ok( (context, props) ),
         Err(()) => Err(
-          format!("master did not return successfully")
+          "master did not return successfully".into()
         ),
       }
     },
     CtxtRes::CheckAss(_, _, _) => Err(
-      format!("verify assuming is not supported")
+      "verify assuming is not supported".into()
     ),
   }
 }

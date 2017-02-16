@@ -26,8 +26,8 @@ static check_ass_desc: & 'static str = "verify with assumption query" ;
 use std::io ;
 use std::fmt ;
 use std::sync::Arc ;
-use std::time::Duration ;
-use std::thread::sleep ;
+// use std::time::Duration ;
+// use std::thread::sleep ;
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
@@ -35,10 +35,11 @@ use term::{
 } ;
 use term::parsing::* ;
 
+use Error as ExtError ;
 use base::* ;
 mod parsers ;
 pub mod check ;
-use self::check::Error ;
+use self::check::CheckError ;
 
 use self::parsers::* ;
 
@@ -123,6 +124,8 @@ impl Atom {
 /// Normal result of a parsing attempt.
 #[derive(Debug)]
 pub enum Res {
+  /// Parsed a command that's not a query.
+  Success,
   /// Found an exit command.
   Exit,
   /// Found a check command.
@@ -134,6 +137,7 @@ impl Res {
   /// A multi-line representation of the result of a parsing attempty
   pub fn lines(& self) -> String {
     match * self {
+      Res::Success => "success".to_string(),
       Res::Exit => "exit".to_string(),
       Res::Check(ref sys, ref props) => {
         let mut s = format!("verify {}", sys.sym()) ;
@@ -368,13 +372,15 @@ impl Cex {
 /// 
 /// ## Checks
 /// 
-/// During parsing, checks the errors corresponding to [`Error`][error].
+/// During parsing, checks the errors corresponding to [`CheckError`][error].
 /// 
-/// [error]: enum.Error.html (The Error enum)
+/// [error]: enum.CheckError.html (The CheckError enum)
 pub struct Context {
   /// Number of lines **read** so far. Does not correspond to where the parser
   /// is currently at. Not really used at the moment.
   line: usize,
+  /// Number of bytes read so far, used for error reporting.
+  bytes_read: usize,
   /// String buffer for swapping when reading, and remember stuff when reading
   /// from stdin.
   buffer: String,
@@ -401,6 +407,7 @@ impl Context {
   pub fn mk(factory: Factory, buffer_size: usize) -> Self {
     Context {
       line: 0,
+      bytes_read: 0,
       buffer: String::with_capacity(buffer_size),
       factory: factory,
       all: HashSet::with_capacity(127),
@@ -665,53 +672,47 @@ impl Context {
   /// * an error.
   pub fn read(
     & mut self, reader: & mut io::Read
-  ) -> Result<Res, ::parse_errors::Error> {
+  ) -> Result<Res, ExtError> {
     use nom::IResult::* ;
     use std::io::{ BufRead, BufReader } ;
     use std::str ;
     let mut lines = BufReader::new(reader).lines() ;
     let mut buffer = String::with_capacity(self.buffer.capacity()) ;
     // panic!("bla")
-    loop {
+
+    'read_loop: loop {
+
+      // println!{"entering read loop"}
+
       let mut new_things = false ;
 
       // println!("  entering lines loop") ;
       loop {
+        // println!{"reading line..."}
         match lines.next() {
           Some(Ok(line)) => {
+            // println!{"got a line"}
             self.line = self.line + 1 ;
-            match comment(line.as_bytes()) {
-              Done(chars, _) => {
-                // Comment necessarily parses the whole line.
-                assert!( chars.len() == 0 ) ;
-                ()
-              },
-              Incomplete(_) => {
-                // Can be incomplete if line is empty.
-                assert!( line.trim().len() == 0 ) ;
-                ()
-              },
-              _ => {
-                // Not a line containing only comments.
-                self.buffer.push('\n') ;
-                self.buffer.push_str(& line) ;
-                new_things = true
-              },
-            }
+            if self.line > 1 { self.buffer.push('\n') } ;
+            self.buffer.push_str(& line) ;
+            new_things = true
           },
-          Some(Err(e)) => bail!(
-            ::parse_errors::ErrorKind::OldError(check::Error::Io(e))
+          Some(Err(e)) => return Err(
+            ExtError::Io(e)
           ),
           None => {
             if new_things { break } else {
-              sleep(Duration::from_millis(10))
+              return Ok(Res::Success)
+              // sleep(Duration::from_millis(10))
             }
           }
         }
       }
 
-      // println!("  entering parse loop") ;
-      loop {
+      // println!{"exiting read loop"}
+
+      'parse_loop: loop {
+        // println!{"entering parse loop"}
         // println!("  updating") ;
         buffer.clear() ;
         buffer.push_str(& self.buffer) ;
@@ -721,42 +722,46 @@ impl Context {
         // ) ;
         // println!("  buffers: {}", buffer) ;
         // println!("         : {}", self.buffer) ;
-        match item_parser(buffer.as_bytes(), self) {
-          Done(chars, Ok(())) => {
-            self.buffer.clear() ;
-            self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+
+        match item_parser(buffer.as_bytes(), 0, self) {
+          Done(chars, res) => match res.destroy() {
+            (Res::Success, spn) => {
+              // println!{"success"}
+              // for line in str::from_utf8(chars).unwrap().lines() {
+              //   println!{"  | {}", line}
+              // }
+              self.buffer.clear() ;
+              self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+              self.bytes_read += spn.len()
+            },
+            (res, spn) => {
+              // println!{"res: {:?}", res}
+              self.buffer.clear() ;
+              self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+              self.bytes_read += spn.len() ;
+              return Ok(res)
+            },
           },
-          Done(_, Err(e)) => return Err(e),
+          Error(
+            ::nom::ErrorKind::Custom(e)
+          ) => return Err(
+            e.to_parse_error(& self.buffer, self.line)
+          ),
           Incomplete(_) => {
+            // println!("Context:") ;
+            // for line in self.lines().lines() {
+            //   println!("| {}", line)
+            // } ;
+            // println!("  incomplete (item)") ;
+            continue 'read_loop
+          },
+          _ => {
             println!("Context:") ;
             for line in self.lines().lines() {
               println!("| {}", line)
             } ;
-            println!("  incomplete (item)") ;
-            break
+            panic!("what's that: {}", buffer)
           },
-          _ => match check_exit_parser(buffer.as_bytes(), self) {
-            Done(chars, res) => {
-              self.buffer.clear() ;
-              self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
-              return res.map(|res| res.destroy().0)
-            },
-            Incomplete(_) => {
-              println!("Context:") ;
-              for line in self.lines().lines() {
-                println!("| {}", line)
-              } ;
-              println!("  incomplete (check)") ;
-              break
-            },
-            _ => {
-              println!("Context:") ;
-              for line in self.lines().lines() {
-                println!("| {}", line)
-              } ;
-              panic!("what's that: {}", buffer)
-            },
-          }
         }
       }
     }
@@ -866,7 +871,7 @@ impl Context {
   /// Adds a function declaration to the context.
   pub fn add_fun_dec(
     & mut self, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
-  ) -> Result<(), Error> {
+  ) -> Result<(), CheckError> {
     match check::check_fun_dec(self, sym, sig, typ) {
       Ok(callable) => Ok( self.internal_add_callable(callable) ),
       Err(e) => Err(e),
@@ -876,7 +881,7 @@ impl Context {
   /// Adds a function definition to the context.
   pub fn add_fun_def(
     & mut self, sym: Spnd<Sym>, args: Args, typ: Spnd<Type>, body: TermAndDep
-  ) -> Result<(), Error> {
+  ) -> Result<(), CheckError> {
     match check::check_fun_def(self, sym, args, typ, body) {
       Ok(callable) => Ok( self.internal_add_callable(callable) ),
       Err(e) => Err(e),
@@ -886,7 +891,7 @@ impl Context {
   /// Adds a state property definition to the context.
   pub fn add_prop(
     & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
-  ) -> Result<(), Error> {
+  ) -> Result<(), CheckError> {
     match check::check_prop(self, sym, sys, body) {
       Ok(prop) => Ok( self.internal_add_prop(prop, PropStatus::Unknown) ),
       Err(e) => Err(e),
@@ -896,7 +901,7 @@ impl Context {
   /// Adds a state relation definition to the context.
   pub fn add_rel(
     & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
-  ) -> Result<(), Error> {
+  ) -> Result<(), CheckError> {
     match check::check_rel(self, sym, sys, body) {
       Ok(rel) => Ok( self.internal_add_prop(rel, PropStatus::Unknown) ),
       Err(e) => Err(e),
@@ -909,7 +914,7 @@ impl Context {
     locals: Vec<(Sym, Type, TermAndDep)>,
     init: TermAndDep, trans: TermAndDep,
     sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
-  ) -> Result<(), Error> {
+  ) -> Result<(), CheckError> {
     match check::check_sys(
       self, sym, state, locals, init, trans, sub_syss
     ) {

@@ -7,542 +7,104 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use nom::{ IResult, multispace } ;
+use nom::IResult ;
 
 use base::* ;
 use super::Context ;
 use super::{ Atom, Res } ;
 use super::check::* ;
-use parse_errors ;
-use term::{ Type, Sym, Factory } ;
+use term::Sym ;
 use term::parsing::* ;
 use term::parsing::vmt::* ;
 
-mk_parser!{
-  #[doc = "Parses a signature."]
-  pub fn sig_parser(bytes, offset: usize) -> Spnd<Sig> {
-    let mut len = 0 ;
-    do_parse!(
-      bytes,
-      len_set!(len < char '(') >>
-      len_add!(len < opt spc cmt) >>
-      args: separated_list!(
-        len_add!(len < spc cmt),
-        map!(
-          apply!(type_parser, offset + len), |t: Spnd<Type>| {
-            len += t.len() ;
-            t
-          }
-        )
-      ) >>
-      len_add!(len < opt spc cmt) >>
-      len_add!(len < char ')') >> (
-        Spnd::len_mk(Sig::mk(args), offset, len)
-      )
-    )
-  }
-}
-
-/// Parses some arguments.
-fn args_parser<'a>(
-  bytes: & 'a [u8], offset: usize, f: & Factory
-) -> IResult<& 'a [u8], Spnd<Args>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    args: separated_list!(
-      len_add!(len < spc cmt),
-      delimited!(
-        len_add!(len < char '('),
-        do_parse!(
-          len_add!(len < opt spc cmt) >>
-          sym: len_add!(
-            len < spn thru apply!(sym_parser, offset + len, f)
-          ) >>
-          len_add!(len < spc cmt) >>
-          typ: len_add!(
-            len < spn thru apply!(type_parser, offset + len)
-          ) >>
-          len_add!(len < opt spc cmt) >> (
-            (sym, typ)
-          )
-        ),
-        len_add!(len < char ')')
-      )
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      Spnd::len_mk(Args::mk(args), offset, len)
-    )
-  )
-}
-
-/// Parses a function declaration.
-pub fn fun_dec_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IResult<& 'a [u8], Result<usize, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("declare-fun")) >>
-    len_add!(len < opt spc cmt) >>
-    sym: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    sig: len_add!(
-      len < spn apply!(sig_parser, offset + len)
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    typ: len_add!(
-      len < spn thru apply!(type_parser, offset + len)
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      c.add_fun_dec(sym, sig, typ).map(|()| len)
-    )
-  )
-}
-
-/// Parses a function definition.
-pub fn fun_def_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IResult<& 'a [u8], Result<usize, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("define-fun")) >>
-    len_add!(len < spc cmt) >>
-    sym: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    args: len_add!(
-      len < spn apply!(args_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    typ: len_add!(
-      len < spn thru apply!(type_parser, offset + len)
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    body: len_add!(
-      len < trm apply!(term_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      c.add_fun_def(sym, args, typ, body).map(|()| len)
-    )
-  )
-}
-
-/// Parses a state property definition.
-pub fn prop_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IResult<& 'a [u8], Result<usize, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("define-prop")) >>
-    len_add!(len < spc cmt) >>
-    sym: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < spc cmt) >>
-    sys: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    body: len_add!(
-      len < trm apply!(term_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      c.add_prop(sym, sys, body).map(|()| len)
-    )
-  )
-}
-
-/// Parses a state relation definition.
-pub fn rel_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IResult<& 'a [u8], Result<usize, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("define-rel")) >>
-    len_add!(len < spc cmt) >>
-    sym: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < spc cmt) >>
-    sys: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    body: len_add!(
-      len < trm apply!(term_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      c.add_rel(sym, sys, body).map(|()| len)
-    )
-  )
-}
-
-/// Parses the calls inside a system definition.
-pub fn sub_sys_parser<'a>(
-  bytes: & 'a [u8], offset: usize, f: & Factory
-) -> IResult<& 'a [u8], (usize, Vec<(Spnd<Sym>, Vec<TermAndDep>)>)> {
-  let mut len = 0 ;
-  map!(
-    bytes,
-    delimited!(
-      len_set!(len < char '('),
-      many0!(
-        do_parse!(
-          len_add!(len < opt spc cmt) >>
-          len_add!(len < char '(') >>
-          len_add!(len < opt spc cmt) >>
-          sym: len_add!(
-            len < spn thru apply!(sym_parser, offset + len, f)
-          ) >>
-          params: many1!(
-            preceded!(
-              len_add!(len < opt spc cmt),
-              len_add!(
-                len < trm apply!(term_parser, offset + len, f)
-              )
-            )
-          ) >>
-          len_add!(len < opt spc cmt) >>
-          len_add!(len < char ')') >> (
-            (sym, params)
-          )
-        )
-      ),
-      do_parse!(
-        len_add!(len < opt spc cmt) >>
-        len_add!(len < char ')') >> ( () )
-      )
-    ),
-    |vec| (len, vec)
-  )
-}
-
-// /// Parses local definitions.
-// fn _locals_parser<'a>(
-//   bytes: & 'a [u8], f: & Factory
-// ) -> IResult<& 'a [u8], Vec<(Sym, Type, TermAndDep)>> {
-//   delimited!(
-//     bytes,
-//     char!('('),
-//     many0!(
-//       preceded!(
-//         opt!(space_comment),
-//         delimited!(
-//           char!('('),
-//           do_parse!(
-//             opt!(space_comment) >>
-//             sym: apply!(sym_parser_2, f) >>
-//             space_comment >>
-//             typ: map!( apply!(type_parser, 0), |t: Spnd<Type>| * t ) >>
-//             space_comment >>
-//             term: apply!(term_parser, 0, f) >>
-//             opt!(space_comment) >> (
-//               (sym, typ, term)
-//             )
-//           ),
-//           char!(')')
-//         )
-//       )
-//     ),
-//     preceded!(
-//       opt!(space_comment),
-//       char!(')')
-//     )
-//   )
-// }
-
-/// Parses a system definition.
-pub fn sys_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IResult<& 'a [u8], Result<usize, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("define-sys") ) >>
-    len_add!(len < spc cmt) >>
-    sym: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    state: len_add!(
-      len < spn apply!(args_parser, offset + len, c.factory())
-    ) >>
-    // opt!(space_comment) >>
-    // locals: apply!(locals_parser, c.factory()) >>
-    len_add!(len < opt spc cmt) >>
-    init: len_add!(
-      len < trm apply!(term_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < spc cmt) >>
-    trans: len_add!(
-      len < trm apply!(term_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    sub_syss: map!(
-      apply!(sub_sys_parser, offset + len, c.factory()),
-      |(n,vec)| {
-        len += n ;
-        vec
-      }
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      c.add_sys(sym, state, vec![], init, trans, sub_syss).map(
-        |()| len
-      )
-    )
-  )
-}
-
-/// Parses an item.
-pub fn item_parser<'a>(
-  bytes: & 'a [u8], c: & mut Context
-) -> IResult<& 'a [u8], Result<(), ::parse_errors::Error>> {
-  preceded!(
-    bytes,
-    opt!(multispace),
-    map!(
-      alt!(
-        map!(
-          apply!(fun_dec_parser, 0, c),
-          |res: Result<usize, Error>| res.map(|_| ())
-        ) |
-        map!(
-          apply!(fun_def_parser, 0, c),
-          |res: Result<usize, Error>| res.map(|_| ())
-        ) |
-        map!(
-          apply!(prop_parser, 0, c),
-          |res: Result<usize, Error>| res.map(|_| ())
-        ) |
-        map!(
-          apply!(rel_parser, 0, c),
-          |res: Result<usize, Error>| res.map(|_| ())
-        ) |
-        map!(
-          apply!(sys_parser, 0, c),
-          |res: Result<usize, Error>| res.map(|_| ())
-        )
-      ),
-      |res: Result<(), Error>| res.map_err(
-        |e| ::parse_errors::ErrorKind::OldError(e).into()
-      )
-    )
-  )
-}
-
-/// Parses a check.
-pub fn check_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & Context
-) -> IResult<& 'a [u8], Result<Spnd<Res>, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("verify")) >>
-    len_add!(len < spc cmt) >>
-    sys: len_add!(
-      len < spn thru apply!(sym_parser, offset + len, c.factory())
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    props: delimited!(
-      len_add!(len < char '('),
-      delimited!(
-        len_add!(len < opt spc cmt),
-        separated_list!(
-          len_add!(len < spc cmt),
-          len_add!(
-            len < spn thru apply!(sym_parser, offset + len, c.factory())
-          )
-        ),
-        len_add!(len < opt spc cmt)
-      ),
-      len_add!(len < char ')')
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      check_check(c, sys, props, None).map(
-        |res| Spnd::len_mk(res, offset, len)
-      )
-    )
-  )
-}
-
-/// Parses an atom.
-pub fn atom_parser<'a>(
-  bytes: & 'a [u8], offset: usize, f: & Factory
-) -> IResult<& 'a [u8], Spnd<Atom>> {
-  let mut len = 0 ;
-  alt!(
-    bytes,
-    map!(
-      len_add!(
-        len < spn thru apply!(sym_parser, offset + len, f)
-      ),
-      |sym| Spnd::len_mk(Atom::Pos(sym), offset, len)
-    ) |
-    map!(
-      delimited!(
-        terminated!(
-          len_add!(len < char '('),
-          len_add!(len < opt spc cmt)
-        ),
-        do_parse!(
-          len_add!(len < bytes tag!("not")) >>
-          len_add!(len < spc cmt) >>
-          sym: len_add!(
-            len < spn thru apply!(sym_parser, offset + len, f)
-          ) >> (
-            Atom::Neg(sym)
-          )
-        ),
-        preceded!(
-          len_add!(len < opt spc cmt),
-          len_add!(len < char ')')
-        )
-      ),
-      |atom| Spnd::len_mk(atom, offset, len)
-    )
-  )
-}
-
-/// Parses a check with assumptions.
-pub fn check_assuming_parser<'a>(
-  bytes: & 'a [u8], offset: usize, c: & Context
-) -> IResult<& 'a [u8], Result<Spnd<Res>, Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_set!(len < char '(') >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < bytes tag!("verify-assuming")) >>
-    len_add!(len < int space_comment) >>
-    sys: apply!(sym_parser, offset + len, c.factory()) >>
-    len_add!(len < opt spc cmt) >>
-    props: delimited!(
-      len_add!(len < char '('),
-      delimited!(
-        len_add!(len < opt spc cmt),
-        separated_list!(
-          len_add!(len < spc cmt),
-          len_add!(
-            len < spn thru apply!(sym_parser, offset + len, c.factory())
-          )
-        ),
-        len_add!(len < opt spc cmt)
-      ),
-      len_add!(len < char ')')
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    atoms: delimited!(
-      len_add!(len < char '('),
-      delimited!(
-        len_add!(len < opt spc cmt),
-        separated_list!(
-          len_add!(len < spc cmt),
-          len_add!(
-            len < spn apply!(atom_parser, offset + len, c.factory())
-          )
-        ),
-        len_add!(len < opt spc cmt)
-      ),
-      len_add!(len < char ')')
-    ) >>
-    len_add!(len < opt spc cmt) >>
-    len_add!(len < char ')') >> (
-      check_check(c, sys, props, Some(atoms)).map(
-        |res| Spnd::len_mk(res, offset, len)
-      )
-    )
-  )
-}
-
-mk_parser!{
-  #[doc = "Parses exit."]
-  pub fn exit_parser(bytes, offset: usize) -> Result<Spnd<Res>, Error> {
-    let mut len = 0 ;
-    do_parse!(
-      bytes,
-      len_add!(len < char '(') >>
-      len_add!(len < opt spc cmt) >>
-      len_add!(len < bytes tag!("exit")) >>
-      len_add!(len < opt spc cmt) >>
-      len_add!(len < char ')') >> (
-        Ok( Spnd::len_mk(Res::Exit, offset, len) )
-      )
-    )
-  }
-}
-
-/// Parses a check with assumptions.
-pub fn check_exit_parser<'a>(
-  bytes: & 'a [u8], c: & Context
-) -> IResult<& 'a [u8], Result<Spnd<Res>, parse_errors::Error>> {
-  let mut len = 0 ;
-  do_parse!(
-    bytes,
-    len_add!(len < opt spc cmt) >>
-    res: alt!(
-      apply!(check_parser, 0 + len, c) |
-      apply!(check_assuming_parser, 0 + len, c) |
-      apply!(exit_parser, 0 + len)
-    ) >>
-    len_add!(len < opt spc cmt) >> (
-      res.map_err(|e| parse_errors::ErrorKind::OldError(e).into())
-    )
-  )
-}
-
-// #[cfg(test)]
-// mod items {
-//   use super::* ;
-//   use parse::Context ;
-//   use term::parsing::* ;
-//   use term::Factory ;
-
-//   fn get_ctx() -> Context {
-//     let factory = Factory::mk() ;
-//     Context::mk(factory, 100)
-//   }
-
-//   #[test]
-//   fn fun_dec() {
-//     let mut ctx = get_ctx() ;
-//     let txt = "\
-// (declare-fun blah ( Int ) Int)\
-//     " ;
-//     try_parse_command!(ctx, 0, fun_dec_parser, txt)
-//   }
-// }
-
+use { Line, Error } ;
 
 /// Alias type for parsing result.
-pub type IRes<'a, T> = IResult<Bytes<'a>, T, parse_errors::Error> ;
+pub type IRes<'a, T> = IResult<Bytes<'a>, T, InternalParseError> ;
+
+/// Internal parse error, raised before it is matched against the actual text
+/// input.
+#[derive(Debug, PartialEq, Eq)]
+pub struct InternalParseError {
+  span: Spn,
+  blah: String,
+  notes: Vec< (Spn, String) >
+}
+impl InternalParseError {
+  /// Creates an internal parse error.
+  #[inline]
+  pub fn mk(span: Spn, blah: String, notes: Vec< (Spn, String) >) -> Self {
+    InternalParseError { span: span, blah: blah, notes: notes }
+  }
+
+  /// Transforms an `InternalParseError` in an `Error`.
+  #[inline]
+  pub fn to_parse_error(self, txt: & str, line_cnt: usize) -> Error {
+    let InternalParseError { span, blah, notes } = self ;
+    Error::parse_mk(
+      line_extractor(txt, span, line_cnt), blah, notes.into_iter().map(
+        |(spn, blah)| (line_extractor(txt, spn, line_cnt), blah)
+      ).collect()
+    )
+  }
+
+  /// Prints an internal parse error.
+  #[cfg(test)]
+  pub fn print(& self) {
+    println!("{}: {}", self.span, self.blah) ;
+    for & (ref span, ref blah) in self.notes.iter() {
+      println!("| {}: {}", span, blah)
+    }
+  }
+}
+/// Extracts the line from a string where the `spn.bgn`th character is, the
+/// number of that line in the text, and the subline highlighting the part
+/// the span corresponds to.
+fn line_extractor(
+  txt: & str, spn: Spn, mut line_count: usize
+) -> Line {
+  // println!{"extracting line: {} from `{}`", spn, txt}
+  let n = spn.bgn ;
+  let mut bgn = 0 ;
+  let mut end = 0 ;
+  let mut gotit = false ;
+  let mut cpt = 0 ;
+  let mut offset = 0 ;
+  line_count += 1 ;
+  for char in txt.chars() {
+    match char {
+      '\n' if gotit => {
+        end = cpt ;
+        break
+      },
+      '\n' => {
+        line_count += 1 ;
+        bgn = cpt + 1
+      },
+      _ if cpt == n => {
+        gotit = true ;
+        offset = cpt - bgn
+      },
+      _ => (),
+    }
+    cpt += 1
+  }
+  if end == 0 { end = cpt }
+  let line = if end >= bgn {
+    (& txt[bgn..end]).to_string()
+  } else { "".to_string() } ;
+  let line_len = line.len() ;
+  Line::mk(
+    line,
+    format!(
+      "{1: >0$}{3:^>2$}",
+      offset, "", ::std::cmp::min(spn.len(), line_len - offset), ""
+    ),
+    line_count,
+    offset
+  )
+}
+
 
 macro_rules! return_err (
   ($i:expr, |$s:pat, $d:pat, $n:pat| $e:expr, $submac:ident!( $($args:tt)* )
@@ -551,16 +113,13 @@ macro_rules! return_err (
       ::nom::IResult::Done(i, o) => ::nom::IResult::Done(i, o),
       ::nom::IResult::Error(
         ::nom::ErrorKind::Custom(
-          ::parse_errors::Error(
-            ::parse_errors::ErrorKind::ParseError($s, $d, $n),
-            _
-          )
+          InternalParseError { span: $s, blah: $d, notes: $n }
         )
       ) => {
         let (s, d, n) = $e ;
         return ::nom::IResult::Error(
           ::nom::ErrorKind::Custom(
-            ::parse_errors::ErrorKind::ParseError(s, d, n).into()
+            InternalParseError::mk(s, d, n).into()
           )
         )
       },
@@ -650,7 +209,7 @@ macro_rules! parse_or_fail {
     return_err!(
       $bytes,
       ::nom::ErrorKind::Custom(
-        ::parse_errors::ErrorKind::ParseError(
+        InternalParseError::mk(
           $span,
           $blah.into(),
           vec![]
@@ -671,10 +230,8 @@ macro_rules! parse_or_fail {
         let $err_args = token_parser($bytes, $offset).unwrap().1 ;
         let (span, desc, notes) = $e ;
         ::nom::ErrorKind::Custom(
-          ::parse_errors::ErrorKind::ParseError(span, desc, notes).into()
-        ) as ::nom::ErrorKind<
-          ::parse_errors::Error
-        >
+          InternalParseError::mk(span, desc, notes).into()
+        ) as ::nom::ErrorKind<InternalParseError>
       },
       $submac!($($args)*)
     )
@@ -682,7 +239,7 @@ macro_rules! parse_or_fail {
 }
 
 /// Parses a signature, does **not** parse leading/trailing spaces/comments.
-pub fn _sig_parser(bytes: Bytes, offset: usize) -> IRes< Spnd<Sig> > {
+fn sig_parser(bytes: Bytes, offset: usize) -> IRes< Spnd<Sig> > {
   let mut len = 0 ;
   do_parse!(
     bytes,
@@ -710,7 +267,7 @@ pub fn _sig_parser(bytes: Bytes, offset: usize) -> IRes< Spnd<Sig> > {
 
 /// Parses some arguments, does **not** parse leading/trailing
 /// spaces/comments.
-fn _args_parser<'a>(
+fn args_parser<'a>(
   bytes: Bytes<'a>, offset: usize, c: & mut Context
 ) -> IRes<'a, Spnd<Args>> {
   let mut len = 0 ;
@@ -730,17 +287,11 @@ fn _args_parser<'a>(
             len_add!(len < sym (offset + len, c))
             ! at (offset + len), "in argument declaration"
           ) >>
-          // sym: len_add!(
-          //   len < spn thru apply!(sym_parser, offset + len, f)
-          // ) >>
-          len_add!(len < spc cmt) >>
+          len_add!(len < opt spc cmt) >>
           typ: parse_or_fail!(
             len_add!(len < type (offset + len))
             ! at (offset + len), "in argument declaration"
           ) >>
-          // typ: len_add!(
-          //   len < spn thru apply!(type_parser, offset + len)
-          // ) >>
           len_add!(len < opt spc cmt) >> 
           parse_or_fail!(
             len_add!(len < char ')')
@@ -763,9 +314,9 @@ fn _args_parser<'a>(
 }
 
 /// Parses a function declaration.
-pub fn _fun_dec_parser<'a>(
+fn fun_dec_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IRes<'a, Spnd<()>> {
+) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
   println!("offset: {}", offset) ;
   do_parse!(
@@ -783,7 +334,7 @@ pub fn _fun_dec_parser<'a>(
         (s, d, vec)
       },
       len_add!(
-        len < spn apply!(_sig_parser, offset + len)
+        len < spn apply!(sig_parser, offset + len)
       )
     ) >>
     len_add!(len < opt spc cmt) >>
@@ -797,25 +348,24 @@ pub fn _fun_dec_parser<'a>(
       match c.add_fun_dec(sym, sig, typ) {
         Err(err) => return ::nom::IResult::Error(
           ::nom::ErrorKind::Custom(
-            ::parse_errors::ErrorKind::ParseError(
+            InternalParseError::mk(
               sym_span.clone(), format!("{}", err), vec![
                 (sym_span, "in this `declare-fun`".into())
               ]
             ).into()
           )
         ),
-        Ok(()) => Spnd::len_mk((), offset, len),
+        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
       }
     })
   )
 }
 
 /// Parses a function definition.
-pub fn _fun_def_parser<'a>(
+fn fun_def_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IRes<'a, Spnd<()>> {
+) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
-  println!("offset: {}", offset) ;
   do_parse!(
     bytes,
     sym: parse_or_fail!(
@@ -831,7 +381,7 @@ pub fn _fun_def_parser<'a>(
         (s, d, vec)
       },
       len_add!(
-        len < spn apply!(_args_parser, offset + len, c)
+        len < spn apply!(args_parser, offset + len, c)
       )
     ) >>
     len_add!(len < opt spc cmt) >>
@@ -850,23 +400,23 @@ pub fn _fun_def_parser<'a>(
       match c.add_fun_def(sym, args, typ, body) {
         Err(err) => return ::nom::IResult::Error(
           ::nom::ErrorKind::Custom(
-            ::parse_errors::ErrorKind::ParseError(
+            InternalParseError::mk(
               sym_span.clone(), format!("{}", err), vec![
                 (sym_span, "in this `define-fun`".into())
               ]
-            ).into()
+            )
           )
         ),
-        Ok(()) => Spnd::len_mk((), offset, len),
+        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
       }
     })
   )
 }
 
 /// Parses a state property definition.
-pub fn _prop_parser<'a>(
+fn prop_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IRes<'a, Spnd<()>> {
+) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
   do_parse!(
     bytes,
@@ -888,23 +438,23 @@ pub fn _prop_parser<'a>(
       match c.add_prop(sym, sys, body) {
         Err(err) => return ::nom::IResult::Error(
           ::nom::ErrorKind::Custom(
-            ::parse_errors::ErrorKind::ParseError(
+            InternalParseError::mk(
               sym_span.clone(), format!("{}", err), vec![
                 (sym_span, "in this `define-prop`".into())
               ]
             ).into()
           )
         ),
-        Ok(()) => Spnd::len_mk((), offset, len),
+        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
       }
     })
   )
 }
 
 /// Parses a state relation definition.
-pub fn _rel_parser<'a>(
+fn rel_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IRes<'a, Spnd<()>> {
+) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
   do_parse!(
     bytes,
@@ -926,14 +476,14 @@ pub fn _rel_parser<'a>(
       match c.add_rel(sym, sys, body) {
         Err(err) => return ::nom::IResult::Error(
           ::nom::ErrorKind::Custom(
-            ::parse_errors::ErrorKind::ParseError(
+            InternalParseError::mk(
               sym_span.clone(), format!("{}", err), vec![
                 (sym_span, "in this `define-rel`".into())
               ]
             ).into()
           )
         ),
-        Ok(()) => Spnd::len_mk((), offset, len),
+        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
       }
     })
   )
@@ -941,7 +491,7 @@ pub fn _rel_parser<'a>(
 
 
 
-pub fn _sys_call_parser<'a>(
+fn sys_call_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
 ) -> IRes<
   'a, Spnd<
@@ -949,16 +499,16 @@ pub fn _sys_call_parser<'a>(
   >
 > {
   let mut len = 0 ;
-  delimited!(
+  map!(
     bytes,
-    do_parse!(
-      parse_or_fail!(
-        len_set!(len < char '(')
-        ! at (offset + len), "starting system calls"
-      ) >>
-      len_add!(len < opt spc cmt) >> (())
-    ),
-    map!(
+    delimited!(
+      do_parse!(
+        parse_or_fail!(
+          len_set!(len < char '(')
+          ! at (offset + len), "starting system calls"
+        ) >>
+        len_add!(len < opt spc cmt) >> (())
+      ),
       many0!(
         do_parse!(
           len_add!(len < char '(') >>
@@ -982,20 +532,20 @@ pub fn _sys_call_parser<'a>(
             (sym, params)
           )
         )
-      ), |vec| Spnd::len_mk(vec, offset, len)
-    ),
-    do_parse!(
-      len_add!(len < opt spc cmt) >>
-      parse_or_fail!(
-        len_add!(len < char ')')
-        ! at (offset + len), "closing system calls, or another system call"
-      ) >> (())
-    )
+      ),
+      do_parse!(
+        len_add!(len < opt spc cmt) >>
+        parse_or_fail!(
+          len_add!(len < char ')')
+          ! at (offset + len), "closing system calls, or another system call"
+        ) >> (())
+      )
+    ), |vec| Spnd::len_mk(vec, offset, len)
   )
 }
-pub fn _sys_parser<'a>(
+fn sys_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
-) -> IRes<'a, Spnd<()>> {
+) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
   do_parse!(
     bytes,
@@ -1012,7 +562,7 @@ pub fn _sys_parser<'a>(
         (s, d, vec)
       },
       len_add!(
-        len < spn apply!(_args_parser, offset + len, c)
+        len < spn apply!(args_parser, offset + len, c)
       )
     ) >>
     len_add!(len < opt spc cmt) >>
@@ -1034,21 +584,189 @@ pub fn _sys_parser<'a>(
         (s, d, vec)
       },
       len_add!(
-        len < spn apply!(_sys_call_parser, offset + len, c)
+        len < spn apply!(sys_call_parser, offset + len, c)
       )
     ) >> ({
       let sym_span = sym.span.clone() ;
       match c.add_sys(sym, state, vec![], init, trans, sys_calls) {
         Err(err) => return ::nom::IResult::Error(
           ::nom::ErrorKind::Custom(
-            ::parse_errors::ErrorKind::ParseError(
+            InternalParseError::mk(
               sym_span.clone(), format!("{}", err), vec![
                 (sym_span, "in this `define-sys`".into())
               ]
             ).into()
           )
         ),
-        Ok(()) => Spnd::len_mk((), offset, len),
+        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
+      }
+    })
+  )
+}
+
+
+fn atom_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<'a, Spnd<Atom>> {
+  let mut len = 0 ;
+  alt_complete!(
+    bytes,
+    fix_error!(
+      InternalParseError,
+      map!(
+        len_add!(
+          len < spn thru apply!(sym_parser, offset + len, c.factory())
+        ), |sym| Spnd::len_mk(Atom::Pos(sym), offset, len)
+      )
+    ) |
+    map!(
+      delimited!(
+        terminated!(
+          len_add!(len < char '('),
+          len_add!(len < opt spc cmt)
+        ),
+        do_parse!(
+          parse_or_fail!(
+            len_add!(len < tag "not")
+            ! at (offset + len), "in atom negation"
+          ) >>
+          len_add!(len < opt spc cmt) >>
+          sym: parse_or_fail!(
+            len_add!(len < sym (offset + len, c))
+            ! at (offset + len), "in atom negation"
+          ) >> (
+            Atom::Neg(sym)
+          )
+        ),
+        preceded!(
+          len_add!(len < opt spc cmt),
+          parse_or_fail!(
+            len_add!(len < char ')')
+            ! at (offset + len), "closing atom negation"
+          )
+        )
+      ), |atom| Spnd::len_mk(atom, offset, len)
+    )
+  )
+}
+
+
+fn verify_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<'a, Spnd<Res>> {
+  let mut len = 0 ;
+  do_parse!(
+    bytes,
+    sys: parse_or_fail!(
+      len_add!(len < sym (offset + len, c))
+      ! at (offset + len), "for system to check in `verify`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    props: delimited!(
+      parse_or_fail!(
+        len_add!(len < char '(')
+        ! at (offset + len), "starting property/relation list"
+      ),
+      preceded!(
+        len_add!(len < opt spc cmt),
+        many0!(
+          do_parse!(
+            prop: len_add!(
+              len < spn thru apply!(sym_parser, offset + len, c.factory())
+            ) >>
+            len_add!(len < opt spc cmt) >> (prop)
+          )
+        )
+      ),
+      parse_or_fail!(
+        len_add!(len < char '(')
+        ! at (offset + len), "closing property/relation list"
+      )
+    ) >> ({
+      let sym_span = sys.span.clone() ;
+      match check_check(c, sys, props, None) {
+        Err(err) => return ::nom::IResult::Error(
+          ::nom::ErrorKind::Custom(
+            InternalParseError::mk(
+              sym_span.clone(), format!("{}", err), vec![
+                (sym_span, "in this `verify`".into())
+              ]
+            ).into()
+          )
+        ),
+        Ok(res) => Spnd::len_mk(res, offset, len),
+      }
+    })
+  )
+}
+
+
+fn verify_assuming_parser<'a>(
+  bytes: & 'a [u8], offset: usize, c: & mut Context
+) -> IRes<'a, Spnd<Res>> {
+  let mut len = 0 ;
+  do_parse!(
+    bytes,
+    sys: parse_or_fail!(
+      len_add!(len < sym (offset + len, c))
+      ! at (offset + len), "for system to check in `verify-assuming`"
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    props: delimited!(
+      parse_or_fail!(
+        len_add!(len < char '(')
+        ! at (offset + len), "starting property/relation list"
+      ),
+      preceded!(
+        len_add!(len < opt spc cmt),
+        many0!(
+          do_parse!(
+            prop: len_add!(
+              len < spn thru apply!(sym_parser, offset + len, c.factory())
+            ) >>
+            len_add!(len < opt spc cmt) >> (prop)
+          )
+        )
+      ),
+      parse_or_fail!(
+        len_add!(len < char '(')
+        ! at (offset + len), "closing property/relation list"
+      )
+    ) >>
+    len_add!(len < opt spc cmt) >>
+    atoms: delimited!(
+      parse_or_fail!(
+        len_add!(len < char '(')
+        ! at (offset + len), "starting atom list"
+      ),
+      preceded!(
+        len_add!(len < opt spc cmt),
+        many0!(
+          do_parse!(
+            atom: len_add!(
+              len < spn apply!(atom_parser, offset + len, c)
+            ) >>
+            len_add!(len < opt spc cmt) >> (atom)
+          )
+        )
+      ),
+      parse_or_fail!(
+        len_add!(len < char '(')
+        ! at (offset + len), "closing atom list"
+      )
+    ) >> ({
+      let sym_span = sys.span.clone() ;
+      match check_check(c, sys, props, Some(atoms)) {
+        Err(err) => return ::nom::IResult::Error(
+          ::nom::ErrorKind::Custom(
+            InternalParseError::mk(
+              sym_span.clone(), format!("{}", err), vec![
+                (sym_span, "in this `verify-assuming`".into())
+              ]
+            ).into()
+          )
+        ),
+        Ok(res) => Spnd::len_mk(res, offset, len),
       }
     })
   )
@@ -1068,7 +786,7 @@ macro_rules! try_parsers {
   ) => (
     fix_error!(
       $bytes,
-      ::parse_errors::Error,
+      InternalParseError,
       alt_complete!(
         $(
           do_parse!(
@@ -1082,7 +800,7 @@ macro_rules! try_parsers {
 }
 
 /// Parses items.
-pub fn _item_parser<'a>(
+pub fn item_parser<'a>(
   bytes: Bytes<'a>, offset: usize, ctx: & mut Context
 ) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
@@ -1092,45 +810,62 @@ pub fn _item_parser<'a>(
     do_parse!(
       parse_or_fail!(
         len_add!(len < char '(')
-        ! at (offset + len), "opening command"
+        ! at (offset + len), "opening VMT-LIB command"
       ) >>
       len_add!(len < opt spc cmt) >>
-      len_add!(
-        len < spn thru try_parsers!(
+      res: parse_or_fail!(
+        len_add!(
+          len < spn thru try_parsers!(
 
-          terminated!(
-            len_add!(len < tag "declare-fun"),
-            len_add!(len < opt spc cmt)
-          ) >> apply!(_fun_dec_parser, offset + len, ctx) |
+            terminated!(
+              len_add!(len < tag "declare-fun"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(fun_dec_parser, offset + len, ctx) |
 
-          terminated!(
-            len_add!(len < tag "define-fun"),
-            len_add!(len < opt spc cmt)
-          ) >> apply!(_fun_def_parser, offset + len, ctx) |
+            terminated!(
+              len_add!(len < tag "define-fun"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(fun_def_parser, offset + len, ctx) |
 
-          terminated!(
-            len_add!(len < tag "define-prop"),
-            len_add!(len < opt spc cmt)
-          ) >> apply!(_prop_parser, offset + len, ctx) |
+            terminated!(
+              len_add!(len < tag "define-prop"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(prop_parser, offset + len, ctx) |
 
-          terminated!(
-            len_add!(len < tag "define-rel"),
-            len_add!(len < opt spc cmt)
-          ) >> apply!(_rel_parser, offset + len, ctx) |
+            terminated!(
+              len_add!(len < tag "define-rel"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(rel_parser, offset + len, ctx) |
 
-          terminated!(
-            len_add!(len < tag "define-sys"),
-            len_add!(len < opt spc cmt)
-          ) >> apply!(_sys_parser, offset + len, ctx)
+            terminated!(
+              len_add!(len < tag "define-sys"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(sys_parser, offset + len, ctx) |
 
+            terminated!(
+              len_add!(len < tag "verify-assuming"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(verify_assuming_parser, offset + len, ctx) |
+
+            terminated!(
+              len_add!(len < tag "verify"),
+              len_add!(len < opt spc cmt)
+            ) >> apply!(verify_parser, offset + len, ctx)
+
+          )
         )
+        ! at (offset + len),
+        with (spn, str) => (
+          spn, format!("expected VMT-LIB command, found `{}`", str), vec![]
+        ),
+        as Res
       ) >>
       len_add!(len < opt spc cmt) >>
       parse_or_fail!(
         len_add!(len < char ')')
-        ! at (offset + len), "closing command"
+        ! at (offset + len), "closing VMT-LIB command"
       ) >> (
-        Spnd::len_mk(Res::Exit, offset, len)
+        Spnd::len_mk(res.destroy().0, offset, len)
       )
     ),
     len_add!(len < opt spc cmt)
@@ -1185,7 +920,7 @@ mod test {
 
   #[test]
   fn sig_parser() {
-    use super::_sig_parser as sig_parser ;
+    use super::sig_parser ;
     let txt = "(Int Bool)" ;
     let res = try_parse_command!(sig_parser, 7, txt).unwrap().1 ;
     let (sig, spn) = res.destroy() ;
@@ -1220,28 +955,26 @@ mod test {
 
     let txt = "( Int Blah )" ;
     match try_parse_command!(sig_parser, 7, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(13, 4) ) ;
-        assert_eq!( desc, "expected `)` or type in signature declaration, found an identifier") ;
+      Err(e) => {
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(13, 4) ) ;
+        assert_eq!(
+          e.blah,
+          "expected `)` or type in signature declaration, found an identifier"
+        ) ;
       },
       res => panic!("unexpected result: {:?}", res),
     }
 
     let txt = "Blah )" ;
     match try_parse_command!(sig_parser, 7, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(7, 4) ) ;
-        assert_eq!( desc, "expected `(` starting signature declaration, found an identifier") ;
+      Err(e) => {
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(7, 4) ) ;
+        assert_eq!(
+          e.blah,
+          "expected `(` starting signature declaration, found an identifier"
+        ) ;
       },
       res => panic!("unexpected result: {:?}", res),
     }
@@ -1254,7 +987,7 @@ mod test {
 
   #[test]
   fn args_parser() {
-    use super::_args_parser as args_parser ;
+    use super::args_parser ;
 
     let mut ctx = get_context() ;
 
@@ -1307,15 +1040,12 @@ mod test {
 
     let txt = "Blah )" ;
     match try_parse_command!(args_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(7, 4) ) ;
+      Err(e) => {
+        e.print() ;
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(7, 4) ) ;
         assert_eq!(
-          desc, "expected `(` opening argument list, found an identifier"
+          e.blah, "expected `(` opening argument list, found an identifier"
         ) ;
       },
       res => panic!("unexpected result: {:?}", res),
@@ -1323,15 +1053,12 @@ mod test {
 
     let txt = "( (7 Int) )" ;
     match try_parse_command!(args_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(10, 1) ) ;
+      Err(e) => {
+        e.print() ;
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(10, 1) ) ;
         assert_eq!(
-          desc, "expected symbol in argument declaration, found an integer"
+          e.blah, "expected symbol in argument declaration, found an integer"
         ) ;
       },
       res => panic!("unexpected result: {:?}", res),
@@ -1339,15 +1066,12 @@ mod test {
 
     let txt = "( (blah 3.0) )" ;
     match try_parse_command!(args_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(15, 3) ) ;
+      Err(e) => {
+        e.print() ;
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(15, 3) ) ;
         assert_eq!(
-          desc, "expected type in argument declaration, found a rational"
+          e.blah, "expected type in argument declaration, found a rational"
         ) ;
       },
       res => panic!("unexpected result: {:?}", res),
@@ -1355,15 +1079,13 @@ mod test {
 
     let txt = "( (blah Int) (blih Int Real) )" ;
     match try_parse_command!(args_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(30, 4) ) ;
+      Err(e) => {
+        e.print() ;
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(30, 4) ) ;
         assert_eq!(
-          desc, "expected `)` closing argument declaration in argument list, \
+          e.blah,
+          "expected `)` closing argument declaration in argument list, \
           found a type"
         ) ;
       },
@@ -1372,15 +1094,13 @@ mod test {
 
     let txt = "( Int Blah )" ;
     match try_parse_command!(args_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert!(vec.is_empty()) ;
-        assert_eq!( spn, Spn::len_mk(9, 3) ) ;
+      Err(e) => {
+        e.print() ;
+        assert!(e.notes.is_empty()) ;
+        assert_eq!( e.span, Spn::len_mk(9, 3) ) ;
         assert_eq!(
-          desc, "expected `)` closing argument list, or an argument \
+          e.blah,
+          "expected `)` closing argument list, or an argument \
           declaration, found a type"
         ) ;
       },
@@ -1390,17 +1110,14 @@ mod test {
 
   #[test]
   fn fun_decl_parser() {
-    use super::_item_parser as item_parser ;
+    use super::item_parser ;
 
     let mut ctx = get_context() ;
 
     let txt = "(declare-fun prout (Int) Bool)" ;
     match try_parse_command!(item_parser, 7, ctx, txt) {
       Err(e) => {
-        println!("error:") ;
-        for e in e.iter() {
-          println!("> {}", e)
-        }
+        e.print() ;
         panic!("unexpected result")
       },
       Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 30) ),
@@ -1408,56 +1125,229 @@ mod test {
 
     let txt = "(declare-fun blah (Blah) Bool)" ;
     match try_parse_command!(item_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, mut vec), _
-        )
-      ) => {
-        assert_eq!( spn, Spn::len_mk(26, 4) ) ;
+      Err(mut e) => {
+        e.print() ;
+        assert_eq!( e.span, Spn::len_mk(26, 4) ) ;
         assert_eq!(
-          desc,
+          e.blah,
           "expected `)` or type in signature declaration, found an identifier"
         ) ;
         assert_eq!(
-          vec.pop(),
+          e.notes.pop(),
           Some(
             (Spn::len_mk(20, 4), "in this `declare-fun`".to_string())
           )
         )
-      },
-      Err(e) => {
-        println!("error:") ;
-        for e in e.iter() {
-          println!("> {}", e)
-        }
-        panic!("unexpected result")
       },
       Ok(res) => panic!("unexpected result: {:?}", res),
     }
 
     let txt = "(declare-fun blah (Int) Blah)" ;
     match try_parse_command!(item_parser, 7, ctx, txt) {
-      Err(
-        ::parse_errors::Error(
-          ::parse_errors::ErrorKind::ParseError(spn, desc, vec), _
-        )
-      ) => {
-        assert_eq!( spn, Spn::len_mk(31, 4) ) ;
+      Err(e) => {
+        e.print() ;
+        assert_eq!( e.span, Spn::len_mk(31, 4) ) ;
         assert_eq!(
-          desc,
+          e.blah,
           "expected type in `declare-fun`, \
           found an identifier".to_string()
         ) ;
         assert!(
-          vec.is_empty()
+          e.notes.is_empty()
         )
       },
+      Ok(res) => panic!("unexpected result: {:?}", res),
+    }
+  }
+
+  #[test]
+  fn fun_def_parser() {
+    use super::item_parser ;
+
+    let mut ctx = get_context() ;
+
+    let txt = "(define-fun prout ( (x Int) ) Bool (>= x 0))" ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
       Err(e) => {
-        println!("error:") ;
-        for e in e.iter() {
-          println!("> {}", e)
-        }
+        e.print() ;
         panic!("unexpected result")
+      },
+      Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 44) ),
+    }
+
+    let txt = "(define-fun prout ( Int) Bool)" ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(mut e) => {
+        e.print() ;
+        assert_eq!( e.span, Spn::len_mk(27, 3) ) ;
+        assert_eq!(
+          e.blah,
+          "expected `)` closing argument list, \
+          or an argument declaration, found a type"
+        ) ;
+        assert_eq!(
+          e.notes.pop(),
+          Some(
+            (Spn::len_mk(19, 5), "in this `define-fun`".to_string())
+          )
+        )
+      },
+      Ok(res) => panic!("unexpected result: {:?}", res),
+    }
+  }
+
+  #[test]
+  fn sys_parser() {
+    use super::item_parser ;
+
+    let mut ctx = get_context() ;
+
+    let txt = "\
+(define-sys prout
+  ;; State.
+  ( (x Int) )
+  ;; Init.
+  (>= (_curr x) 0)
+  ;; Trans.
+  (> (_ next x) (_ curr x))
+  ;; No calls.
+  ()
+)\
+    " ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        panic!("unexpected result")
+      },
+      Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 135) ),
+    }
+
+    let txt = "\
+(define-sys prout
+  ;; State.
+  ( (Int) )
+  ;; Init.
+  (>= (_curr x) 0)
+  ;; Trans.
+  (> (_ next x) (_ curr x))
+  ;; No calls.
+  ()
+)\
+    " ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(mut e) => {
+        e.print() ;
+        assert_eq!( e.span, Spn::len_mk(45, 1) ) ;
+        assert_eq!(
+          e.blah,
+          "expected type in argument declaration, found `)`"
+        ) ;
+        assert_eq!(
+          e.notes.pop(),
+          Some(
+            (Spn::len_mk(19, 5), "in this `define-sys`".to_string())
+          )
+        )
+      },
+      Ok(res) => panic!("unexpected result: {:?}", res),
+    }
+  }
+
+  #[test]
+  fn prop_parser() {
+    use super::item_parser ;
+
+    let mut ctx = get_context() ;
+
+    let txt = "\
+(define-sys prout
+  ;; State.
+  ( (x Int) )
+  ;; Init.
+  (>= (_curr x) 0)
+  ;; Trans.
+  (> (_ next x) (_ curr x))
+  ;; No calls.
+  ()
+)\
+    " ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        panic!("unexpected result")
+      },
+      Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 135) ),
+    }
+
+    let txt = "(define-prop blah prout (= (_ curr x) 0))" ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        panic!("unexpected result")
+      },
+      Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 41) ),
+    }
+
+    let txt = "(define-prop blah prout)" ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        assert_eq!( e.span, Spn::len_mk(20, 4) ) ;
+        assert_eq!(
+          e.blah,
+          "parse error in body of `define-prop`"
+        ) ;
+        assert!(e.notes.is_empty())
+      },
+      Ok(res) => panic!("unexpected result: {:?}", res),
+    }
+  }
+
+  #[test]
+  fn rel_parser() {
+    use super::item_parser ;
+
+    let mut ctx = get_context() ;
+
+    let txt = "\
+(define-sys prout
+  ;; State.
+  ( (x Int) )
+  ;; Init.
+  (>= (_curr x) 0)
+  ;; Trans.
+  (> (_ next x) (_ curr x))
+  ;; No calls.
+  ()
+)\
+    " ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        panic!("unexpected result")
+      },
+      Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 135) ),
+    }
+
+    let txt = "(define-rel blah prout (= (_ curr x) (_next x)))" ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        panic!("unexpected result")
+      },
+      Ok(res) => assert_eq!( res.1.to_span(), Spn::len_mk(7, 48) ),
+    }
+
+    let txt = "(define-rel blah prout)" ;
+    match try_parse_command!(item_parser, 7, ctx, txt) {
+      Err(e) => {
+        e.print() ;
+        assert_eq!( e.span, Spn::len_mk(19, 4) ) ;
+        assert_eq!(
+          e.blah,
+          "parse error in body of `define-rel`"
+        ) ;
+        assert!(e.notes.is_empty())
       },
       Ok(res) => panic!("unexpected result: {:?}", res),
     }

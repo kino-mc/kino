@@ -394,6 +394,67 @@ impl<
     self.nl()
   }
 
+  /// Logs an error.
+  pub fn log_error(
+    & self, t: & super::Tek, error: & ::errors::ErrorKind
+  ) {
+    use errors::ErrorKind::* ;
+    let pref = format!(
+      "{} {}", self.fmt.ppre(), self.mk_bad(self.fmt.pref())
+    ) ;
+    println!("{} {}: error.", pref, self.emph(t.to_str())) ;
+    println!("(error \"") ;
+    match * error {
+      ParseError(ref line, ref blah, ref notes) => {
+        // Text of the error.
+        let mut fst = true ;
+        for lainu in blah.lines() {
+          if fst {
+            println!("  [{}:{}] {}", line.l, line.c, self.mk_bad(lainu)) ;
+            fst = false
+          } else {
+            println!("    {}", self.mk_bad(lainu)) ;
+          }
+        }
+        // Line of the error, with subline.
+        let l = format!("{}", line.l) ;
+        let l_len = l.len() ;
+        let l = self.emph(& l) ;
+        println!("  {1: <0$} |", l_len, "") ;
+        println!("  {1: <0$} | {2}", l_len, l, line.line) ;
+        println!("  {1: <0$} | {2}", l_len, "", self.mk_bad(& line.subline)) ;
+        for & (ref line, ref blah) in notes {
+          // Text of the note.
+          let mut fst = true ;
+          for lainu in blah.lines() {
+            if fst {
+              println!("  [{}:{}] {}", line.l, line.c, self.emph(lainu)) ;
+              fst = false
+            } else {
+              println!("    {}", self.emph(lainu))
+            }
+          }
+          // Line of the note, with subline.
+          let l = format!("{}", line.l) ;
+          let l_len = l.len() ;
+          let l = self.emph(& l) ;
+          println!("  {1: <0$} |", l_len, "") ;
+          println!("  {1: <0$} | {2}", l_len, l, line.line) ;
+          println!("  {1: <0$} | {2}", l_len, "", self.emph(& line.subline)) ;
+        }
+      },
+      ref err => {
+        println!("(error \"") ;
+        for line in format!("{}", err).lines() {
+          println!("  {}", line)
+        }
+        println!("\")")
+      },
+    }
+    println!("\")") ;
+    self.nl()
+  }
+
   /// Logs a cex for some properties.
   pub fn log_cex(
     & self, t: & super::Tek, cex: & Cex, props: & [Sym]
