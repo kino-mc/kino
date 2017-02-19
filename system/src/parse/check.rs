@@ -229,15 +229,15 @@ macro_rules! new_type_check {
       $ctxt, & $term, $state, $sig
     ) {
       Ok($t) => if $t != $ty.val {
-        return Err(
+        Err(
           InternalParseError::mk(
-            $ty.span, format!($($fmt)+), vec![]
+            $ty.span.clone(), format!($($fmt)+), vec![]
           )
         )
-      },
-      Err(s) => return Err(
+      } else { Ok(()) },
+      Err(s) => Err(
         InternalParseError::mk(
-          $span, s, vec![]
+          $span.clone(), s, vec![]
         )
       ),
     }
@@ -321,15 +321,15 @@ pub fn check_fun_def(
   let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
-  for call_sym in body.apps.iter() {
+  for (ref call_sym, ref spns) in body.apps.iter() {
     match app_defined(ctxt, call_sym) {
       None => return Err(
-        InternalParseError::mk(
-          sym.span,
+        InternalParseError::vec_mk(
+          spns,
           format!(
             "application of unknown function symbol `{}` in body", call_sym
           ),
-          vec![]
+          "also used here"
         )
       ),
       Some(f) => {
@@ -339,7 +339,7 @@ pub fn check_fun_def(
     }
   } ;
   // No stateful var, all non-stateful vars exist.
-  for var in body.vars.iter() {
+  for (ref var, ref spns) in body.vars.iter() {
     match * var.get() {
       real_term::Var::Var(ref var_sym) => {
         match var_defined(ctxt, var_sym) {
@@ -350,12 +350,12 @@ pub fn check_fun_def(
             } ;
             if ! exists {
               return Err(
-                InternalParseError::mk(
-                  sym.span,
+                InternalParseError::vec_mk(
+                  spns,
                   format!(
                     "unknown constant function symbol `{}` in body", var_sym
                   ),
-                  vec![]
+                  "also used here"
                 )
               )
             }
@@ -364,19 +364,21 @@ pub fn check_fun_def(
         }
       },
       _ => return Err(
-        InternalParseError::mk(
-          sym.span,
+        InternalParseError::vec_mk(
+          spns,
           format!("illegal state variable `{}` in body", var),
-          vec![]
+          "also used here"
         )
       ),
     }
   } ;
 
-  new_type_check!(
-    ctxt, body.term, typ, sig: args.args(), sym.span,
-    t => "body of function is inconsistent with return type\n  \
-      expected {}, got {}", typ.val, t
+  try!(
+    new_type_check!(
+      ctxt, body.term, typ, sig: args.args(), sym.span,
+      t => "body of function is inconsistent with return type\n  \
+        expected {}, got {}", typ.val, t
+    )
   ) ;
 
   match ctxt.factory().set_fun_type(
@@ -396,11 +398,11 @@ pub fn check_fun_def(
 }
 
 enum CheckFailed {
-  HasNext(Var),
-  HasSVar(Var),
-  UnknownVar(Var),
-  UnknownSVar(Var),
-  UnknownCall(Sym),
+  HasNext(Var, Vec<Spn>),
+  HasSVar(Var, Vec<Spn>),
+  UnknownVar(Var, Vec<Spn>),
+  UnknownSVar(Var, Vec<Spn>),
+  UnknownCall(Sym, Vec<Spn>),
 }
 
 /// Checks everything in a term is well defined.
@@ -422,34 +424,34 @@ fn check_term_and_dep(
 
   let mut bindings = HashSet::with_capacity(locals.len()) ;
 
-  for var in term.vars.iter() {
+  for (ref var, ref spns) in term.vars.iter() {
     match * var.get() {
       NSVar(ref var_sym) => match is_sym_in_locals(var_sym, locals) {
         Some( (sym, term) ) => {
           bindings.insert( (sym, term) ) ; ()
         },
         None => match var_defined(ctxt, var_sym) {
-          None => return Err( UnknownVar(var.clone()) ),
+          None => return Err( UnknownVar((* var).clone(), (* spns).clone()) ),
           Some(fun) => { calls.insert(fun) ; () },
         },
       },
       SVar(ref var_sym, ref st) => if ! svar_allowed {
-        return Err( HasSVar(var.clone()) )
+        return Err( HasSVar((* var).clone(), (* spns).clone()) )
       } else {
         if Next == * st && ! next_allowed {
-          return Err( HasNext(var.clone()) )
+          return Err( HasNext((* var).clone(), (* spns).clone()) )
         } else {
           if ! svar_in_state(var_sym, state) {
-            return Err( UnknownSVar(var.clone()) )
+            return Err( UnknownSVar((* var).clone(), (* spns).clone()) )
           }
         }
       },
     }
   } ;
 
-  for app_sym in term.apps.iter() {
+  for (ref app_sym, ref spns) in term.apps.iter() {
     match app_defined(ctxt, app_sym) {
-      None => return Err( UnknownCall(app_sym.clone()) ),
+      None => return Err( UnknownCall((* app_sym).clone(), (* spns).clone()) ),
       Some(fun) => {
         // Don't care if it was already there.
         calls.insert(fun) ;
@@ -482,30 +484,32 @@ pub fn check_prop(
   let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
-  for app_sym in body.apps.iter() {
+  for (ref app_sym, ref spns) in body.apps.iter() {
     match app_defined(ctxt, app_sym) {
-      None => return Err(
-        InternalParseError::mk(
-          sym.span,
+    None => return Err(
+        InternalParseError::vec_mk(
+          spns,
           format!(
-            "application of unknown function symbol `{}`in body", app_sym
+            "application of unknown function symbol `{}` in body", app_sym
           ),
-          vec![]
+          "also used here"
         )
       ),
       Some(fun) => { calls.insert(fun) ; },
     }
   } ;
   // Stateful var belong to state of system, non-stateful var exist.
-  for var in body.vars.iter() {
+  for (ref var, ref spns) in body.vars.iter() {
     match * var.get() {
       // Non-stateful var exist.
       real_term::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
         None => return Err(
-          InternalParseError::mk(
-            sym.span,
-            format!("unknown constant function symbol `{}` in body", var_sym),
-            vec![]
+          InternalParseError::vec_mk(
+            spns,
+            format!(
+              "unknown constant function symbol `{}` in body", var_sym
+            ),
+            "also used here"
           )
         ),
         Some(fun) => { calls.insert(fun) ; },
@@ -516,42 +520,44 @@ pub fn check_prop(
         var_sym, sys.state()
       ) {
         return Err(
-          InternalParseError::mk(
-            sym.span.clone(),
+          InternalParseError::vec_mk(
+            spns,
             format!("unknown state variable `{}` in body", var_sym),
-            vec![
-              (spnd_sys.span, "state variables must belong \
-                to the system referenced here".into()
-              )
-            ]
+            "also used here"
+          ).add_note(
+            spnd_sys.span,
+            "state variables must belong \
+            to the system referenced here".into()
           )
         )
       },
       real_term::Var::SVar(_, ::term::State::Next) => return Err(
-        InternalParseError::mk(
-          sym.span.clone(),
+        InternalParseError::vec_mk(
+          spns,
           format!(
             "illegal state variable in next state `{}` in body", var.get()
           ),
-          vec![
-            (spnd_sys.span, "only state variables of this system in the \
-              current state are allowed in properties\n\
-              Use `define-rel` instead to allow state variables in the next \
-              state".into()
-            )
-          ]
+          "also used here"
+        ).add_note(
+          spnd_sys.span,
+          "only state variables of this system in the \
+          current state are allowed in properties\n\
+          Use `define-rel` instead to allow state variables in the next \
+          state".into()
         )
       ),
     }
   } ;
 
-  new_type_check!(
-    ctxt, body.term, Spnd::mk(
-      Type::Bool, sym.span.clone()
-    ), state: sys.state().args(),
-    sym.span,
-    t => "body of property should have type Bool, got {}", t
-  ) ;
+  try!{
+    new_type_check!(
+      ctxt, body.term, Spnd::mk(
+        Type::Bool, sym.span.clone()
+      ), state: sys.state().args(),
+      sym.span,
+      t => "body of property should have type Bool, got {}", t
+    )
+  }
 
   // Unwrap cannot fail, we just checked no svar was used as next.
   let nxt = ctxt.factory().bump(body.term.clone()).unwrap() ;
@@ -580,30 +586,32 @@ pub fn check_rel(
   let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
-  for app_sym in body.apps.iter() {
+  for (ref app_sym, ref spns) in body.apps.iter() {
     match app_defined(ctxt, app_sym) {
       None => return Err(
-        InternalParseError::mk(
-          sym.span,
+        InternalParseError::vec_mk(
+          spns,
           format!(
             "application of unknown function symbol `{}`in body", app_sym
           ),
-          vec![]
+          "also used here"
         )
       ),
       Some(fun) => { calls.insert(fun) ; },
     }
   } ;
   // Stateful var belong to state of system, non-stateful var exist.
-  for var in body.vars.iter() {
+  for (ref var, ref spns) in body.vars.iter() {
     match * var.get() {
       // Non-stateful var exist.
       real_term::Var::Var(ref var_sym) => match var_defined(ctxt, var_sym) {
         None => return Err(
-          InternalParseError::mk(
-            sym.span,
-            format!("unknown constant function symbol `{}` in body", var_sym),
-            vec![]
+          InternalParseError::vec_mk(
+            spns,
+            format!(
+              "unknown constant function symbol `{}` in body", var_sym
+            ),
+            "also used here"
           )
         ),
         Some(fun) => { calls.insert(fun) ; },
@@ -614,26 +622,27 @@ pub fn check_rel(
         var_sym, sys.state()
       ) {
         return Err(
-          InternalParseError::mk(
-            sym.span.clone(),
+          InternalParseError::vec_mk(
+            spns,
             format!("unknown state variable `{}` in body", var_sym),
-            vec![
-              (spnd_sys.span, "state variables must belong \
-                to the system referenced here".into()
-              )
-            ]
+            "also used here"
+          ).add_note(
+            spnd_sys.span, "state variables must belong \
+            to the system referenced here".into()
           )
         )
       },
     }
   } ;
 
-  new_type_check!(
-    ctxt, body.term, Spnd::mk(
-      Type::Bool, sym.span.clone()
-    ), state: sys.state().args(), sym.span.clone(),
-    t => "body of relation should have type Bool, got {}", t
-  ) ;
+  try!{
+    new_type_check!(
+      ctxt, body.term, Spnd::mk(
+        Type::Bool, sym.span.clone()
+      ), state: sys.state().args(), sym.span.clone(),
+      t => "body of relation should have type Bool, got {}", t
+    )
+  }
 
   let body = STerm::Two(body.term) ;
   Ok(
@@ -649,39 +658,39 @@ macro_rules! sys_try {
           Vec::from_iter( bindings.into_iter() ), $term
         )
       ),
-      Err( HasNext(var) ) => Err(
-        InternalParseError::mk(
-          $span, format!(
-            "illegal next state variable {}", $blah
-          ), vec![]
+      Err( HasNext(var, spns) ) => Err(
+        InternalParseError::vec_mk(
+          & spns, format!(
+            "illegal next state variable `{}` {}", var, $blah
+          ), "also used here"
         )
       ),
-      Err( HasSVar(var) ) => Err(
-        InternalParseError::mk(
-          $span, format!(
-            "illegal state variable {}", $blah
-          ), vec![]
+      Err( HasSVar(var, spns) ) => Err(
+        InternalParseError::vec_mk(
+          & spns, format!(
+            "illegal state variable `{}`, {}", var, $blah
+          ), "also used here"
         )
       ),
-      Err( UnknownVar(var) ) => Err(
-        InternalParseError::mk(
-          $span, format!(
-            "unknown constant function symbol {}", $blah
-          ), vec![]
+      Err( UnknownVar(var, spns) ) => Err(
+        InternalParseError::vec_mk(
+          & spns, format!(
+            "unknown constant function symbol `{}`, {}", var, $blah
+          ), "also used here"
         )
       ),
-      Err( UnknownSVar(var) ) => Err(
-        InternalParseError::mk(
-          $span, format!(
-            "unknown state variable {}", $blah
-          ), vec![]
+      Err( UnknownSVar(var, spns) ) => Err(
+        InternalParseError::vec_mk(
+          & spns, format!(
+            "unknown state variable `{}`, {}", var, $blah
+          ), "also used here"
         )
       ),
-      Err( UnknownCall(s) ) => Err(
-        InternalParseError::mk(
-          $span, format!(
-            "application of unknown function symbol {}", $blah
-          ), vec![]
+      Err( UnknownCall(s, spns) ) => Err(
+        InternalParseError::vec_mk(
+          & spns, format!(
+            "application of unknown function symbol `{}`, {}", s, $blah
+          ), "also used here"
         )
       ),
     }
@@ -718,12 +727,14 @@ pub fn check_sys(
       )
     ) ;
 
-    new_type_check!(
-      ctxt, term, typ.clone(), state: state.args(), sym.span.clone(),
-      t =>
-        "local variable {} was declared with type {}, got {}",
-        local_sym, typ, t
-    ) ;
+    try!{
+      new_type_check!(
+        ctxt, term, typ.clone(), state: state.args(), sym.span.clone(),
+        t =>
+          "local variable {} was declared with type {}, got {}",
+          local_sym, typ, t
+      )
+    }
 
     local_vars.push( (local_sym.val, typ.val, term) )
   } ;
@@ -732,7 +743,7 @@ pub fn check_sys(
   // * no next state vars
   // * current state vars exist in state
   // * non-stateful var exist.
-  new_type_check!(
+  let maybe_ok = new_type_check!(
     ctxt, init.term, Spnd::mk(
       Type::Bool, sym.span.clone()
     ), state: state.args(), sym.span.clone(),
@@ -746,11 +757,12 @@ pub fn check_sys(
         "in init predicate"
     )
   ) ;
+  try!{ maybe_ok }
 
   // Trans:
   // * state vars exist in state
   // * non-stateful var exist.
-  new_type_check!(
+  let maybe_ok = new_type_check!(
     ctxt, trans.term, Spnd::mk(
       Type::Bool, sym.span.clone()
     ), state: state.args(), sym.span,
@@ -764,6 +776,7 @@ pub fn check_sys(
       "in trans predicate"
     )
   ) ;
+  try!{ maybe_ok }
 
   let mut subsys = Vec::with_capacity(sub_syss.len()) ;
   // Sub systems exist and number of params matches their arity.

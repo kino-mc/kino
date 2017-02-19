@@ -58,6 +58,27 @@ impl InternalParseError {
     InternalParseError { span: span, blah: blah, notes: notes }
   }
 
+  /// Creates an internal parse error from a vector of spans for something.
+  #[inline]
+  pub fn vec_mk(spns: & Vec<Spn>, blah: String, note: & str) -> Self {
+    let mut spns = spns.iter() ;
+    let fst = if let Some(fst) = spns.next() { fst.clone() } else {
+      Spn::len_mk(1,1)
+    } ;
+    Self::mk(
+      fst, blah, spns.map(
+        |spn| (spn.clone(), note.into())
+      ).collect()
+    )
+  }
+
+  /// Adds a note.
+  #[inline]
+  pub fn add_note(mut self, spn: Spn, blah: String) -> Self {
+    self.notes.push( (spn, blah) ) ;
+    self
+  }
+
   /// Transforms an `InternalParseError` in an `Error`.
   #[inline]
   pub fn to_parse_error(self, txt: & str, line_cnt: usize) -> Error {

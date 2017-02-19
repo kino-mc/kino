@@ -40,7 +40,6 @@ use base::* ;
 mod parsers ;
 pub use self::parsers::InternalParseError ;
 pub mod check ;
-use self::check::CheckError ;
 
 use self::parsers::* ;
 
@@ -680,7 +679,7 @@ impl Context {
     let mut lines = BufReader::new(reader).lines() ;
     let mut buffer = String::with_capacity(self.buffer.capacity()) ;
     // The last line parsed. Used for error reconstruction.
-    let mut curr_line = 0 ;
+    let mut _curr_line = 0 ;
     // panic!("bla")
 
     // Items are read ONE BY ONE, thanks to the open/close paren count.
@@ -690,7 +689,7 @@ impl Context {
 
       let mut new_things = false ;
       let (mut op, mut cp) = (0,0) ;
-      curr_line = self.line ;
+      _curr_line = self.line ;
 
       // println!("  entering lines loop") ;
       'fetch: loop {
@@ -732,7 +731,7 @@ impl Context {
       // ) ;
       // println!("  buffers: {}", buffer) ;
       // println!("         : {}", self.buffer) ;
-      // println!("buffer parsed ({}):", curr_line) ;
+      // println!("buffer parsed ({}):", _curr_line) ;
       // for line in self.buffer.lines() {
       //   println!("  `{}`", line)
       // }
@@ -759,7 +758,7 @@ impl Context {
         Error(
           ::nom::ErrorKind::Custom(e)
         ) => return Err(
-          e.to_parse_error(& self.buffer, curr_line + 1)
+          e.to_parse_error(& self.buffer, _curr_line + 1)
         ),
         Incomplete(_) => {
           // println!("Context:") ;

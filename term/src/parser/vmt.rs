@@ -10,7 +10,7 @@
 //! Parsers for the `vmt` format.
 
 use std::str ;
-use std::collections::HashSet ;
+use std::collections::{ HashMap, HashSet } ;
 use std::fmt ;
 
 use nom::{ IResult } ;
@@ -38,12 +38,12 @@ pub struct TermAndDep {
   /// The term parsed.
   pub term: Term,
   /// The function symbol applications in the term.
-  pub apps: HashSet<Sym>,
+  pub apps: HashMap<Sym, Vec<Spn>>,
   /// The variables in the term.
-  pub vars: HashSet<Var>,
+  pub vars: HashMap<Var, Vec<Spn>>,
   /// Types found in the term.
   /// Does **not** include the types of variables.
-  pub types: HashSet<Type>,
+  pub types: HashMap<Type, Vec<Spn>>,
   /// Whether the term is linear.
   pub linear: bool,
   /// Whether the term is quantifier-free.
@@ -62,13 +62,13 @@ impl TermAndDep {
     factory: & Factory, var: Var, span: Spn
   ) -> Self {
     let term: Term = factory.mk_var(var.clone()) ;
-    let mut vars = HashSet::new() ;
-    vars.insert(var) ;
+    let mut vars = HashMap::new() ;
+    vars.insert(var, vec![span.clone()]) ;
     TermAndDep {
       term: term,
-      apps: HashSet::new(),
+      apps: HashMap::new(),
       vars: vars,
-      types: HashSet::new(),
+      types: HashMap::new(),
       linear: true,
       qf: true,
       span: span,
@@ -79,13 +79,13 @@ impl TermAndDep {
     factory: & Factory, cst: Cst, span: Spn
   ) -> Self {
     use term::CstMaker ;
-    let mut types = HashSet::new() ;
-    types.insert( cst.get().typ() ) ;
+    let mut types = HashMap::new() ;
+    types.insert( cst.get().typ(), vec![span.clone()] ) ;
     let term = factory.cst(cst) ;
     TermAndDep {
       term: term,
-      apps: HashSet::new(),
-      vars: HashSet::new(),
+      apps: HashMap::new(),
+      vars: HashMap::new(),
       types: types,
       linear: true,
       qf: true,
@@ -97,29 +97,36 @@ impl TermAndDep {
   #[inline(always)]
   fn merge(kids: Vec<TermAndDep>) -> (
     Vec<Term>,
-    HashSet<Sym>,
-    HashSet<Var>,
-    HashSet<Type>,
+    HashMap<Sym, Vec<Spn>>,
+    HashMap<Var, Vec<Spn>>,
+    HashMap<Type, Vec<Spn>>,
     usize,
     bool,
     bool,
   ) {
     use std::iter::Extend ;
     let mut subs = vec![] ;
-    let mut apps = HashSet::new() ;
-    let mut vars = HashSet::new() ;
-    let mut types = HashSet::new() ;
+    let mut apps = HashMap::new() ;
+    let mut vars = HashMap::new() ;
+    let mut types = HashMap::new() ;
     let mut linear = true ;
     let mut qf = true ;
     let mut kids_with_vars = 0 ;
     for kid in kids.into_iter() {
       subs.push( kid.term ) ;
-      apps.extend( kid.apps ) ;
+      for (sym, spns) in kid.apps.into_iter() {
+        apps.entry(sym).or_insert(vec![]).extend( spns )
+      }
+      // apps.extend( kid.apps ) ;
       if ! kid.vars.is_empty() {
         kids_with_vars = kids_with_vars + 1
       } ;
-      vars.extend( kid.vars ) ;
-      types.extend( kid.types ) ;
+      for (sym, spns) in kid.vars.into_iter() {
+        vars.entry(sym).or_insert(vec![]).extend( spns )
+      }
+      for (ty, spns) in kid.types.into_iter() {
+        types.entry(ty).or_insert(vec![]).extend( spns )
+      }
       if ! kid.linear { linear = false } ;
       if ! kid.qf { qf = false } ;
     }
@@ -160,7 +167,7 @@ impl TermAndDep {
       subs, mut apps, vars, types, kids_with_vars, linear, qf
     ) = Self::merge(kids) ;
     let linear = linear && kids_with_vars >= 2 ;
-    apps.insert(sym.clone()) ;
+    apps.insert( sym.clone(), vec![span.clone()] ) ;
     let term = factory.app(sym, subs) ;
     TermAndDep {
       term: term,
@@ -188,9 +195,9 @@ impl TermAndDep {
     for (sym, typ) in bindings.into_iter() {
       let var = factory.var(sym.clone()) ;
       let was_there = vars.remove(& var) ;
-      if was_there {
+      if was_there.is_some() {
         binds.push( (sym, * typ) ) ;
-        types.insert(* typ) ;
+        types.entry(typ.val).or_insert(vec![]).push(typ.span) ;
         ()
       } ;
     } ;
@@ -244,7 +251,7 @@ impl TermAndDep {
     for (sym, res) in bindings.into_iter() {
       let var = factory.var(sym.clone()) ;
       let was_there = vars.remove(& var) ;
-      if was_there {
+      if was_there.is_some() {
         let term = res.term ;
         apps.extend(res.apps) ;
         bind_vars.extend(res.vars) ;
