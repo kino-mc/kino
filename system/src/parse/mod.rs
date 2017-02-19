@@ -38,6 +38,7 @@ use term::parsing::* ;
 use Error as ExtError ;
 use base::* ;
 mod parsers ;
+pub use self::parsers::InternalParseError ;
 pub mod check ;
 use self::check::CheckError ;
 
@@ -731,7 +732,7 @@ impl Context {
       // ) ;
       // println!("  buffers: {}", buffer) ;
       // println!("         : {}", self.buffer) ;
-      // println!("buffer parsed:") ;
+      // println!("buffer parsed ({}):", curr_line) ;
       // for line in self.buffer.lines() {
       //   println!("  `{}`", line)
       // }
@@ -883,21 +884,23 @@ impl Context {
   /// Adds a function declaration to the context.
   pub fn add_fun_dec(
     & mut self, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
-  ) -> Result<(), CheckError> {
-    match check::check_fun_dec(self, sym, sig, typ) {
-      Ok(callable) => Ok( self.internal_add_callable(callable) ),
-      Err(e) => Err(e),
-    }
+  ) -> Result<(), InternalParseError> {
+    check::check_fun_dec(self, sym, sig, typ).map(
+      |callable| self.internal_add_callable(callable)
+    )
+    // match check::check_fun_dec(self, sym, sig, typ) {
+    //   Ok(callable) => Ok( self.internal_add_callable(callable) ),
+    //   Err(e) => Err(e),
+    // }
   }
 
   /// Adds a function definition to the context.
   pub fn add_fun_def(
     & mut self, sym: Spnd<Sym>, args: Args, typ: Spnd<Type>, body: TermAndDep
-  ) -> Result<(), CheckError> {
-    match check::check_fun_def(self, sym, args, typ, body) {
-      Ok(callable) => Ok( self.internal_add_callable(callable) ),
-      Err(e) => Err(e),
-    }
+  ) -> Result<(), InternalParseError> {
+    check::check_fun_def(self, sym, args, typ, body).map(
+      |callable| self.internal_add_callable(callable)
+    )
   }
 
   /// Adds a state property definition to the context.

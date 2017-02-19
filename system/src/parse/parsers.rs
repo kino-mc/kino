@@ -22,6 +22,27 @@ use { Line, Error } ;
 /// Alias type for parsing result.
 pub type IRes<'a, T> = IResult<Bytes<'a>, T, InternalParseError> ;
 
+/// Augments an internal parse error with notes.
+macro_rules! try_parserr {
+  ($p:pat = $e:expr => $then:expr) => (
+    match $e {
+      Err(e) => return ::nom::IResult::Error( ::nom::ErrorKind::Custom(e) ),
+      Ok($p) => $then,
+    }
+  ) ;
+  ($p:pat = $e:expr => $then:expr $(, ($spn:expr, $blah:expr) )*) => (
+    match $e {
+      Err(mut e) => {
+        $(
+          e.notes.push( ($spn, $blah) ) ;
+        )*
+        return ::nom::IResult::Error( ::nom::ErrorKind::Custom(e) )
+      },
+      Ok($p) => $then,
+    }
+  ) ;
+}
+
 /// Internal parse error, raised before it is matched against the actual text
 /// input.
 #[derive(Debug, PartialEq, Eq)]
@@ -104,6 +125,7 @@ fn line_extractor(
       _ => (),
     }
   }
+  if end < bgn { end = cpt }
   debug_assert!(bgn > 0) ;
   debug_assert!(end > 0) ;
   debug_assert!(end < txt.len()) ;
@@ -338,7 +360,7 @@ fn fun_dec_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
 ) -> IRes<'a, Spnd<Res>> {
   let mut len = 0 ;
-  println!("offset: {}", offset) ;
+  // println!("offset: {}", offset) ;
   do_parse!(
     bytes,
     sym: parse_or_fail!(
@@ -363,21 +385,13 @@ fn fun_dec_parser<'a>(
         len < type (offset + len)
       )
       ! at (offset + len), "in `declare-fun`"
-    ) >> ({
-      let sym_span = sym.span.clone() ;
-      match c.add_fun_dec(sym, sig, typ) {
-        Err(err) => return ::nom::IResult::Error(
-          ::nom::ErrorKind::Custom(
-            InternalParseError::mk(
-              sym_span.clone(), format!("{}", err), vec![
-                (sym_span, "in this `declare-fun`".into())
-              ]
-            ).into()
-          )
-        ),
-        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
-      }
-    })
+    ) >> (
+      try_parserr!(
+        _ = c.add_fun_dec(sym, sig, typ) => Spnd::len_mk(
+          Res::Success, offset, len
+        )
+      )
+    )
   )
 }
 
@@ -417,18 +431,24 @@ fn fun_def_parser<'a>(
       ! at sym.span.clone(), "parse error in body of `define-fun`"
     ) >> ({
       let sym_span = sym.span.clone() ;
-      match c.add_fun_def(sym, args, typ, body) {
-        Err(err) => return ::nom::IResult::Error(
-          ::nom::ErrorKind::Custom(
-            InternalParseError::mk(
-              sym_span.clone(), format!("{}", err), vec![
-                (sym_span, "in this `define-fun`".into())
-              ]
-            )
-          )
-        ),
-        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
-      }
+      try_parserr!(
+        _ = c.add_fun_def(sym, args, typ, body) => Spnd::len_mk(
+          Res::Success, offset, len
+        ), (sym_span, "in this `declare-fun`".into())
+      )
+      // let sym_span = sym.span.clone() ;
+      // match c.add_fun_def(sym, args, typ, body) {
+      //   Err(err) => return ::nom::IResult::Error(
+      //     ::nom::ErrorKind::Custom(
+      //       InternalParseError::mk(
+      //         sym_span.clone(), format!("{}", err), vec![
+      //           (sym_span, "in this `define-fun`".into())
+      //         ]
+      //       )
+      //     )
+      //   ),
+      //   Ok(()) => Spnd::len_mk(Res::Success, offset, len),
+      // }
     })
   )
 }

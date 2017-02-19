@@ -23,6 +23,7 @@ use super::{ Context, Atom, Res } ;
 
 use self::CheckError::* ;
 use self::CheckFailed::* ;
+use parse::InternalParseError ;
 
 /// Parse error.
 #[derive(Debug)]
@@ -146,6 +147,21 @@ macro_rules! check_sym {
   )
 }
 
+/// Checks that an identifier is unused.
+macro_rules! new_check_sym {
+  ($ctxt:expr, $sym:expr) => (
+    match $ctxt.sym_unused(& $sym.val) {
+      None => (),
+      Some(_) => return Err(
+        InternalParseError::mk(
+          $sym.span, format!("redefining symbol `{}`", $sym.val),
+          vec![]
+        )
+      ),
+    }
+  )
+}
+
 /// Type checks a term.
 macro_rules! type_check {
   (
@@ -182,6 +198,47 @@ macro_rules! type_check {
       },
       Err(s) => return Err(
         TypeCheck( format!("{}\n{}", $desc, s) )
+      ),
+    }
+  ) ;
+}
+
+/// Type checks a term.
+macro_rules! new_type_check {
+  (
+    $ctxt:expr, $term:expr, $ty:expr,
+    state: $state:expr, $span:expr, $( $fmt:tt )+
+  ) => (
+    new_type_check!(internal
+      $ctxt, $term, $ty, Some($state), None, $span, $( $fmt )+
+    )
+  ) ;
+  (
+    $ctxt:expr, $term:expr, $ty:expr,
+    sig: $sig:expr, $span:expr, $( $fmt:tt )+
+  ) => (
+    new_type_check!(internal
+      $ctxt, $term, $ty, None, Some($sig), $span, $( $fmt )+
+    )
+  ) ;
+  (
+    internal $ctxt:expr, $term:expr, $ty:expr,
+    $state:expr, $sig:expr, $span:expr, $t:ident => $( $fmt:tt )+
+  ) => (
+    match ::type_check::type_check(
+      $ctxt, & $term, $state, $sig
+    ) {
+      Ok($t) => if $t != $ty.val {
+        return Err(
+          InternalParseError::mk(
+            $ty.span, format!($($fmt)+), vec![]
+          )
+        )
+      },
+      Err(s) => return Err(
+        InternalParseError::mk(
+          $span, s, vec![]
+        )
       ),
     }
   ) ;
@@ -241,14 +298,13 @@ fn is_sym_in_locals(
 /// Checks that a function declaration is legal.
 pub fn check_fun_dec(
   ctxt: & Context, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
-) -> Result<Callable, CheckError> {
-  let desc = super::uf_desc ;
-  check_sym!(ctxt, sym.get().clone(), desc) ;
+) -> Result<Callable, InternalParseError> {
+  new_check_sym!(ctxt, sym) ;
   match ctxt.factory().set_fun_type(sym.get().clone(), * typ.get()) {
     Ok(()) => (),
     Err(e) => return Err(
-      TypeCheck(
-        format!("in `(declare-fun {} ...)\n{}`", sym, e)
+      InternalParseError::mk(
+        sym.span, format!("{}", e), vec![]
       )
     ),
   } ;
@@ -259,16 +315,21 @@ pub fn check_fun_dec(
 pub fn check_fun_def(
   ctxt: & Context, sym: Spnd<Sym>, args: Args,
   typ: Spnd<Type>, body: TermAndDep
-) -> Result<Callable, CheckError> {
-  let desc = super::fun_desc ;
-  check_sym!(ctxt, sym.get().clone(), desc) ;
+) -> Result<Callable, InternalParseError> {
+  new_check_sym!(ctxt, sym) ;
 
   let mut calls = CallSet::empty() ;
 
   // All symbols used in applications actually exist.
   for call_sym in body.apps.iter() {
     match app_defined(ctxt, call_sym) {
-      None => return Err( UkCall(call_sym.clone(), sym.get().clone(), desc) ),
+      None => return Err(
+        InternalParseError::mk(
+          sym.span,
+          format!("call to unknown function symbol `{}`", call_sym),
+          vec![]
+        )
+      ),
       Some(f) => {
         // Don't care if it was already there.
         calls.insert(f) ;
@@ -286,22 +347,32 @@ pub fn check_fun_def(
               if dsym.get() == var_sym { exists = true }
             } ;
             if ! exists {
-              return Err( UkVar(var.clone(), sym.get().clone(), desc) )
+              return Err(
+                InternalParseError::mk(
+                  sym.span,
+                  format!("unknown constant function symbol `{}`", var_sym),
+                  vec![]
+                )
+              )
             }
           },
           Some(fun) => { calls.insert(fun) ; },
         }
       },
-      _ => return Err( SVarInDef(var.clone(), sym.get().clone()) ),
+      _ => return Err(
+        InternalParseError::mk(
+          sym.span,
+          format!("illegal state variable `{}` in `define-fun`", var),
+          vec![]
+        )
+      ),
     }
   } ;
 
-  type_check!(
-    ctxt, body.term, typ.get().clone(), sig: args.args(),
-    format!("in body of `(define-fun {} ...)`", sym),
+  new_type_check!(
+    ctxt, body.term, typ, sig: args.args(), sym.span,
     t => "body of function is inconsistent with return type\n  \
-      expected {}, got {}",
-    typ, t
+      expected {}, got {}", typ.val, t
   ) ;
 
   match ctxt.factory().set_fun_type(
@@ -309,8 +380,8 @@ pub fn check_fun_def(
   ) {
     Ok(()) => (),
     Err(e) => return Err(
-      TypeCheck(
-        format!("in `(define-fun {} ...)\n{}`", sym, e)
+      InternalParseError::mk(
+        sym.span, format!("{}", e), vec![]
       )
     ),
   } ;

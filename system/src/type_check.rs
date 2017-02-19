@@ -53,9 +53,7 @@ fn checker(
           Ok(typ) => Ok( (
             context.factory().app(sym, nu_kids), typ
           ) ),
-          Err( (arg, bla) ) => return Err(
-            format!("{}\nparameter {}:\n  {}", bla, arg, nu_kids[arg])
-          ),
+          Err( (_, bla) ) => return Err(bla),
         },
         None => return Err(
           format!("application of unknown function symbol {}", sym)
@@ -77,12 +75,12 @@ fn checker(
         Ok(typ) => Ok( (
           context.factory().op(op, nu_kids), typ
         ) ),
-        Err( (args, mut bla) ) => {
-          if let Some(args) = args {
-            for arg in args {
-              bla = format!("{}\nargument {}:\n  {}", bla, arg, nu_kids[arg])
-            } ;
-          } ;
+        Err( (_, bla) ) => {
+          // if let Some(args) = args {
+          //   for arg in args {
+          //     bla = format!("{}\nargument {}:\n  {}", bla, arg, nu_kids[arg])
+          //   } ;
+          // } ;
           return Err(bla)
         },
       }
@@ -105,9 +103,8 @@ fn checker(
       if typ != Type::Bool {
         return Err(
           format!(
-            "forall quantifier expects Bool but got {}\n\
-              argument:\n  {}",
-            typ, kid
+            "forall quantifier expects Bool but got {}",
+            typ
           )
         )
       } ;
@@ -121,9 +118,7 @@ fn checker(
       if typ != Type::Bool {
         return Err(
           format!(
-            "exists quantifier expects Bool but got {}\n\
-              argument:\n  {}",
-            typ, kid
+            "exists quantifier expects Bool but got {}", typ
           )
         )
       } ;
