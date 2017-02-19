@@ -18,9 +18,9 @@ pub type TmpTermSet = HashSet<TmpTerm> ;
 /// A map from temporary terms to something.
 pub type TmpTermMap<Val> = HashMap<TmpTerm, Val> ;
 
-/** *Temporary* terms that are not hashconsed.
-
-**Warning**: no `|`-quoting is added when printing a symbol in SMT-LIB 2. */
+/// *Temporary* terms that are not hashconsed.
+///
+/// **Warning**: no `|`-quoting is added when printing a symbol in SMT-LIB 2.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum TmpTerm {
   /// A (typed) symbol.

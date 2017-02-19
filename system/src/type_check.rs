@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Type checking. */
+//! Type checking.
 
 use std::collections::HashMap ;
 
@@ -16,22 +16,29 @@ use term::{
 } ;
 use term::zip::* ;
 use term::real_term::Var as RVar ;
+use term::parsing::{ Spn, Spnd } ;
 
 use super::parse::Context ;
 
-/** Function passed to `fold` over terms for type checking. */
+/// Function passed to `fold` over terms for type checking.
 fn checker(
   context: & Context,
-  state: & Option<HashMap<Sym, Type>>,
-  sig: & Option<HashMap<Sym, Type>>,
+  state: & Option<
+    HashMap< Sym, (Spn, Spnd<Type>) >
+  >,
+  sig: & Option<
+    HashMap< Sym, (Spn, Spnd<Type>) >
+  >,
   step: Step<(Term, Type)>,
-  bindings: & [ HashMap<Sym, (Term, Type)> ],
+  bindings: & [
+    HashMap< Sym, (Term, Type) >
+  ],
   quantified: & [ HashMap<Sym, Type> ],
 ) -> Result<(Term, Type), String> {
   use term::zip::Step::* ;
   match step {
 
-    /* Application. */
+    // Application.
     App(sym, kids) => {
       let (mut nu_kids, mut types) = (
         Vec::with_capacity(kids.len()),
@@ -46,9 +53,7 @@ fn checker(
           Ok(typ) => Ok( (
             context.factory().app(sym, nu_kids), typ
           ) ),
-          Err( (arg, bla) ) => return Err(
-            format!("{}\nparameter {}:\n  {}", bla, arg, nu_kids[arg])
-          ),
+          Err( (_, bla) ) => return Err(bla),
         },
         None => return Err(
           format!("application of unknown function symbol {}", sym)
@@ -56,7 +61,7 @@ fn checker(
       }
     },
 
-    /* Operator. */
+    // Operator.
     Op(op, kids) => {
       let (mut nu_kids, mut types) = (
         Vec::with_capacity(kids.len()),
@@ -70,18 +75,18 @@ fn checker(
         Ok(typ) => Ok( (
           context.factory().op(op, nu_kids), typ
         ) ),
-        Err( (args, mut bla) ) => {
-          if let Some(args) = args {
-            for arg in args {
-              bla = format!("{}\nargument {}:\n  {}", bla, arg, nu_kids[arg])
-            } ;
-          } ;
+        Err( (_, bla) ) => {
+          // if let Some(args) = args {
+          //   for arg in args {
+          //     bla = format!("{}\nargument {}:\n  {}", bla, arg, nu_kids[arg])
+          //   } ;
+          // } ;
           return Err(bla)
         },
       }
     },
 
-    /* Let binding. */
+    // Let binding.
     Let(bindings, (kid, typ)) => {
       let mut nu_bindings = Vec::with_capacity(bindings.len()) ;
       for (sym, (term,_)) in bindings {
@@ -93,14 +98,13 @@ fn checker(
       ) )
     },
 
-    /* Universal quantifier. */
+    // Universal quantifier.
     Forall(qf, (kid, typ)) => {
       if typ != Type::Bool {
         return Err(
           format!(
-            "forall quantifier expects Bool but got {}\n\
-              argument:\n  {}",
-            typ, kid
+            "forall quantifier expects Bool but got {}",
+            typ
           )
         )
       } ;
@@ -109,14 +113,12 @@ fn checker(
       ) )
     },
 
-    /* Existential quantifier. */
+    // Existential quantifier.
     Exists(qf, (kid, typ)) => {
       if typ != Type::Bool {
         return Err(
           format!(
-            "exists quantifier expects Bool but got {}\n\
-              argument:\n  {}",
-            typ, kid
+            "exists quantifier expects Bool but got {}", typ
           )
         )
       } ;
@@ -125,19 +127,19 @@ fn checker(
       ) )
     },
 
-    /* Constant. */
+    // Constant.
     C(cst) => {
       let typ = cst.typ().clone() ;
       Ok( (context.factory().mk_cst(cst), typ) )
     },
 
-    /* Variable. */
+    // Variable.
     V(var) => {
       let typ = match * var.get() {
         RVar::SVar(ref sym, _) => {
           if let Some(ref state) = * state {
-            if let Some(typ) = state.get(sym) {
-              typ.clone()
+            if let Some( & (_, ref typ) ) = state.get(sym) {
+              typ.get().clone()
             } else {
               return Err(
                 format!("unknown state variable {}", sym)
@@ -151,8 +153,8 @@ fn checker(
         },
         RVar::Var(ref sym) => {
           match if let Some(ref sig) = * sig {
-            if let Some(typ) = sig.get(sym) {
-              Some( typ.clone() )
+            if let Some( & (_, ref typ) ) = sig.get(sym) {
+              Some( typ.get().clone() )
             } else {
               None
             }
@@ -185,18 +187,19 @@ fn checker(
   }
 }
 
-/** Type checks a term. */
+/// Type checks a term.
 pub fn type_check(
   ctxt: & Context, term: & Term,
-  state: Option<& [ (Sym, Type) ]>,
-  sig: Option<& [ (Sym, Type) ]>,
+  state: Option<& [ ( Spnd<Sym>, Spnd<Type> ) ]>,
+  sig: Option<& [ ( Spnd<Sym>, Spnd<Type> ) ]>,
 ) -> Result<Type, String> {
   let state = match state {
     None => None,
     Some(state) => {
       let mut map = HashMap::with_capacity(state.len()) ;
       for & (ref sym, ref typ) in state.iter() {
-        map.insert(sym.clone(), typ.clone()) ; ()
+        let (sym, spn) = sym.extract() ;
+        map.insert( sym, (spn, typ.clone()) ) ; ()
       } ;
       Some(map)
     },
@@ -206,7 +209,8 @@ pub fn type_check(
     Some(sig) => {
       let mut map = HashMap::with_capacity(sig.len()) ;
       for & (ref sym, ref typ) in sig.iter() {
-        map.insert(sym.clone(), typ.clone()) ; ()
+        let (sym, spn) = sym.extract() ;
+        map.insert( sym, (spn, typ.clone()) ) ; ()
       } ;
       Some(map)
     },
@@ -224,7 +228,7 @@ pub fn type_check(
 
 
 
-/** Tests the evaluator. */
+/// Tests the evaluator.
 #[cfg(test)]
 pub mod test {
   use term::gen::* ;
@@ -232,18 +236,18 @@ pub mod test {
   use base::Callable ;
   use parse::{ Context, Res } ;
 
-  /** Generates random terms to check the evaluator. */
-  #[test]
-  pub fn rand_terms_fault_conf() {
+  /// Generates random terms to check the evaluator.
+  // #[test]
+  pub fn _rand_terms_fault_conf() {
     use std::fs::File ;
     use std::collections::HashMap ;
 
-    let file = "rsc/vmt/fault_conf.vmt" ;
+    let file = "rsc/simple/fault_conf.vmt" ;
     let factory = Factory::mk() ;
     let mut context = Context::mk(factory.clone(), 1000) ;
 
     println!("| opening file {}", file) ;
-    match File::open(& format!("../{}", file)) {
+    match File::open(file) {
       Ok(mut f) => {
         println!("| parsing") ;
         match context.read(& mut f) {
@@ -315,7 +319,7 @@ pub mod test {
                 term_map.insert(Type::Rat, rat_terms) ;
 
                 // Add variable definitions to map.
-                for call in sys.calls().iter() {
+                for call in sys.calls().get().iter() {
                   match * * call {
                     Callable::Dec(_) => (),
                     Callable::Def(ref def) => {
@@ -324,7 +328,7 @@ pub mod test {
                         match term_map.get_mut(def.typ()) {
                           Some(set) => {
                             set.insert(
-                              factory.var(def.sym().clone())
+                              factory.var(def.sym().get().clone())
                             ) ;
                             ()
                           },
@@ -343,10 +347,10 @@ pub mod test {
                   match term_map.get_mut(typ) {
                     Some(set) => {
                       set.insert(
-                        factory.svar(sym.clone(), State::Curr)
+                        factory.svar(sym.get().clone(), State::Curr)
                       ) ;
                       set.insert(
-                        factory.svar(sym.clone(), State::Next)
+                        factory.svar(sym.get().clone(), State::Next)
                       ) ;
                       ()
                     },
@@ -396,9 +400,7 @@ pub mod test {
           },
           Err(e) => {
             println!("could not parse input file:") ;
-            for line in format!("{}", e).lines() {
-              println!("| {}", line)
-            } ;
+            e.print() ;
             panic!("could not parse test file")
           },
         }

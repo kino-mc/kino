@@ -96,7 +96,7 @@ impl Operator {
               return Err( (
                 Some( vec![cpt] ),
                 format!(
-                  "parameter {} of equality:\n  \
+                  "parameter {} of equality: \
                     first parameter(s) have type {}, got {}",
                   cpt + 1, first, typ
                 )
@@ -163,9 +163,9 @@ impl Operator {
             return Err( (
               Some( vec![cpt] ),
               format!(
-                "parameter {} of operator {}:\n  \
-                  first parameter(s) have type Bool, got {}",
-                self, cpt + 1, typ
+                "parameter {} of operator `{}`: \
+                  expected Bool, got {}",
+                cpt + 1, self, typ
               )
             ) )
           } ;
@@ -183,7 +183,7 @@ impl Operator {
               return Err( (
                 Some( vec![cpt] ),
                 format!(
-                  "argument {} of operator distinct:\n  \
+                  "argument {} of operator distinct: \
                     first argument(s) have type {}, got {}",
                   cpt + 1, first, typ
                 )
@@ -205,7 +205,7 @@ impl Operator {
             _ => return Err( (
               Some( vec![0] ),
               format!(
-                "first argument of operator {}:\n  \
+                "first argument of operator {}: \
                   expected Int or Real but got {}",
                 self, first
               )
@@ -217,7 +217,7 @@ impl Operator {
               return Err( (
                 Some( vec![cpt] ),
                 format!(
-                  "argument {} as incompatible type\n  \
+                  "argument {} as incompatible type \
                     expected {}, got {}",
                   cpt + 1, first, typ
                 )
@@ -242,7 +242,7 @@ impl Operator {
             _ => return Err( (
               Some( vec![0] ),
               format!(
-                "first argument of operator {}:\n  \
+                "first argument of operator {}: \
                   expected Int or Real but got {}",
                 self, first
               )
@@ -254,7 +254,7 @@ impl Operator {
               return Err( (
                 Some( vec![cpt] ),
                 format!(
-                  "argument {} as incompatible type\n  \
+                  "argument {} as incompatible type \
                     expected {}, got {}",
                   cpt + 1, first, typ
                 )
@@ -1629,7 +1629,7 @@ pub mod eval {
                 ),
                 Err(e) => Err(
                   format!(
-                    "variable {} not found in model\n\
+                    "variable {} not found in model \
                     or in type cache\n{}", var, e
                   ).into()
                 ),

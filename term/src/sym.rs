@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Function symbols. */
+//! Function symbols.
 
 use std::io ;
 use std::fmt ;
@@ -15,14 +15,14 @@ use std::fmt ;
 use base::{ SymPrintStyle, SymWritable, HConsed, HConsign, HConser } ;
 
 
-/** Underlying representation of function symbols. */
+/// Underlying representation of function symbols.
 #[derive(Clone,Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub struct RealSym {
-  /** The `String` representing the function symbol. */
+  /// The `String` representing the function symbol.
   sym: String
 }
 impl RealSym {
-  /** The verbatim string representation of the symbol. */
+  /// The verbatim string representation of the symbol.
   pub fn sym(& self) -> & str { & self.sym }
 }
 
@@ -32,7 +32,7 @@ impl fmt::Display for RealSym {
   }
 }
 
-/** Hash consed function symbol. */
+/// Hash consed function symbol.
 pub type Sym = HConsed<RealSym> ;
 
 impl SymWritable for RealSym {
@@ -57,12 +57,12 @@ impl SymWritable for Sym {
   }
 }
 
-/** Hash cons table for function symbols. */
+/// Hash cons table for function symbols.
 pub type SymConsign = HConsign<RealSym> ;
 
-/** Can create a function symbol. */
+/// Can create a function symbol.
 pub trait SymMaker<T> {
-  /** Creates a function symbol. */
+  /// Creates a function symbol.
   #[inline(always)]
   fn sym(& self, T) -> Sym ;
 }

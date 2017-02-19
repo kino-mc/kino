@@ -14,6 +14,8 @@
 //!
 //! * check that first argument of custom technique is legal
 
+#![recursion_limit = "1024"]
+
 extern crate ansi_term as ansi ;
 #[macro_use]
 extern crate nom ;
@@ -35,6 +37,8 @@ use sys::{ Prop, Sys } ;
 
 /// Kino errors using [`error-chain`](https://crates.io/crates/error-chain).
 pub mod errors {
+  use sys::Line ;
+
   error_chain!{
     types {
       Error, ErrorKind, ResExt, Res ;
@@ -87,6 +91,31 @@ pub mod errors {
       MsgSndError(src: ::Tek, tgt: ::Tek) {
         description("error while sending a message")
         display("could not send message from `{}` to `{}`", src, tgt)
+      }
+
+      #[doc = "Parse error."]
+      ParseError(
+        line: Line, blah: String, notes: Vec<(Line, String)>
+      ) {
+        // description("parse error: {}", blah)
+        display("parse error: {} here: {}", blah, line)
+      }
+
+      #[doc = "IO error."]
+      IoError(e: ::std::io::Error) {
+        description("io error")
+        display("io error: {:?}", e)
+      }
+    }
+  }
+
+  impl From<::sys::Error> for ErrorKind {
+    fn from(e: ::sys::Error) -> ErrorKind {
+      match e {
+        ::sys::Error::Parse { line, blah, notes } => ErrorKind::ParseError(
+          line, blah, notes
+        ),
+        ::sys::Error::Io(e) => ErrorKind::IoError(e),
       }
     }
   }

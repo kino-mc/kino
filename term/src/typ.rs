@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Type representation and their values. */
+//! Type representation and their values.
 
 use std::io ;
 use std::fmt ;
@@ -15,14 +15,14 @@ use std::fmt ;
 use base::{ Writable } ;
 use real_term::Cst ;
 
-/** A primitive type. */
+/// A primitive type.
 #[derive(Clone,Copy,Debug,PartialEq,Eq,PartialOrd,Ord,Hash)]
 pub enum Type {
-  /** Bool type. */
+  /// Bool type.
   Bool,
-  /** Int type. */
+  /// Int type.
   Int,
-  /** Rat type. */
+  /// Rat type.
   Rat
 }
 
@@ -40,8 +40,8 @@ impl fmt::Display for Type {
 }
 
 impl Type {
-  /** String representation of a type. */
-  #[inline(always)]
+  /// String representation of a type.
+  #[inline]
   pub fn to_str(& self) -> & 'static str {
     match * self {
       Type::Bool => "Bool",
@@ -68,17 +68,17 @@ impl Type {
 }
 
 impl Writable for Type {
-  #[inline(always)]
+  #[inline]
   fn write(& self, writer: & mut io::Write) -> io::Result<()> {
     write!(writer, "{}", self.to_str())
   }
 }
 
-/** Type of boolean values. */
+/// Type of boolean values.
 pub type Bool = bool ;
 
-/** Type of integer values. */
+/// Type of integer values.
 pub type Int = ::num::BigInt ;
 
-/** Type of rational values. */
+/// Type of rational values.
 pub type Rat = ::num::rational::BigRational ;

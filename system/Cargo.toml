@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Adrien Champion <adrien.champion@email.com>"]
 
 [dependencies]
+error-chain = "*"
 nom = "*"
 term = { path = "../term" }
