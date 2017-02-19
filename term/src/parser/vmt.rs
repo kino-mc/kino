@@ -408,12 +408,13 @@ pub fn op_parser<'a>(
     op: len_add!(
       len < spn apply!(operator_parser, offset + len)
     ) >>
+    len_add!(len < spc cmt) >>
     args: many1!(
       do_parse!(
-        len_add!(len < spc cmt) >>
         term: len_add!(
           len < trm apply!(term_parser, offset + len, f)
-        ) >> (term)
+        ) >>
+        len_add!(len < spc cmt) >> (term)
       )
     ) >>
     len_add!(len < opt spc cmt) >>

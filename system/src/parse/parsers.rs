@@ -47,9 +47,9 @@ macro_rules! try_parserr {
 /// input.
 #[derive(Debug, PartialEq, Eq)]
 pub struct InternalParseError {
-  span: Spn,
-  blah: String,
-  notes: Vec< (Spn, String) >
+  pub span: Spn,
+  pub blah: String,
+  pub notes: Vec< (Spn, String) >
 }
 impl InternalParseError {
   /// Creates an internal parse error.
@@ -140,7 +140,7 @@ fn line_extractor(
     line,
     format!(
       "{1: >0$}{3:^>2$}",
-      offset - 1, "", ::std::cmp::min(spn.len(), line_len - offset), ""
+      offset - 1, "", ::std::cmp::min(spn.len(), line_len - offset + 1), ""
     ),
     line_count,
     offset
@@ -436,19 +436,6 @@ fn fun_def_parser<'a>(
           Res::Success, offset, len
         ), (sym_span, "in this `declare-fun`".into())
       )
-      // let sym_span = sym.span.clone() ;
-      // match c.add_fun_def(sym, args, typ, body) {
-      //   Err(err) => return ::nom::IResult::Error(
-      //     ::nom::ErrorKind::Custom(
-      //       InternalParseError::mk(
-      //         sym_span.clone(), format!("{}", err), vec![
-      //           (sym_span, "in this `define-fun`".into())
-      //         ]
-      //       )
-      //     )
-      //   ),
-      //   Ok(()) => Spnd::len_mk(Res::Success, offset, len),
-      // }
     })
   )
 }
@@ -475,18 +462,11 @@ fn prop_parser<'a>(
       ! at sym.span.clone(), "parse error in body of `define-prop`"
     ) >> ({
       let sym_span = sym.span.clone() ;
-      match c.add_prop(sym, sys, body) {
-        Err(err) => return ::nom::IResult::Error(
-          ::nom::ErrorKind::Custom(
-            InternalParseError::mk(
-              sym_span.clone(), format!("{}", err), vec![
-                (sym_span, "in this `define-prop`".into())
-              ]
-            ).into()
-          )
-        ),
-        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
-      }
+      try_parserr!(
+        _ = c.add_prop(sym, sys, body) => Spnd::len_mk(
+          Res::Success, offset, len
+        ), (sym_span, "in this `define-prop`".into())
+      )
     })
   )
 }
@@ -513,18 +493,11 @@ fn rel_parser<'a>(
       ! at sym.span.clone(), "parse error in body of `define-rel`"
     ) >> ({
       let sym_span = sym.span.clone() ;
-      match c.add_rel(sym, sys, body) {
-        Err(err) => return ::nom::IResult::Error(
-          ::nom::ErrorKind::Custom(
-            InternalParseError::mk(
-              sym_span.clone(), format!("{}", err), vec![
-                (sym_span, "in this `define-rel`".into())
-              ]
-            ).into()
-          )
-        ),
-        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
-      }
+      try_parserr!(
+        _ = c.add_rel(sym, sys, body) => Spnd::len_mk(
+          Res::Success, offset, len
+        ), (sym_span, "in this `define-rel`".into())
+      )
     })
   )
 }
@@ -559,11 +532,13 @@ fn sys_call_parser<'a>(
           ) >>
           len_add!(len < opt spc cmt) >>
           params: many0!(
-            len_add!(
-              len < trm apply!(term_parser, offset + len, c.factory())
+            terminated!(
+              len_add!(
+                len < trm apply!(term_parser, offset + len, c.factory())
+              ),
+              len_add!(len < opt spc cmt)
             )
           ) >>
-          len_add!(len < opt spc cmt) >>
           parse_or_fail!(
             len_add!(len < char ')')
             ! at (offset + len),
@@ -583,6 +558,7 @@ fn sys_call_parser<'a>(
     ), |vec| Spnd::len_mk(vec, offset, len)
   )
 }
+
 fn sys_parser<'a>(
   bytes: & 'a [u8], offset: usize, c: & mut Context
 ) -> IRes<'a, Spnd<Res>> {
@@ -628,18 +604,13 @@ fn sys_parser<'a>(
       )
     ) >> ({
       let sym_span = sym.span.clone() ;
-      match c.add_sys(sym, state, vec![], init, trans, sys_calls) {
-        Err(err) => return ::nom::IResult::Error(
-          ::nom::ErrorKind::Custom(
-            InternalParseError::mk(
-              sym_span.clone(), format!("{}", err), vec![
-                (sym_span, "in this `define-sys`".into())
-              ]
-            ).into()
-          )
-        ),
-        Ok(()) => Spnd::len_mk(Res::Success, offset, len),
-      }
+      try_parserr!(
+        _ = c.add_sys(
+          sym, state, vec![], init, trans, sys_calls
+        ) => Spnd::len_mk(
+          Res::Success, offset, len
+        ), (sym_span, "in this `define-sys`".into())
+      )
     })
   )
 }

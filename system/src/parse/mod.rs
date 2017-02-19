@@ -906,36 +906,33 @@ impl Context {
   /// Adds a state property definition to the context.
   pub fn add_prop(
     & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
-  ) -> Result<(), CheckError> {
-    match check::check_prop(self, sym, sys, body) {
-      Ok(prop) => Ok( self.internal_add_prop(prop, PropStatus::Unknown) ),
-      Err(e) => Err(e),
-    }
+  ) -> Result<(), InternalParseError> {
+    check::check_prop(self, sym, sys, body).map(
+      |prop| self.internal_add_prop(prop, PropStatus::Unknown)
+    )
   }
 
   /// Adds a state relation definition to the context.
   pub fn add_rel(
     & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
-  ) -> Result<(), CheckError> {
-    match check::check_rel(self, sym, sys, body) {
-      Ok(rel) => Ok( self.internal_add_prop(rel, PropStatus::Unknown) ),
-      Err(e) => Err(e),
-    }
+  ) -> Result<(), InternalParseError> {
+    check::check_rel(self, sym, sys, body).map(
+      |rel| self.internal_add_prop(rel, PropStatus::Unknown)
+    )
   }
 
   /// Adds a system definition to the context.
   pub fn add_sys(
     & mut self, sym: Spnd<Sym>, state: Args,
-    locals: Vec<(Sym, Type, TermAndDep)>,
+    locals: Vec<(Spnd<Sym>, Spnd<Type>, TermAndDep)>,
     init: TermAndDep, trans: TermAndDep,
     sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
-  ) -> Result<(), CheckError> {
-    match check::check_sys(
+  ) -> Result<(), InternalParseError> {
+    check::check_sys(
       self, sym, state, locals, init, trans, sub_syss
-    ) {
-      Ok(sys) => Ok( self.internal_add_sys(sys) ),
-      Err(e) => Err(e),
-    }
+    ).map(
+      |sys| self.internal_add_sys(sys)
+    )
   }
 
 }
