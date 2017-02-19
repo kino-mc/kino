@@ -63,15 +63,30 @@ impl InternalParseError {
 fn line_extractor(
   txt: & str, spn: Spn, mut line_count: usize
 ) -> Line {
-  // println!{"extracting line: {} from `{}`", spn, txt}
+  debug_assert!(line_count > 0) ;
+  debug_assert!(txt.len() >= spn.end) ;
+  // println!{"line_count: {}", line_count}
+  // println!{"extracting line from span {} from", spn}
+  // for line in txt.lines() {
+  //   println!{"  `{}`", line}
+  // }
   let n = spn.bgn ;
-  let mut bgn = 0 ;
-  let mut end = 0 ;
+  let mut bgn = 1 ;
+  let mut end = 1 ;
   let mut gotit = false ;
   let mut cpt = 0 ;
-  let mut offset = 0 ;
-  line_count += 1 ;
+  let mut offset = 1 ;
   for char in txt.chars() {
+    cpt += 1 ;
+    // println!() ;
+    // println!("char : `{}`", char) ;
+    // println!("  bgn: {}", bgn) ;
+    // println!("  end: {}", end) ;
+    // println!("  gotit: {}", gotit) ;
+    // println!("  cpt: {}", cpt) ;
+    // println!("  offset: {}", offset) ;
+    // println!("  line_count: {}", line_count) ;
+    debug_assert!(cpt > 0) ;
     match char {
       '\n' if gotit => {
         end = cpt ;
@@ -79,26 +94,31 @@ fn line_extractor(
       },
       '\n' => {
         line_count += 1 ;
+        // Final nl of last line is not in new line.
         bgn = cpt + 1
       },
       _ if cpt == n => {
         gotit = true ;
-        offset = cpt - bgn
+        offset = cpt - bgn + 1
       },
       _ => (),
     }
-    cpt += 1
   }
-  if end == 0 { end = cpt }
+  debug_assert!(bgn > 0) ;
+  debug_assert!(end > 0) ;
+  debug_assert!(end < txt.len()) ;
   let line = if end >= bgn {
-    (& txt[bgn..end]).to_string()
+    (
+      & txt[ (bgn - 1) .. (end - 1) ]
+    ).to_string()
   } else { "".to_string() } ;
   let line_len = line.len() ;
+  debug_assert!(offset > 0) ;
   Line::mk(
     line,
     format!(
       "{1: >0$}{3:^>2$}",
-      offset, "", ::std::cmp::min(spn.len(), line_len - offset), ""
+      offset - 1, "", ::std::cmp::min(spn.len(), line_len - offset), ""
     ),
     line_count,
     offset
@@ -679,7 +699,7 @@ fn verify_parser<'a>(
         )
       ),
       parse_or_fail!(
-        len_add!(len < char '(')
+        len_add!(len < char ')')
         ! at (offset + len), "closing property/relation list"
       )
     ) >> ({
@@ -850,7 +870,17 @@ pub fn item_parser<'a>(
             terminated!(
               len_add!(len < tag "verify"),
               len_add!(len < opt spc cmt)
-            ) >> apply!(verify_parser, offset + len, ctx)
+            ) >> apply!(verify_parser, offset + len, ctx) |
+
+            len_add!(len < tag "exit") >> map!(
+              opt!(space_comment), |n: Option<usize>| {
+                let res = Spnd::len_mk(
+                  Res::Exit, offset + len - 4, 4
+                ) ;
+                len += n.unwrap_or(0) ;
+                res
+              }
+            )
 
           )
         )

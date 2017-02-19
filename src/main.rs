@@ -82,7 +82,7 @@ fn main() {
 
           match res {
             Res::Success => panic!("update master to work with new parsers"),
-            Res::Exit => (),
+            Res::Exit => log.trail(),
             Res::Check(sys, props) => {
               log.trail() ;
               match Master::launch(

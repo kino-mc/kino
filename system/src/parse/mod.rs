@@ -678,24 +678,34 @@ impl Context {
     use std::str ;
     let mut lines = BufReader::new(reader).lines() ;
     let mut buffer = String::with_capacity(self.buffer.capacity()) ;
+    // The last line parsed. Used for error reconstruction.
+    let mut curr_line = 0 ;
     // panic!("bla")
 
+    // Items are read ONE BY ONE, thanks to the open/close paren count.
     'read_loop: loop {
 
       // println!{"entering read loop"}
 
       let mut new_things = false ;
+      let (mut op, mut cp) = (0,0) ;
+      curr_line = self.line ;
 
       // println!("  entering lines loop") ;
-      loop {
+      'fetch: loop {
         // println!{"reading line..."}
         match lines.next() {
           Some(Ok(line)) => {
             // println!{"got a line"}
             self.line = self.line + 1 ;
-            if self.line > 1 { self.buffer.push('\n') } ;
+            let (nu_op, nu_cp) = paren_count(& line) ;
+            op += nu_op ;
+            cp += nu_cp ;
+            if new_things { self.buffer.push('\n') } ;
             self.buffer.push_str(& line) ;
-            new_things = true
+            // We have something to parse.
+            if op > 1 && op == cp { break 'fetch }
+            new_things = true ;
           },
           Some(Err(e)) => return Err(
             ExtError::Io(e)
@@ -711,58 +721,60 @@ impl Context {
 
       // println!{"exiting read loop"}
 
-      'parse_loop: loop {
-        // println!{"entering parse loop"}
-        // println!("  updating") ;
-        buffer.clear() ;
-        buffer.push_str(& self.buffer) ;
-        // println!(
-        //   "  buffer capacity: {}, {}",
-        //   buffer.capacity(), self.buffer.capacity()
-        // ) ;
-        // println!("  buffers: {}", buffer) ;
-        // println!("         : {}", self.buffer) ;
+      // println!{"entering parse loop"}
+      // println!("  updating") ;
+      buffer.clear() ;
+      buffer.push_str(& self.buffer) ;
+      // println!(
+      //   "  buffer capacity: {}, {}",
+      //   buffer.capacity(), self.buffer.capacity()
+      // ) ;
+      // println!("  buffers: {}", buffer) ;
+      // println!("         : {}", self.buffer) ;
+      // println!("buffer parsed:") ;
+      // for line in self.buffer.lines() {
+      //   println!("  `{}`", line)
+      // }
 
-        match item_parser(buffer.as_bytes(), 0, self) {
-          Done(chars, res) => match res.destroy() {
-            (Res::Success, spn) => {
-              // println!{"success"}
-              // for line in str::from_utf8(chars).unwrap().lines() {
-              //   println!{"  | {}", line}
-              // }
-              self.buffer.clear() ;
-              self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
-              self.bytes_read += spn.len()
-            },
-            (res, spn) => {
-              // println!{"res: {:?}", res}
-              self.buffer.clear() ;
-              self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
-              self.bytes_read += spn.len() ;
-              return Ok(res)
-            },
+      match item_parser(buffer.as_bytes(), 1, self) {
+        Done(chars, res) => match res.destroy() {
+          (Res::Success, spn) => {
+            // println!{"success"}
+            // for line in str::from_utf8(chars).unwrap().lines() {
+            //   println!{"  | {}", line}
+            // }
+            self.buffer.clear() ;
+            self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+            self.bytes_read += spn.len()
           },
-          Error(
-            ::nom::ErrorKind::Custom(e)
-          ) => return Err(
-            e.to_parse_error(& self.buffer, self.line)
-          ),
-          Incomplete(_) => {
-            // println!("Context:") ;
-            // for line in self.lines().lines() {
-            //   println!("| {}", line)
-            // } ;
-            // println!("  incomplete (item)") ;
-            continue 'read_loop
+          (res, spn) => {
+            // println!{"res: {:?}", res}
+            self.buffer.clear() ;
+            self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+            self.bytes_read += spn.len() ;
+            return Ok(res)
           },
-          _ => {
-            println!("Context:") ;
-            for line in self.lines().lines() {
-              println!("| {}", line)
-            } ;
-            panic!("what's that: {}", buffer)
-          },
-        }
+        },
+        Error(
+          ::nom::ErrorKind::Custom(e)
+        ) => return Err(
+          e.to_parse_error(& self.buffer, curr_line + 1)
+        ),
+        Incomplete(_) => {
+          // println!("Context:") ;
+          // for line in self.lines().lines() {
+          //   println!("| {}", line)
+          // } ;
+          // println!("  incomplete (item)") ;
+          continue 'read_loop
+        },
+        _ => {
+          println!("Context:") ;
+          for line in self.lines().lines() {
+            println!("| {}", line)
+          } ;
+          panic!("what's that: {}", buffer)
+        },
       }
     }
   }
@@ -923,4 +935,22 @@ impl Context {
     }
   }
 
+}
+
+/// Counts open and close paren that are not after a `;` in a string.
+fn paren_count(line: & str) -> (usize, usize) {
+  let (mut op, mut cp) = (0, 0) ;
+  for c in line.chars() {
+    match c {
+      '(' => op += 1,
+      ')' => cp += 1,
+      ';' => return (op, cp),
+      _ => {
+        debug_assert!(c != '\n') ;
+        debug_assert!(c != '\r') ;
+        ()
+      },
+    }
+  }
+  (op, cp)
 }
