@@ -1,5 +1,7 @@
 Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for transition systems.
 
+**NB: kino is not maintained anymore for now, for lack of time. If you are interested in this project please open an issue or contact me directly.**
+
 # Code status
 
 [![Build Status](https://travis-ci.org/kino-mc/kino.svg?branch=master)](https://travis-ci.org/kino-mc/kino)
