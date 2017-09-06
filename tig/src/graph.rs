@@ -552,7 +552,7 @@ impl<
     sys: Sys, rep: Term, class: TermSet, factory: Factory, conf: & conf::Tig
   ) -> Self {
     Learner {
-      sys: sys.sym().clone(),
+      sys: sys.sym().get().clone(),
       graph: Graph::mk(rep, class),
       known: TmpTermSet::with_capacity(211),
       stable: TermSet::with_capacity(17),

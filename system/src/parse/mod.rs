@@ -26,18 +26,20 @@ static check_ass_desc: & 'static str = "verify with assumption query" ;
 use std::io ;
 use std::fmt ;
 use std::sync::Arc ;
-use std::time::Duration ;
-use std::thread::sleep ;
+// use std::time::Duration ;
+// use std::thread::sleep ;
 use std::collections::{ HashSet, HashMap } ;
 
 use term::{
-  TermAndDep, Type, Offset, Cst, Sym, Term, Factory, Model, STermSet
+  Type, Offset, Cst, Sym, Term, Factory, Model, STermSet
 } ;
+use term::parsing::* ;
 
+use Error as ExtError ;
 use base::* ;
 mod parsers ;
+pub use self::parsers::InternalParseError ;
 pub mod check ;
-use self::check::Error ;
 
 use self::parsers::* ;
 
@@ -91,13 +93,13 @@ macro_rules! try_get {
 /// A positive or negative literal.
 pub enum Atom {
   /// A positive literal.
-  Pos(Sym),
+  Pos( Spnd<Sym> ),
   /// A negative literal.
-  Neg(Sym),
+  Neg( Spnd<Sym> ),
 }
 impl Atom {
   #[inline]
-  pub fn sym(& self) -> & Sym {
+  pub fn sym(& self) -> & Spnd<Sym> {
     match * self {
       Atom::Pos(ref sym) => sym,
       Atom::Neg(ref sym) => sym,
@@ -107,8 +109,14 @@ impl Atom {
   pub fn into_var(self, f: & Factory) -> Term {
     use term::VarMaker ;
     match self {
-      Atom::Pos(sym) => f.var(sym),
-      Atom::Neg(sym) => f.not( f.var(sym) ),
+      Atom::Pos(sym) => {
+        let (sym, _) = sym.destroy() ;
+        f.var(sym)
+      },
+      Atom::Neg(sym) => {
+        let (sym, _) = sym.destroy() ;
+        f.not( f.var(sym) )
+      },
     }
   }
 }
@@ -116,6 +124,8 @@ impl Atom {
 /// Normal result of a parsing attempt.
 #[derive(Debug)]
 pub enum Res {
+  /// Parsed a command that's not a query.
+  Success,
   /// Found an exit command.
   Exit,
   /// Found a check command.
@@ -127,6 +137,7 @@ impl Res {
   /// A multi-line representation of the result of a parsing attempty
   pub fn lines(& self) -> String {
     match * self {
+      Res::Success => "success".to_string(),
       Res::Exit => "exit".to_string(),
       Res::Check(ref sys, ref props) => {
         let mut s = format!("verify {}", sys.sym()) ;
@@ -257,7 +268,7 @@ impl Cex {
     let args = self.sys.state().args() ;
     for & (ref sym, _) in args {
       cst_lens.insert(
-        sym.clone(), format!("{}", sym).len()
+        sym.get().clone(), format!("{}", sym).len()
       ) ;
     } ;
     let sys_name = format!("{}", self.sys.sym()) ;
@@ -361,13 +372,15 @@ impl Cex {
 /// 
 /// ## Checks
 /// 
-/// During parsing, checks the errors corresponding to [`Error`][error].
+/// During parsing, checks the errors corresponding to [`CheckError`][error].
 /// 
-/// [error]: enum.Error.html (The Error enum)
+/// [error]: enum.CheckError.html (The CheckError enum)
 pub struct Context {
   /// Number of lines **read** so far. Does not correspond to where the parser
   /// is currently at. Not really used at the moment.
   line: usize,
+  /// Number of bytes read so far, used for error reporting.
+  bytes_read: usize,
   /// String buffer for swapping when reading, and remember stuff when reading
   /// from stdin.
   buffer: String,
@@ -394,6 +407,7 @@ impl Context {
   pub fn mk(factory: Factory, buffer_size: usize) -> Self {
     Context {
       line: 0,
+      bytes_read: 0,
       buffer: String::with_capacity(buffer_size),
       factory: factory,
       all: HashSet::with_capacity(127),
@@ -534,8 +548,12 @@ impl Context {
     let mut res = vec![] ;
     for prop in props {
       match self.props.get( prop.sym() ) {
-        Some( & (_, PropStatus::Unknown) ) => res.push(prop.sym()),
-        Some( & (_, PropStatus::KTrue(_)) ) => res.push(prop.sym()),
+        Some( & (_, PropStatus::Unknown) ) => res.push(
+          prop.sym().get()
+        ),
+        Some( & (_, PropStatus::KTrue(_)) ) => res.push(
+          prop.sym().get()
+        ),
         Some( _ ) => (),
         None => return Err(
           format!("[Context::unknown_props] unknown property {}", prop)
@@ -654,97 +672,109 @@ impl Context {
   /// * an error.
   pub fn read(
     & mut self, reader: & mut io::Read
-  ) -> Result<Res, Error> {
+  ) -> Result<Res, ExtError> {
     use nom::IResult::* ;
     use std::io::{ BufRead, BufReader } ;
     use std::str ;
     let mut lines = BufReader::new(reader).lines() ;
     let mut buffer = String::with_capacity(self.buffer.capacity()) ;
+    // The last line parsed. Used for error reconstruction.
+    let mut _curr_line = 0 ;
     // panic!("bla")
-    loop {
+
+    // Items are read ONE BY ONE, thanks to the open/close paren count.
+    'read_loop: loop {
+
+      // println!{"entering read loop"}
+
       let mut new_things = false ;
+      let (mut op, mut cp) = (0,0) ;
+      _curr_line = self.line ;
 
       // println!("  entering lines loop") ;
-      loop {
+      'fetch: loop {
+        // println!{"reading line..."}
         match lines.next() {
           Some(Ok(line)) => {
+            // println!{"got a line"}
             self.line = self.line + 1 ;
-            match comment(line.as_bytes()) {
-              Done(chars, _) => {
-                // Comment necessarily parses the whole line.
-                assert!( chars.len() == 0 ) ;
-                ()
-              },
-              Incomplete(_) => {
-                // Can be incomplete if line is empty.
-                assert!( line.trim().len() == 0 ) ;
-                ()
-              },
-              _ => {
-                // Not a line containing only comments.
-                self.buffer.push('\n') ;
-                self.buffer.push_str(& line) ;
-                new_things = true
-              },
-            }
+            let (nu_op, nu_cp) = paren_count(& line) ;
+            op += nu_op ;
+            cp += nu_cp ;
+            if new_things { self.buffer.push('\n') } ;
+            self.buffer.push_str(& line) ;
+            // We have something to parse.
+            if op > 1 && op == cp { break 'fetch }
+            new_things = true ;
           },
-          Some(Err(e)) => return Err( check::Error::Io(e) ),
+          Some(Err(e)) => return Err(
+            ExtError::Io(e)
+          ),
           None => {
             if new_things { break } else {
-              sleep(Duration::from_millis(10))
+              return Ok(Res::Success)
+              // sleep(Duration::from_millis(10))
             }
           }
         }
       }
 
-      // println!("  entering parse loop") ;
-      loop {
-        // println!("  updating") ;
-        buffer.clear() ;
-        buffer.push_str(& self.buffer) ;
-        // println!(
-        //   "  buffer capacity: {}, {}",
-        //   buffer.capacity(), self.buffer.capacity()
-        // ) ;
-        // println!("  buffers: {}", buffer) ;
-        // println!("         : {}", self.buffer) ;
-        match item_parser(buffer.as_bytes(), self) {
-          Done(chars, Ok(())) => {
+      // println!{"exiting read loop"}
+
+      // println!{"entering parse loop"}
+      // println!("  updating") ;
+      buffer.clear() ;
+      buffer.push_str(& self.buffer) ;
+      // println!(
+      //   "  buffer capacity: {}, {}",
+      //   buffer.capacity(), self.buffer.capacity()
+      // ) ;
+      // println!("  buffers: {}", buffer) ;
+      // println!("         : {}", self.buffer) ;
+      // println!("buffer parsed ({}):", _curr_line) ;
+      // for line in self.buffer.lines() {
+      //   println!("  `{}`", line)
+      // }
+
+      match item_parser(buffer.as_bytes(), 1, self) {
+        Done(chars, res) => match res.destroy() {
+          (Res::Success, spn) => {
+            // println!{"success"}
+            // for line in str::from_utf8(chars).unwrap().lines() {
+            //   println!{"  | {}", line}
+            // }
             self.buffer.clear() ;
             self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+            self.bytes_read += spn.len()
           },
-          Done(_, Err(e)) => return Err(e),
-          Incomplete(_) => {
-            println!("Context:") ;
-            for line in self.lines().lines() {
-              println!("| {}", line)
-            } ;
-            println!("  incomplete (item)") ;
-            break
+          (res, spn) => {
+            // println!{"res: {:?}", res}
+            self.buffer.clear() ;
+            self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
+            self.bytes_read += spn.len() ;
+            return Ok(res)
           },
-          _ => match check_exit_parser(buffer.as_bytes(), self) {
-            Done(chars, res) => {
-              self.buffer.clear() ;
-              self.buffer.push_str(str::from_utf8(chars).unwrap()) ;
-              return res
-            },
-            Incomplete(_) => {
-              println!("Context:") ;
-              for line in self.lines().lines() {
-                println!("| {}", line)
-              } ;
-              println!("  incomplete (check)") ;
-              break
-            },
-            _ => {
-              println!("Context:") ;
-              for line in self.lines().lines() {
-                println!("| {}", line)
-              } ;
-              panic!("what's that: {}", buffer)
-            },
-          }
-        }
+        },
+        Error(
+          ::nom::ErrorKind::Custom(e)
+        ) => return Err(
+          e.to_parse_error(& self.buffer, _curr_line + 1)
+        ),
+        Incomplete(_) => {
+          // println!("Context:") ;
+          // for line in self.lines().lines() {
+          //   println!("| {}", line)
+          // } ;
+          // println!("  incomplete (item)") ;
+          continue 'read_loop
+        },
+        _ => {
+          println!("Context:") ;
+          for line in self.lines().lines() {
+            println!("| {}", line)
+          } ;
+          panic!("what's that: {}", buffer)
+        },
       }
     }
   }
@@ -815,7 +845,7 @@ impl Context {
     }
   }
   fn internal_add_prop(& mut self, prop: Prop, status: PropStatus) {
-    let sym = prop.sym().clone() ;
+    let sym = prop.sym().get().clone() ;
     match self.all.insert(sym.clone()) {
       true => (),
       false => panic!(
@@ -833,13 +863,13 @@ impl Context {
   }
   fn internal_add_sys(& mut self, sys: Sys) {
     let sym = sys.sym().clone() ;
-    match self.all.insert(sym.clone()) {
+    match self.all.insert(sym.get().clone()) {
       true => (),
       false => panic!(
         println!("added system {} but symbol is already used", sym)
       ),
     }
-    match self.syss.insert(sym, Arc::new(sys)) {
+    match self.syss.insert(sym.get().clone(), Arc::new(sys)) {
       None => (),
       Some(e) => {
         self.stdin_print() ;
@@ -852,57 +882,74 @@ impl Context {
 
   /// Adds a function declaration to the context.
   pub fn add_fun_dec(
-    & mut self, sym: Sym, sig: Sig, typ: Type
-  ) -> Result<(), Error> {
-    match check::check_fun_dec(self, sym, sig, typ) {
-      Ok(callable) => Ok( self.internal_add_callable(callable) ),
-      Err(e) => Err(e),
-    }
+    & mut self, sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>
+  ) -> Result<(), InternalParseError> {
+    check::check_fun_dec(self, sym, sig, typ).map(
+      |callable| self.internal_add_callable(callable)
+    )
+    // match check::check_fun_dec(self, sym, sig, typ) {
+    //   Ok(callable) => Ok( self.internal_add_callable(callable) ),
+    //   Err(e) => Err(e),
+    // }
   }
 
   /// Adds a function definition to the context.
   pub fn add_fun_def(
-    & mut self, sym: Sym, args: Args, typ: Type, body: TermAndDep
-  ) -> Result<(), Error> {
-    match check::check_fun_def(self, sym, args, typ, body) {
-      Ok(callable) => Ok( self.internal_add_callable(callable) ),
-      Err(e) => Err(e),
-    }
+    & mut self, sym: Spnd<Sym>, args: Args, typ: Spnd<Type>, body: TermAndDep
+  ) -> Result<(), InternalParseError> {
+    check::check_fun_def(self, sym, args, typ, body).map(
+      |callable| self.internal_add_callable(callable)
+    )
   }
 
   /// Adds a state property definition to the context.
   pub fn add_prop(
-    & mut self, sym: Sym, sys: Sym, body: TermAndDep
-  ) -> Result<(), Error> {
-    match check::check_prop(self, sym, sys, body) {
-      Ok(prop) => Ok( self.internal_add_prop(prop, PropStatus::Unknown) ),
-      Err(e) => Err(e),
-    }
+    & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
+  ) -> Result<(), InternalParseError> {
+    check::check_prop(self, sym, sys, body).map(
+      |prop| self.internal_add_prop(prop, PropStatus::Unknown)
+    )
   }
 
   /// Adds a state relation definition to the context.
   pub fn add_rel(
-    & mut self, sym: Sym, sys: Sym, body: TermAndDep
-  ) -> Result<(), Error> {
-    match check::check_rel(self, sym, sys, body) {
-      Ok(rel) => Ok( self.internal_add_prop(rel, PropStatus::Unknown) ),
-      Err(e) => Err(e),
-    }
+    & mut self, sym: Spnd<Sym>, sys: Spnd<Sym>, body: TermAndDep
+  ) -> Result<(), InternalParseError> {
+    check::check_rel(self, sym, sys, body).map(
+      |rel| self.internal_add_prop(rel, PropStatus::Unknown)
+    )
   }
 
   /// Adds a system definition to the context.
   pub fn add_sys(
-    & mut self, sym: Sym, state: Args,
-    locals: Vec<(Sym, Type, TermAndDep)>,
+    & mut self, sym: Spnd<Sym>, state: Args,
+    locals: Vec<(Spnd<Sym>, Spnd<Type>, TermAndDep)>,
     init: TermAndDep, trans: TermAndDep,
-    sub_syss: Vec<(Sym, Vec<TermAndDep>)>
-  ) -> Result<(), Error> {
-    match check::check_sys(
+    sub_syss: Vec<(Spnd<Sym>, Vec<TermAndDep>)>
+  ) -> Result<(), InternalParseError> {
+    check::check_sys(
       self, sym, state, locals, init, trans, sub_syss
-    ) {
-      Ok(sys) => Ok( self.internal_add_sys(sys) ),
-      Err(e) => Err(e),
-    }
+    ).map(
+      |sys| self.internal_add_sys(sys)
+    )
   }
 
+}
+
+/// Counts open and close paren that are not after a `;` in a string.
+fn paren_count(line: & str) -> (usize, usize) {
+  let (mut op, mut cp) = (0, 0) ;
+  for c in line.chars() {
+    match c {
+      '(' => op += 1,
+      ')' => cp += 1,
+      ';' => return (op, cp),
+      _ => {
+        debug_assert!(c != '\n') ;
+        debug_assert!(c != '\r') ;
+        ()
+      },
+    }
+  }
+  (op, cp)
 }

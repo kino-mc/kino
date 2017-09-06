@@ -8,6 +8,7 @@ name = "kino"
 doc = false
 
 [dependencies]
+error-chain = "*"
 term = { path = "term" }
 system = { path = "system" }
 unroll = { path = "unroll" }

@@ -122,7 +122,7 @@ fn bmc<
             event, props.forget(unroller.solver(), ps.iter())
             => "while forgetting property in manager"
           ),
-          MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+          MsgDown::Invariants(sym, invs) => if sys.sym().get() == & sym  {
             // event.log(
             //   & format!("received {} invariants", invs.len())
             // ) ;

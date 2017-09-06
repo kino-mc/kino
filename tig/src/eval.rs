@@ -150,7 +150,8 @@ impl<Val: Domain> Eval<Val> {
               // }
               let value = try_chain!(
                 self.factory.eval(
-                  trm, & self.offset, & self.model, self.sys.sym().clone()
+                  trm, & self.offset, & self.model,
+                  self.sys.sym().get().clone()
                 ) => "could not evaluate term {}", trm
               ) ;
               self.cache.insert( Trm(trm.clone()), value.clone() ) ;

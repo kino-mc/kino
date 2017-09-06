@@ -140,7 +140,7 @@ fn kind<
             => "while forgetting some properties\n\
               because of a `Forget` message (1)"
           ),
-          MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+          MsgDown::Invariants(sym, invs) => if sys.sym().get() == & sym  {
             // event.log(
             //   & format!("received {} invariants", invs.len())
             // ) ;
@@ -266,7 +266,8 @@ fn kind<
                         disproved = disproved || unfalsifiable.remove(p)
                       }
                     },
-                    MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+                    MsgDown::Invariants(sym, invs) =>
+                    if sys.sym().get() == & sym  {
                       // event.log(
                       //   & format!("received {} invariants", invs.len())
                       // ) ;
@@ -309,7 +310,7 @@ fn kind<
               => "while forgetting some properties \
                 because of a `Forget` message (1)"
             ),
-            MsgDown::Invariants(sym, invs) => if sys.sym() == & sym  {
+            MsgDown::Invariants(sym, invs) => if sys.sym().get() == & sym  {
               // event.log(
               //   & format!("received {} invariants", invs.len())
               // ) ;

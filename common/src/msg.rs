@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Messages from kino to techniques and back. */
+//! Messages from kino to techniques and back.
 
 use std::fmt ;
 use std::thread ;
@@ -301,7 +301,7 @@ impl Event {
   ) -> Self {
     let mut k_true = HashMap::with_capacity(props.len()) ;
     for prop in props {
-      match k_true.insert(prop.sym().clone(), None) {
+      match k_true.insert(prop.sym().get().clone(), None) {
         None => (),
         Some(_) => unreachable!(),
       }

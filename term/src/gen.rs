@@ -24,18 +24,18 @@ pub use rand::* ;
 
 use super::* ;
 
-/** Can generate random terms. */
+/// Can generate random terms.
 pub struct TermGen<Rand> {
-  /** RNG. */
+  /// RNG.
   rng: Rand,
-  /** Terms generated so far. */
+  /// Terms generated so far.
   generated: HashMap<Type, TermSet>,
-  /** Factory. */
+  /// Factory.
   factory: Factory,
 }
 
 impl TermGen<isaac::IsaacRng> {
-  /** Builds a new generator from a seed. Uses Isaac RNG. */
+  /// Builds a new generator from a seed. Uses Isaac RNG.
   pub fn of_seed(
     factory: Factory, init: HashMap<Type, TermSet>, seed: & [u32]
   ) -> Self {
@@ -46,7 +46,7 @@ impl TermGen<isaac::IsaacRng> {
     }
   }
 
-  /** Builds a new generator using a fixed seed. Uses Isaac RNG. */
+  /// Builds a new generator using a fixed seed. Uses Isaac RNG.
   pub fn of(factory: Factory, init: HashMap<Type, TermSet>) -> Self {
     TermGen {
       rng: isaac::IsaacRng::from_seed(
@@ -68,7 +68,7 @@ impl TermGen<isaac::IsaacRng> {
 }
 
 impl TermGen<ThreadRng> {
-  /** Builds a random generator. */
+  /// Builds a random generator.
   pub fn random(factory: Factory, init: HashMap<Type, TermSet>) -> Self {
     TermGen {
       rng: thread_rng(),
@@ -80,7 +80,7 @@ impl TermGen<ThreadRng> {
 
 impl<Rand: Rng> TermGen<Rand> {
 
-  /** Builds a new generator from a `RNG`. */
+  /// Builds a new generator from a `RNG`.
   pub fn of_rng(
     factory: Factory, init: HashMap<Type, TermSet>, rng: Rand
   ) -> Self {
@@ -89,9 +89,9 @@ impl<Rand: Rng> TermGen<Rand> {
     }
   }
 
-  /** Generates `n` random terms of type `typ`. The optional `max_depth`
-  argument is maximal number of layers on top of the terms given during the
-  creation of the term generator. */
+  /// Generates `n` random terms of type `typ`. The optional `max_depth`
+  /// argument is maximal number of layers on top of the terms given during the
+  /// creation of the term generator.
   pub fn generate(
     & mut self, typ: Type, n: usize, max_depth: Option<usize>
   ) -> TermSet {
@@ -111,9 +111,9 @@ impl<Rand: Rng> TermGen<Rand> {
 
 // |===| Helper functions and structures for random term generation.
 
-/** Can return the `n`th element of itself. */
+/// Can return the `n`th element of itself.
 trait CanNth<T> {
-  /** The `n`th element of itself. */
+  /// The `n`th element of itself.
   fn nth(& self, n: usize) -> T ;
 }
 impl CanNth<Term> for TermSet {
@@ -126,17 +126,17 @@ impl CanNth<Term> for TermSet {
   }
 }
 
-/** Returns true or false. True has `pc`% chances of being returned. */
+/// Returns true or false. True has `pc`% chances of being returned.
 fn rand_bool<Rand: Rng>(rng: & mut Rand, pc: u8) -> bool {
   rng.next_f32() <= (pc as f32) / 100f32
 }
 
-/** Returns a `usize` in the interval `[0,max[`. No bias. */
+/// Returns a `usize` in the interval `[0,max[`. No bias.
 fn rand_int<Rand: Rng>(rng: & mut Rand, max: usize) -> usize {
   (rng.next_u64() as usize) % max
 }
 
-/** Returns a random bool to bool operator. */
+/// Returns a random bool to bool operator.
 fn rand_bool_to_bool<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
   use Operator::* ;
   // Distinct with 5%.
@@ -146,7 +146,7 @@ fn rand_bool_to_bool<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
   }
 }
 
-/** Returns a random arith to bool operator. */
+/// Returns a random arith to bool operator.
 fn rand_arith_to_bool<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
   use Operator::* ;
   // Distinct with 5%.
@@ -156,7 +156,7 @@ fn rand_arith_to_bool<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
   }
 }
 
-/** Returns a random arith to arith operator. */
+/// Returns a random arith to arith operator.
 fn rand_arith_to_arith<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
   use Operator::* ;
   let ops = vec![ Add, Sub, Mul, Div ] ;
@@ -164,17 +164,17 @@ fn rand_arith_to_arith<Rand: Rng + Sized>(rng: & mut Rand) -> Operator {
 }
 
 
-/** Constructive zipper step. */
+/// Constructive zipper step.
 enum Step {
-  /** Zipper is below the condition of an ite. */
+  /// Zipper is below the condition of an ite.
   Ite0(Type),
-  /** Zipper is below the then of an ite. */
+  /// Zipper is below the then of an ite.
   Ite1(usize, Term),
-  /** Zipper is below the else of an ite. */
+  /// Zipper is below the else of an ite.
   Ite2(usize, Term, Term),
-  /** We're below a let-binding. */
+  /// We're below a let-binding.
   Let,
-  /** We're below an operator. */
+  /// We're below an operator.
   Op(Operator, Type, usize, Vec<Term>),
 }
 
@@ -198,42 +198,42 @@ impl fmt::Display for Step {
 }
 
 
-/** Constructive zipper, holds the information for the construction of the
-current term and moving upwards.*/
+/// Constructive zipper, holds the information for the construction of the
+/// current term and moving upwards.
 struct Zip<'a, Rand: 'a> {
-  /** Path leading to the current term. */
+  /// Path leading to the current term.
   path: Vec<Step>,
-  /** Type of the current term. */
+  /// Type of the current term.
   typ: Type,
-  /** Sequence of bindings. */
+  /// Sequence of bindings.
   bindings: Vec< (HashMap<Type, Vec<Sym>>, Vec<(Sym, Term)>) >,
-  /** Terms available. */
+  /// Terms available.
   terms: & 'a mut HashMap<Type, TermSet>,
-  /** Depth associated to the terms.
-  Does **not** correspond to the actual depth of the terms.
-
-  Terms provided at creation of the generator are given depth zero. */
+  /// Depth associated to the terms.
+  /// Does **not** correspond to the actual depth of the terms.
+  /// 
+  /// Terms provided at creation of the generator are given depth zero.
   depth: HashMap<Term, usize>,
-  /** Max depth requested by the generation query.
-  Stored in the structure to make things easier. */
+  /// Max depth requested by the generation query.
+  /// Stored in the structure to make things easier.
   max_depth: Option<usize>,
-  /** RNG. */
+  /// RNG.
   rng: & 'a mut Rand,
-  /** Factory. */
+  /// Factory.
   factory: & 'a Factory,
-  /** Can generate int terms. */
+  /// Can generate int terms.
   can_int: bool,
-  /** Can generate rat terms. */
+  /// Can generate rat terms.
   can_rat: bool,
-  /** Can generate arith terms. */
+  /// Can generate arith terms.
   can_arith: bool,
-  /** Index for fresh variables. */
+  /// Index for fresh variables.
   index: usize,
 }
 
 impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
 
-  /** Creates a new constructive zipper for some type. */
+  /// Creates a new constructive zipper for some type.
   pub fn mk(
     typ: Type, terms: & 'a mut HashMap<Type, TermSet>,
     rng: & 'a mut Rand, factory: & 'a Factory
@@ -269,24 +269,24 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Pushes a step. */
+  /// Pushes a step.
   fn push(& mut self, step: Step) { self.path.push(step) }
 
-  /** Pops a step. */
+  /// Pops a step.
   fn pop(& mut self) -> Option<Step> { self.path.pop() }
 
-  /** Returns true for zippers at the top level (path has length 0). */
+  /// Returns true for zippers at the top level (path has length 0).
   fn at_top(& self) -> bool { self.path.len() == 0 }
 
-  /** Returns true iff `bindings` is not empty. */
+  /// Returns true iff `bindings` is not empty.
   fn below_let(& self) -> bool { ! self.bindings.is_empty() }
 
-  /** Returns the depth of a zipper. */
+  /// Returns the depth of a zipper.
   fn depth(& self) -> usize {
     self.path.len()
   }
 
-  /** Returns the depth of a term. Fails if it is not defined. */
+  /// Returns the depth of a term. Fails if it is not defined.
   fn depth_of(& self, t: & Term) -> usize {
     match self.depth.get(t) {
       Some(d) => * d,
@@ -297,10 +297,10 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Returns a term of type `typ` of depth less than `depth - max` if
-  `max_depth = Some(max)`. Otherwise just returns a term of type `typ`.
-
-  Also returns the depth of the term choosen. */
+  /// Returns a term of type `typ` of depth less than `depth - max` if
+  /// `max_depth = Some(max)`. Otherwise just returns a term of type `typ`.
+  /// 
+  /// Also returns the depth of the term choosen.
   fn get_term(& mut self, typ: Type) -> (Term, usize) {
     println!(
       "|   > get_term ({}/{})",
@@ -346,7 +346,7 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Inserts a new binding. */
+  /// Inserts a new binding.
   fn insert_binding(& mut self, (sym, term): (Sym, Term)) -> Result<(),()> {
     if ! self.bindings.is_empty() {
       let last = self.bindings.len() - 1 ;
@@ -367,7 +367,7 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Returns a fresh variable. */
+  /// Returns a fresh variable.
   fn fresh(& mut self) -> (Sym, Term) {
     let sym = self.factory.sym(
       format!("@fresh {}", self.index)
@@ -376,8 +376,8 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     (sym.clone(), self.factory.var(sym))
   }
 
-  /** Adds a term to the map from types to terms if we're not under a let
-  binding. */
+  /// Adds a term to the map from types to terms if we're not under a let
+  /// binding.
   fn remember(& mut self, term: Term) -> Option<bool> {
     let typ = self.typ ;
     // Remember only if we're not under a let binding.
@@ -397,7 +397,7 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Goes down, bool version. */
+  /// Goes down, bool version.
   fn bool_down(& mut self) {
     // Going down into arith at 10%.
     if self.can_arith && rand_bool(& mut self.rng, 10) {
@@ -426,20 +426,20 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Goes down, arith version. */
+  /// Goes down, arith version.
   fn arith_down(& mut self) {
     let op = rand_arith_to_arith(& mut self.rng) ;
     let typ = self.typ ;
     self.push( Step::Op(op, typ, 0, Vec::with_capacity(1)) )
   }
 
-  /** Builds a random term. */
+  /// Builds a random term.
   pub fn build(& mut self, max_depth: Option<usize>) -> Term {
     self.max_depth = max_depth ;
     self.down()
   }
 
-  /** Goes down a constructive zipper. */
+  /// Goes down a constructive zipper.
   fn down(& mut self) -> Term {
     use self::Step::* ;
 
@@ -488,7 +488,7 @@ impl<'a, Rand: 'a + Rng + Sized> Zip<'a, Rand> {
     }
   }
 
-  /** Goes up a constructive zipper. */
+  /// Goes up a constructive zipper.
   fn up(& mut self, mut term: Term, mut depth: usize) -> Option<Term> {
     use std::cmp::max ;
     use self::Step::* ;

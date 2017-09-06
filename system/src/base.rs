@@ -17,6 +17,7 @@ use term::{
   Sym, Var, Type, Term, STerm, STermSet
 } ;
 use term::real_term::Cst ;
+use term::parsing::Spnd ;
 
 use Cex ;
 
@@ -114,20 +115,20 @@ impl CallSet {
 
 
 /// A signature, a list of types. Used only in `Uf`.
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone, PartialEq, Eq)]
 pub struct Sig {
   /// Types of the signature.
-  types: Vec<Type>,
+  types: Vec< Spnd<Type> >,
 }
 impl Sig {
   /// Creates a new signature.
   #[inline(always)]
-  pub fn mk(types: Vec<Type>) -> Self {
+  pub fn mk(types: Vec< Spnd<Type> >) -> Self {
     Sig { types: types }
   }
   /// The types of a signature.
   #[inline(always)]
-  pub fn types(& self) -> & [Type] { & self.types }
+  pub fn types(& self) -> & [ Spnd<Type> ] { & self.types }
 }
 impl fmt::Display for Sig {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -146,24 +147,24 @@ impl fmt::Display for Sig {
 #[derive(Debug,Clone)]
 pub struct Args {
   /// The symbol/type pair list.
-  args: Vec<(Sym, Type)>,
+  args: Vec<( Spnd<Sym>, Spnd<Type> )>,
 }
 impl Args {
   /// Creates a new argument list.
   #[inline(always)]
-  pub fn mk(args: Vec<(Sym, Type)>) -> Self {
+  pub fn mk(args: Vec<( Spnd<Sym>, Spnd<Type> )>) -> Self {
     Args { args: args }
   }
   /// The formal parameters.
   #[inline(always)]
-  pub fn args(& self) -> & [(Sym, Type)] { & self.args }
+  pub fn args(& self) -> & [(Spnd<Sym>, Spnd<Type>)] { & self.args }
   /// Number of paramaters.
   #[inline(always)]
   pub fn len(& self) -> usize { self.args.len() }
   /// Returns true iff a symbol is a list of arguments.
   pub fn contains(& self, sym: & Sym) -> bool {
     for & (ref arg, _) in self.args() {
-      if sym == arg { return true }
+      if sym == arg.get() { return true }
     } ;
     false
   }
@@ -207,27 +208,27 @@ impl fmt::Display for Args {
 #[derive(Debug,Clone)]
 pub struct Uf {
   /// Identifier of the function.
-  sym: Sym,
+  sym: Spnd<Sym>,
   /// Signature of the function.
   sig: Sig,
   /// Return type of the function.
-  typ: Type,
+  typ: Spnd<Type>,
 }
 impl Uf {
   /// Creates a new uninterpreted function.
   #[inline(always)]
-  pub fn mk(sym: Sym, sig: Sig, typ: Type) -> Self {
+  pub fn mk(sym: Spnd<Sym>, sig: Sig, typ: Spnd<Type>) -> Self {
     Uf { sym: sym, sig: sig, typ: typ }
   }
   /// Identifier of a function.
   #[inline(always)]
-  pub fn sym(& self) -> & Sym { & self.sym }
+  pub fn sym(& self) -> & Spnd<Sym> { & self.sym }
   /// Signature of a function.
   #[inline(always)]
-  pub fn sig(& self) -> & [Type] { & self.sig.types() }
+  pub fn sig(& self) -> & [ Spnd<Type> ] { & self.sig.types() }
   /// Return type of a function.
   #[inline(always)]
-  pub fn typ(& self) -> & Type { & self.typ }
+  pub fn typ(& self) -> & Spnd<Type> { & self.typ }
 }
 impl fmt::Display for Uf {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
@@ -250,11 +251,11 @@ impl Hash for Uf {
 #[derive(Debug,Clone)]
 pub struct Fun {
   /// Identifier of the function.
-  sym: Sym,
+  sym: Spnd<Sym>,
   /// Formal arguments of the function.
   args: Args,
   /// Return type of the function.
-  typ: Type,
+  typ: Spnd<Type>,
   /// Body of the function.
   body: Term,
   /// Callables used by this function **recursively**.
@@ -264,19 +265,21 @@ impl Fun {
   /// Creates a new function.
   #[inline(always)]
   pub fn mk(
-    sym: Sym, args: Args, typ: Type, body: Term, calls: CallSet
+    sym: Spnd<Sym>, args: Args, typ: Spnd<Type>, body: Term, calls: CallSet
   ) -> Self {
     Fun { sym: sym, args: args, typ: typ, body: body, calls: calls }
   }
   /// Identifier of a function.
   #[inline(always)]
-  pub fn sym(& self) -> & Sym { & self.sym }
+  pub fn sym(& self) -> & Spnd<Sym> { & self.sym }
   /// Formal arguments of a function.
   #[inline(always)]
-  pub fn args(& self) -> & [(Sym, Type)] { & self.args.args() }
+  pub fn args(& self) -> & [(Spnd<Sym>, Spnd<Type>)] {
+    & self.args.args()
+  }
   /// Return type of a function.
   #[inline(always)]
-  pub fn typ(& self) -> & Type { & self.typ }
+  pub fn typ(& self) -> & Spnd<Type> { & self.typ }
   /// Body of a function.
   #[inline(always)]
   pub fn body(& self) -> & Term { & self.body }
@@ -336,7 +339,7 @@ impl Callable {
         for (
           type_formal, type_actual
         ) in fun.sig().iter().zip(sig.iter()) {
-          if type_formal != type_actual {
+          if type_formal.get() != type_actual {
             return Err( (
               cpt,
               format!(
@@ -354,7 +357,7 @@ impl Callable {
         for (
           & (ref sym, ref type_formal), ref type_actual
         ) in fun.args().iter().zip(sig.iter()) {
-          if type_formal != * type_actual {
+          if type_formal.get() != * type_actual {
             return Err( (
               cpt,
               format!(
@@ -368,7 +371,7 @@ impl Callable {
         fun.typ().clone()
       },
     } ;
-    Ok( typ )
+    Ok( typ.get().clone() )
   }
 }
 impl fmt::Display for Callable {
@@ -412,7 +415,7 @@ impl fmt::Display for PropStatus {
 #[derive(Debug,Clone)]
 pub struct Prop {
   /// Identifier of the property.
-  sym: Sym,
+  sym: Spnd<Sym>,
   /// System the property is over.
   sys: ::Sys,
   /// Body of the property.
@@ -423,12 +426,14 @@ pub struct Prop {
 impl Prop {
   /// Creates a new property.
   #[inline(always)]
-  pub fn mk(sym: Sym, sys: ::Sys, body: STerm, calls: CallSet) -> Self {
+  pub fn mk(
+    sym: Spnd<Sym>, sys: ::Sys, body: STerm, calls: CallSet
+  ) -> Self {
     Prop { sym: sym, sys: sys, body: body, calls: calls }
   }
   /// Identifier of a property.
   #[inline(always)]
-  pub fn sym(& self) -> & Sym { & self.sym }
+  pub fn sym(& self) -> & Spnd<Sym> { & self.sym }
   /// System a property ranges over.
   #[inline(always)]
   pub fn sys(& self) -> & ::Sys { & self.sys }
@@ -442,13 +447,13 @@ impl Prop {
 impl fmt::Display for Prop {
   fn fmt(& self, fmt: & mut fmt::Formatter) -> fmt::Result {
     write!(
-      fmt, "{} ({}) {{ {} }}", self.sym, self.sys.sym(), self.body
+      fmt, "{} ({}) {{ {} }}", self.sym.get(), self.sys.sym(), self.body
     )
   }
 }
 impl PartialEq for Prop {
   fn eq(& self, other: & Prop) -> bool {
-    self.sym == other.sym
+    self.sym.get() == other.sym.get()
   }
 }
 impl Eq for Prop {}
@@ -462,7 +467,7 @@ impl Hash for Prop {
 #[derive(Debug,Clone)]
 pub struct Sys {
   /// Identifier of the system.
-  sym: Sym,
+  sym: Spnd<Sym>,
   /// State of the system.
   state: Args,
   /// Local variables of the system.
@@ -480,7 +485,7 @@ impl Sys {
   /// Creates a new system.
   #[inline(always)]
   pub fn mk(
-    sym: Sym, state: Args, locals: Vec<(Sym, Type, Term)>,
+    sym: Spnd<Sym>, state: Args, locals: Vec<(Sym, Type, Term)>,
     init: (Sym, Vec<(Var, Type)>, Term, Term),
     trans: (Sym, Vec<(Var, Type)>, Term, Term),
     subsys: Vec<(::Sys, Vec<Term>)>,
@@ -494,7 +499,7 @@ impl Sys {
   }
   /// Identifier of a system.
   #[inline(always)]
-  pub fn sym(& self) -> & Sym { & self.sym }
+  pub fn sym(& self) -> & Spnd<Sym> { & self.sym }
   /// State of a system.
   #[inline(always)]
   pub fn state(& self) -> & Args { & self.state }
@@ -525,7 +530,7 @@ impl Sys {
   pub fn subsys_syms(& self) -> HashSet<Sym> {
     let mut set = HashSet::with_capacity( self.subsys.len() ) ;
     for & (ref sub, _) in self.subsys.iter() {
-      set.insert(sub.sym().clone()) ; ()
+      set.insert(sub.sym().get().clone()) ; ()
     }
     set.shrink_to_fit() ;
     set
@@ -571,7 +576,7 @@ impl Sys {
 }
 impl PartialEq<Sym> for Sys {
   fn eq(& self, rhs: & Sym) -> bool {
-    self.sym == * rhs
+    self.sym.get() == rhs
   }
 }
 impl fmt::Display for Sys {

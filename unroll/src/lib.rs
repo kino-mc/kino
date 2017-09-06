@@ -32,6 +32,7 @@ use term::smt::{
   Expr2Smt
 } ;
 use term::tmp::* ;
+// use term::parsing::Spnd ;
 
 use sys::{ Prop, Sys, Callable } ;
 
@@ -255,7 +256,7 @@ impl<
       // println!("defining {}", fun.sym()) ;
       match * * fun {
         Dec(ref fun_dec) => if ! known.contains(fun_dec.sym()) {
-          known.insert( fun_dec.sym().clone() ) ;
+          known.insert( fun_dec.sym().get().clone() ) ;
           try!(
             chain_err!(
               unroll, "during function declaration" => solver.declare_fun(
@@ -276,7 +277,7 @@ impl<
             ok
           } ;
           if declare {
-            known.insert( fun_def.sym().clone() ) ;
+            known.insert( fun_def.sym().get().clone() ) ;
             try!(
               chain_err!(
                 unroll, "during function definition" => solver.define_fun(
@@ -312,7 +313,7 @@ impl<
           ok
         } ;
         if declare {
-          known.insert( sys.sym().clone() ) ;
+          known.insert( sys.sym().get().clone() ) ;
           try!(
             chain_err!(
               unroll, "during system definition" => define(
@@ -629,7 +630,7 @@ impl<
     for fun in self.sys.calls().get() {
       match * * fun {
         Dec(ref fun) => to_get.push(
-          self.solver.parser().var( fun.sym().clone() )
+          self.solver.parser().var( fun.sym().get().clone() )
         ),
         Def(_) => (),
       }
@@ -638,10 +639,10 @@ impl<
     // Push state.
     for & (ref sym, _) in self.sys.state().args().iter() {
       to_get.push(
-        self.solver.parser().svar( sym.clone(), State::Curr )
+        self.solver.parser().svar( sym.get().clone(), State::Curr )
       ) ;
       to_get.push(
-        self.solver.parser().svar( sym.clone(), State::Next )
+        self.solver.parser().svar( sym.get().clone(), State::Next )
       ) ;
     }
 
@@ -765,7 +766,7 @@ fn actlit_name_of_sym(sym: & Sym) -> String {
 
 /// Actlit name of a property.
 fn actlit_name_of(prop: & Prop) -> String {
-  actlit_name_of_sym(prop.sym())
+  actlit_name_of_sym(prop.sym().get())
 }
 
 /// Handles properties by providing a positive actlits for each.
@@ -812,14 +813,14 @@ impl TermManager<Sym> {
         STerm::One(state, next) => {
           let state_impl = state.clone().under_actlit( actlit.clone() ) ;
           let was_there = map_1.insert(
-            prop.sym().clone(), (state, next, state_impl, actlit)
+            prop.sym().get().clone(), (state, next, state_impl, actlit)
           ) ;
           debug_assert!( was_there.is_none() )
         },
         STerm::Two(next) => {
           let next_impl = next.clone().under_actlit( actlit.clone() ) ;
           let was_there = map_2.insert(
-            prop.sym().clone(), (next, next_impl, actlit)
+            prop.sym().get().clone(), (next, next_impl, actlit)
           ) ;
           debug_assert!( was_there.is_none() )
         },

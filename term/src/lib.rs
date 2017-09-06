@@ -179,8 +179,20 @@ pub use term::{
   Operator, Term, STerm, CstMaker, BindMaker, AppMaker, OpMaker
 } ;
 pub mod tmp ;
+#[macro_use]
 mod parser ;
-pub use parser::vmt::TermAndDep ;
+/// Parsing stuff.
+pub mod parsing {
+  pub use super::parser::vmt::TermAndDep ;
+  pub use super::parser::{ Spn, Spnd, Bytes, space_comment, comment } ;
+  /// VMT parsing stuff.
+  pub mod vmt {
+    pub use super::super::parser::type_parser ;
+    pub use super::super::parser::vmt::{
+      id_parser, term_parser, sym_parser, token_parser
+    } ;
+  }
+}
 mod factory ;
 pub use factory::{ Factory, ParseVmt2, UnTermOps } ;
 pub mod gen ;
@@ -214,9 +226,9 @@ pub mod zip {
   pub use term::zip2::{ Step, fold, fold_info, extract } ;
 }
 
-/** Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
-
-Exposed for extensibility. */
+/// Internal traits used for SMT Lib 2 and TSV Lib 2 writing.
+///
+/// Exposed for extensibility.
 pub mod write {
   pub use base::{ Writable, SVarWriter, StateWritable } ;
 }
@@ -224,17 +236,17 @@ pub mod write {
 // Re-export of num.
 pub use ::num::* ;
 
-/** SMT solver. */
+/// SMT solver.
 pub mod smt {
   use ::std::process::Command ;
 
   pub use ::rsmt2::* ;
   use ::rsmt2::errors::* ;
 
-  /** The default z3 command. */
+  /// The default z3 command.
   #[inline(always)]
   pub fn z3_cmd() -> Command { Command::new("z3") }
-  /** The default cvc4 command. */
+  /// The default cvc4 command.
   #[inline(always)]
   pub fn cvc4_cmd() -> Command { Command::new("cvc4") }
 

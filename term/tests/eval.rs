@@ -7,20 +7,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/*! Tests for the evaluator. */
+//! Tests for the evaluator.
 
 extern crate term ;
 
 use term::{
-  BigInt, Factory, Cst, Term, CstMaker, Offset2
+  BigInt, Factory, Cst, Term, CstMaker, SymMaker, Offset2
 } ;
 
-/** Creates a constant integer term. */
+/// Creates a constant integer term.
 pub fn int(factory: & Factory, bytes: & [u8]) -> Term {
   factory.cst( int_cst(factory, bytes) )
 }
 
-/** Createts a constant integer `Cst`. */
+/// Createts a constant integer `Cst`.
 pub fn int_cst(factory: & Factory, bytes: & [u8]) -> Cst {
   factory.cst( BigInt::parse_bytes(bytes, 10u32).unwrap() )
 }
@@ -39,7 +39,8 @@ fn and() {
   let res: Cst = factory.cst(false) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -58,7 +59,8 @@ fn or() {
   let res: Cst = factory.cst(true) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -77,7 +79,8 @@ fn xor() {
   let res: Cst = factory.cst(false) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -95,7 +98,8 @@ fn eq() {
   let res: Cst = factory.cst(true) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -112,7 +116,8 @@ fn ite() {
   let res = int_cst(& factory, b"42") ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -128,7 +133,8 @@ fn imp() {
   let res: Cst = factory.cst(true) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -141,7 +147,8 @@ fn not() {
   let res: Cst = factory.cst(false) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -158,7 +165,8 @@ fn add() {
   let res = int_cst(& factory, b"42") ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -172,7 +180,8 @@ fn sub() {
   let res = int_cst(& factory, b"-28") ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -186,7 +195,8 @@ fn mul() {
   let res = int_cst(& factory, b"245") ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -201,7 +211,8 @@ fn div() {
   let res = int_cst(& factory, b"0") ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -216,7 +227,8 @@ fn le() {
   let res: Cst = factory.cst(true) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -231,7 +243,8 @@ fn lt() {
   let res: Cst = factory.cst(true) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -246,7 +259,8 @@ fn ge() {
   let res: Cst = factory.cst(false) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }
@@ -261,7 +275,8 @@ fn gt() {
   let res: Cst = factory.cst(false) ;
   let model = vec![] ;
   let offset = Offset2::init() ;
-  match factory.eval(& term, & offset, & model) {
+  let scope = factory.sym("whatever") ;
+  match factory.eval(& term, & offset, & model, scope) {
     Ok(cst) => assert_eq!(res, cst),
     Err(s) => panic!("{}", s),
   }

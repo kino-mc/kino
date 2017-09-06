@@ -4,6 +4,7 @@ version = "0.1.0"
 dependencies = [
  "bmc 0.1.0",
  "common 0.1.0",
+ "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "kind 0.1.0",
  "pruner 0.1.0",
  "system 0.1.0",
@@ -231,6 +232,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "system"
 version = "0.1.0"
 dependencies = [
+ "error-chain 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "term 0.2.0",
 ]
