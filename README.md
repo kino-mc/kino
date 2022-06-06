@@ -2,6 +2,8 @@ Kinō (帰納: induction, recursion) is an SMT-based, k-induction engine for tra
 
 **NB: kino is not maintained anymore for now, for lack of time. If you are interested in this project please open an issue or contact me directly.**
 
+**⚠️ Also, the current (and probably last) version of kino relies on an old version of the `hashconsing` crate, which has [security vulnerabilities][cve].**
+
 # Code status
 
 [![Build Status](https://travis-ci.org/kino-mc/kino.svg?branch=master)](https://travis-ci.org/kino-mc/kino)
@@ -96,3 +98,4 @@ http://opensource.org/licenses/MIT>, at your option.
 [c2i invgen]: http://web.stanford.edu/~sharmar/pubs/c2i.pdf (C2I Invariant Generation)
 
 [z3]: https://github.com/Z3Prover/z3 (Z3 SMT solver)
+[cve]: https://nvd.nist.gov/vuln/detail/CVE-2020-36215
